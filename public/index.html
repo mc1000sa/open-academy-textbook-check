@@ -73,7 +73,8 @@ const state = {
   selectedSetupClassId:'',setupFormClass:{ name:'', grade:'', teacherId:'', note:'' },studentBulkText:'',studentBulkMode:'nameSchool',
   selectedBookManageId:'',formBook:{ title:'', subject:'영어', grade:'', publisher:'열린학원', active:true },formUnit:{ name:'', start:'', end:'' },bulkUnitText:'',editingBookId:'',assigningClassId:'',
   selectedInspectionClassId:'',selectedInspectionStudentId:'',selectedInspectionBookId:'',selectedDate:new Date().toISOString().slice(0,10),selectedRangeStart:'',selectedRangeEnd:'',missedPages:'',memo:'',quickClassId:'',
-  reportStudentId:'',reportClassId:'',dashboardTeacherFilter:'all',saveMsg:'',printHtml:'',inspectionHistoryFilterStudent:'',inspectionHistoryFilterClass:''
+  reportStudentId:'',reportClassId:'',dashboardTeacherFilter:'all',saveMsg:'',printHtml:'',inspectionHistoryFilterStudent:'',inspectionHistoryFilterClass:'',
+  adminTeacherForm:{ id:'', name:'', pin:'', role:'teacher' },adminTeacherEditId:''
 };
 function safe(v){ return String(v ?? '').replace(/[&<>\"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -96,12 +97,82 @@ function setupProgress(){ const klass = classById(state.selectedSetupClassId); c
 function findDuplicateStudentName(classId, name, school=''){ return state.students.find(s => s.classId===classId && String(s.name||'').trim()===String(name||'').trim() && String(s.school||'').trim()===String(school||'').trim() && s.active!==false); }
 
 async function ensureSeedData(){ const teacherSnap = await getDocs(refs.teachers); if (!teacherSnap.empty) return; const batch = writeBatch(db);
-[{ id:'t_admin', name:'관리자', pin:'9999', role:'admin', active:true },{ id:'t_kim', name:'김선생', pin:'1234', role:'teacher', active:true },{ id:'t_lee', name:'이선생', pin:'2345', role:'teacher', active:true }].forEach(t=>batch.set(doc(db,'openacademy_textbook_teachers',t.id),{...t, createdAt:serverTimestamp()}));
+[{ id:'t_admin', name:'관리자', pin:'9999', role:'admin', active:true },{ id:'t_kim', name:'수최', pin:'1234', role:'teacher', active:true },{ id:'t_lee', name:'Joy', pin:'2345', role:'teacher', active:true }].forEach(t=>batch.set(doc(db,'openacademy_textbook_teachers',t.id),{...t, createdAt:serverTimestamp()}));
 [{ id:'b1', title:'중3 영어 시험대비', subject:'영어', grade:'중3', publisher:'열린학원', active:true, archived:false, units:[{ id:uid(), name:'문법 1', start:1, end:20, color:pastel(0) },{ id:uid(), name:'문법 2', start:21, end:45, color:pastel(1) },{ id:uid(), name:'서술형', start:46, end:70, color:pastel(2) }]},{ id:'b2', title:'고1 독해 특강', subject:'영어', grade:'고1', publisher:'열린학원', active:true, archived:false, units:[{ id:uid(), name:'Unit 1', start:1, end:25, color:pastel(3) },{ id:uid(), name:'Unit 2', start:26, end:52, color:pastel(4) },{ id:uid(), name:'Unit 3', start:53, end:88, color:pastel(5) }]}].forEach(b=>batch.set(doc(db,'openacademy_textbook_books',b.id),{...b, createdAt:serverTimestamp()}));
 [{ id:'c1', name:'중3 A반', teacherId:'t_kim', grade:'중3', note:'시험대비반', active:true },{ id:'c2', name:'고1 독해반', teacherId:'t_lee', grade:'고1', note:'독해집중', active:true }].forEach(c=>batch.set(doc(db,'openacademy_textbook_classes',c.id),{...c, createdAt:serverTimestamp()}));
 [{ id:'s1', name:'김다인', classId:'c1', grade:'중3', school:'파주중', active:true },{ id:'s2', name:'박서윤', classId:'c1', grade:'중3', school:'문산중', active:true },{ id:'s3', name:'이하준', classId:'c2', grade:'고1', school:'파주고', active:true }].forEach(s=>batch.set(doc(db,'openacademy_textbook_students',s.id),{...s, createdAt:serverTimestamp()}));
 [{ id:'cb1', classId:'c1', bookId:'b1', order:1, main:true, active:true },{ id:'cb2', classId:'c2', bookId:'b2', order:1, main:true, active:true }].forEach(l=>batch.set(doc(db,'openacademy_textbook_class_books',l.id),{...l, createdAt:serverTimestamp()}));
 await batch.commit(); }
+
+async function migrateDefaultTeachers(){
+  const teacherSnap = await getDocs(refs.teachers);
+  if (teacherSnap.empty) return;
+  const renameMap = {
+    t_kim: { name:'수최', pin:'1234', role:'teacher', active:true },
+    t_lee: { name:'Joy', pin:'2345', role:'teacher', active:true },
+    t_admin: { name:'관리자', pin:'9999', role:'admin', active:true }
+  };
+  const batch = writeBatch(db);
+  let changed = 0;
+  teacherSnap.docs.forEach((snap) => {
+    const next = renameMap[snap.id];
+    if (!next) return;
+    const data = snap.data() || {};
+    const needsUpdate = data.name !== next.name || String(data.pin || '') !== String(next.pin) || data.role !== next.role || data.active === false;
+    if (!needsUpdate) return;
+    batch.update(doc(db,'openacademy_textbook_teachers',snap.id), { ...next, updatedAt:serverTimestamp() });
+    changed++;
+  });
+  if (changed) await batch.commit();
+}
+function resetAdminTeacherForm(){ state.adminTeacherForm = { id:'', name:'', pin:'', role:'teacher' }; state.adminTeacherEditId=''; }
+function loadAdminTeacherToForm(teacherId){
+  const teacher = state.teachers.find(t=>t.id===teacherId);
+  if (!teacher) return;
+  state.adminTeacherEditId = teacher.id;
+  state.adminTeacherForm = { id:teacher.id, name:teacher.name || '', pin:String(teacher.pin || ''), role:teacher.role || 'teacher' };
+  render();
+}
+async function saveAdminTeacher(){
+  const form = state.adminTeacherForm;
+  if (!form.name.trim()) return alert('강사 이름을 입력해주세요.');
+  if (!/^\d{4}$/.test(String(form.pin || ''))) return alert('PIN은 4자리 숫자로 입력해주세요.');
+  if (!['admin','teacher'].includes(form.role)) return alert('권한을 선택해주세요.');
+  const duplicate = state.teachers.find(t => t.id !== state.adminTeacherEditId && String(t.name || '').trim() === form.name.trim() && t.active !== false);
+  if (duplicate) return alert('같은 이름의 강사가 이미 있습니다.');
+  if (state.adminTeacherEditId) {
+    await updateDoc(doc(db,'openacademy_textbook_teachers',state.adminTeacherEditId), {
+      name:form.name.trim(),
+      pin:String(form.pin),
+      role:form.role,
+      active:true,
+      updatedAt:serverTimestamp()
+    });
+    notify('강사 정보 수정 완료');
+  } else {
+    await addDoc(refs.teachers, {
+      name:form.name.trim(),
+      pin:String(form.pin),
+      role:form.role,
+      active:true,
+      createdAt:serverTimestamp()
+    });
+    notify('강사 추가 완료');
+  }
+  resetAdminTeacherForm();
+  render();
+}
+async function removeAdminTeacher(teacherId){
+  const teacher = state.teachers.find(t=>t.id===teacherId);
+  if (!teacher) return;
+  if (teacher.role === 'admin') return alert('관리자 계정은 삭제할 수 없습니다.');
+  const hasClasses = state.classes.some(c => c.teacherId === teacherId && c.active !== false);
+  if (hasClasses) return alert('담당 반이 남아 있어 삭제할 수 없습니다.');
+  await updateDoc(doc(db,'openacademy_textbook_teachers',teacherId), { active:false, updatedAt:serverTimestamp() });
+  if (state.adminTeacherEditId === teacherId) resetAdminTeacherForm();
+  notify('강사 삭제 완료');
+}
+
 function subscribe(){
   onSnapshot(refs.teachers, snap => { state.teachers = snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false); render(); });
   onSnapshot(refs.classes, snap => { state.classes = snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.active!==false); if (!state.selectedSetupClassId && state.classes.length) state.selectedSetupClassId = state.classes[0].id; if (!state.assigningClassId && state.classes.length) state.assigningClassId = state.classes[0].id; render(); });
@@ -135,11 +206,63 @@ function bookMap(book){ const units = bookUnits(book); const totalPages = units.
 function setupView(){ const availableClasses = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id); const selectedClass = classById(state.selectedSetupClassId); const selectedStudents = selectedClass ? studentsForClass(selectedClass.id) : []; const selectedAssigned = selectedClass ? assignedBooksForClass(selectedClass.id) : []; const visibleBooks = state.books.filter(b=>!b.archived).sort((a,b)=>String(a.title).localeCompare(String(b.title),'ko')); return `<div class="space-y-6"><div class="grid md:grid-cols-2 xl:grid-cols-4 gap-4">${metricCard('등록 반 수', state.classes.length, 'text-violet-700')}${metricCard('등록 학생 수', state.students.length, 'text-sky-700')}${metricCard('등록 교재 수', state.books.filter(b=>!b.archived).length, 'text-emerald-700')}${metricCard('현재 반 교재 수', selectedAssigned.length, 'text-rose-700')}</div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><div><h3 class="text-lg font-black text-slate-900">반 세팅 마법사</h3><div class="text-sm text-slate-500 mt-1">반 생성 → 학생 일괄 등록 → 교재 배정 → 운영 시작</div></div><div class="text-xs text-slate-400">관리자 중심 초기 세팅</div></div>${wizardStatus()}</div><div class="grid xl:grid-cols-[0.92fr_1.08fr] gap-6"><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">1. 신규 반 만들기</h3><div class="text-xs text-slate-400">반 중심 등록</div></div><div class="space-y-4"><input id="setupClassName" class="w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="반 이름" value="${safe(state.setupFormClass.name)}" /><div class="grid md:grid-cols-3 gap-3"><input id="setupClassGrade" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="학년" value="${safe(state.setupFormClass.grade)}" /><select id="setupClassTeacherId" class="border border-slate-300 rounded-xl p-3 bg-white"><option value="">담당 강사</option>${state.teachers.map(t=>`<option value="${t.id}" ${state.setupFormClass.teacherId===t.id?'selected':''}>${safe(t.name)}</option>`).join('')}</select><input id="setupClassNote" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="반 설명" value="${safe(state.setupFormClass.note)}" /></div><div class="flex gap-3"><button data-action="save-class" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">반 생성</button><button data-action="reset-class-form" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">초기화</button></div><div class="border-t border-slate-100 pt-4"><div class="text-sm font-black text-slate-800 mb-2">현재 반 선택</div><select id="selectedSetupClassId" class="w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">반 선택</option>${availableClasses.map(c=>`<option value="${c.id}" ${state.selectedSetupClassId===c.id?'selected':''}>${safe(c.name)} · ${safe(teacherNameById(c.teacherId))}</option>`).join('')}</select></div></div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">2. 학생 일괄 등록</h3><div class="text-xs text-slate-400">${selectedClass ? safe(selectedClass.name) : '반 선택 필요'}</div></div><div class="grid xl:grid-cols-[0.95fr_1.05fr] gap-4"><div><div class="flex flex-wrap gap-2 mb-3"><button data-action="student-mode" data-mode="nameSchool" class="top-context-chip ${state.studentBulkMode==='nameSchool'?'top-context-chip-active':''}">이름 / 학교</button><button data-action="student-mode" data-mode="nameOnly" class="top-context-chip ${state.studentBulkMode==='nameOnly'?'top-context-chip-active':''}">이름만</button></div><textarea id="studentBulkText" class="w-full min-h-[220px] border border-slate-300 rounded-2xl p-4 bg-white leading-7" placeholder="${state.studentBulkMode==='nameOnly' ? '김다인\n박서윤\n이하준' : '김다인 / 파주중\n박서윤 / 문산중\n이하준 / 파주중'}">${safe(state.studentBulkText)}</textarea><div class="mt-3 text-xs text-slate-500 leading-6">한 줄에 한 명씩 입력하세요. 학년은 반 정보에서 자동 적용됩니다.</div><div class="mt-4 flex gap-3"><button data-action="save-students-bulk" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black px-5 py-3">학생 등록</button><button data-action="clear-student-bulk" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">입력 비우기</button></div></div><div><div class="text-sm font-black text-slate-800 mb-3">등록된 학생</div><div class="space-y-3 max-h-[340px] overflow-y-auto mini-scroll pr-1">${selectedStudents.length ? selectedStudents.map(s=>`<div class="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div class="flex items-center justify-between gap-3"><div><div class="font-black text-slate-900">${safe(s.name)}</div><div class="text-xs text-slate-500 mt-1">${safe(s.school || '-')} · ${safe(s.grade || '-')}</div></div><button data-action="remove-student" data-id="${s.id}" class="text-rose-600 text-sm font-black">삭제</button></div></div>`).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400">학생이 아직 없습니다.</div>'}</div></div></div></div></div><div class="grid xl:grid-cols-[0.95fr_1.05fr] gap-6"><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">3. 반별 교재 배정</h3><div class="text-xs text-slate-400">같은 교재 여러 반 사용 가능</div></div><div class="space-y-4"><select id="assigningClassId" class="w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">반 선택</option>${availableClasses.map(c=>`<option value="${c.id}" ${state.assigningClassId===c.id?'selected':''}>${safe(c.name)}</option>`).join('')}</select><div class="grid md:grid-cols-2 gap-3">${visibleBooks.map(b=>`<button data-action="assign-book" data-class="${state.assigningClassId}" data-book="${b.id}" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left hover:border-violet-300 hover:bg-violet-50"><div class="flex items-center justify-between gap-3"><div><div class="font-black text-slate-900">${safe(b.title)}</div><div class="text-xs text-slate-500 mt-1">${safe(b.subject || '-')} · ${safe(b.grade || '-')}</div></div><span class="text-[11px] font-black text-violet-700">${bookUnits(b).length}단원</span></div></button>`).join('')}</div></div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">현재 반 교재 목록</h3><div class="text-xs text-slate-400">${safe(classById(state.assigningClassId)?.name || '반 선택 필요')}</div></div><div class="space-y-3">${assignedBooksForClass(state.assigningClassId).length ? assignedBooksForClass(state.assigningClassId).map((x,idx)=>`<div class="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div class="flex items-center justify-between gap-3"><div><div class="font-black text-slate-900">${idx+1}. ${safe(x.book.title)}</div><div class="text-xs text-slate-500 mt-1">${idx===0 ? '메인 교재' : '부교재'} · ${safe(x.book.subject || '-')} · ${safe(x.book.grade || '-')}</div></div><div class="flex items-center gap-2"><button data-action="move-assign" data-id="${x.link.id}" data-dir="up" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">위</button><button data-action="move-assign" data-id="${x.link.id}" data-dir="down" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">아래</button><button data-action="remove-assign" data-id="${x.link.id}" class="rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-xs font-black text-rose-700">제거</button></div></div></div>`).join('') : '<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400">배정된 교재가 없습니다.</div>'}</div></div></div><div class="grid xl:grid-cols-[0.92fr_1.08fr] gap-6"><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">4. 교재 템플릿 관리</h3><div class="text-xs text-slate-400">재사용용 교재 자산</div></div><div class="space-y-4"><input id="bookTitle" class="w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="교재명" value="${safe(state.formBook.title)}" /><div class="grid md:grid-cols-3 gap-3"><input id="bookSubject" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="과목" value="${safe(state.formBook.subject)}" /><input id="bookGrade" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="대상 학년" value="${safe(state.formBook.grade)}" /><input id="bookPublisher" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="출판사" value="${safe(state.formBook.publisher)}" /></div><div class="flex gap-3"><button data-action="save-book" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">${state.editingBookId ? '교재 수정 저장' : '교재 저장'}</button><button data-action="reset-book-form" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">초기화</button></div><div class="border-t border-slate-100 pt-4"><div class="text-sm font-black text-slate-800 mb-3">교재 목록</div><div class="space-y-3 max-h-[320px] overflow-y-auto mini-scroll pr-1">${state.books.sort((a,b)=>String(a.title).localeCompare(String(b.title),'ko')).map(b=>`<div class="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div class="flex items-start justify-between gap-3"><div><div class="font-black text-slate-900">${safe(b.title)}</div><div class="text-xs text-slate-500 mt-1">${safe(b.subject || '-')} · ${safe(b.grade || '-')} · ${safe(b.publisher || '-')}</div></div><div class="text-[11px] font-black ${b.archived ? 'text-rose-600' : 'text-emerald-600'}">${b.archived ? '보관' : '사용중'}</div></div><div class="mt-3 flex flex-wrap gap-2"><button data-action="edit-book" data-id="${b.id}" class="rounded-xl bg-violet-50 border border-violet-200 px-3 py-2 text-xs font-black text-violet-700">수정</button><button data-action="clone-book" data-id="${b.id}" class="rounded-xl bg-sky-50 border border-sky-200 px-3 py-2 text-xs font-black text-sky-700">복제</button><button data-action="toggle-book-archive" data-id="${b.id}" class="rounded-xl ${b.archived ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'} border px-3 py-2 text-xs font-black">${b.archived ? '부활' : '보관'}</button><button data-action="select-book-manage" data-id="${b.id}" class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">단원관리</button></div></div>`).join('')}</div></div></div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">단원 입력 / 페이지 맵</h3><div class="text-xs text-slate-400">${safe(bookById(state.selectedBookManageId)?.title || '교재 선택 필요')}</div></div><div class="space-y-4"><select id="selectedBookManageId" class="w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">교재 선택</option>${state.books.sort((a,b)=>String(a.title).localeCompare(String(b.title),'ko')).map(b=>`<option value="${b.id}" ${state.selectedBookManageId===b.id?'selected':''}>${safe(b.title)} ${b.archived ? '(보관됨)' : ''}</option>`).join('')}</select><div class="grid md:grid-cols-3 gap-3"><input id="unitName" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="단원명" value="${safe(state.formUnit.name)}" /><input id="unitStart" type="number" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="시작쪽" value="${safe(state.formUnit.start)}" /><input id="unitEnd" type="number" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="끝쪽" value="${safe(state.formUnit.end)}" /></div><button data-action="save-unit" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black px-5 py-3">단원 추가</button><textarea id="bulkUnitText" class="w-full min-h-[160px] border border-slate-300 rounded-2xl p-4 bg-white leading-7" placeholder="문법 1 / 1 / 20&#10;문법 2 / 21 / 45&#10;서술형 / 46 / 70">${safe(state.bulkUnitText)}</textarea><div class="flex gap-3"><button data-action="save-unit-bulk" class="rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-500 text-white font-black px-5 py-3">붙여넣기 반영</button><button data-action="clear-unit-bulk" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">입력 비우기</button></div>${bookById(state.selectedBookManageId) ? bookMap(bookById(state.selectedBookManageId)) : '<div class="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center text-sm text-slate-400">교재를 선택하면 단원 페이지 맵이 표시됩니다.</div>'}</div></div></div></div>`; }
 function inspectionsView(){ const classes = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id); const students = studentsForClass(state.selectedInspectionClassId); const assigned = assignedBooksForClass(state.selectedInspectionClassId); const selectedBook = bookById(state.selectedInspectionBookId); const units = selectedBook && state.selectedRangeStart && state.selectedRangeEnd ? unitsForRange(selectedBook, state.selectedRangeStart, state.selectedRangeEnd) : []; const total = pagesInRange(state.selectedRangeStart, state.selectedRangeEnd); const missed = parseMissedPages(state.missedPages).filter(p=>p>=Number(state.selectedRangeStart||0)&&p<=Number(state.selectedRangeEnd||0)); const donePct = total.length ? Math.round(((total.length-missed.length)/total.length)*100) : 0; const historyRows = state.inspections.filter(r => (!state.inspectionHistoryFilterClass || r.classId === state.inspectionHistoryFilterClass) && (!state.inspectionHistoryFilterStudent || r.studentId === state.inspectionHistoryFilterStudent)).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,20); return `<div class="space-y-6"><div class="grid xl:grid-cols-[1.02fr_0.98fr] gap-6"><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">학생별 교재점검</h3><div class="text-xs text-slate-400">강사용 입력 화면</div></div><div class="grid md:grid-cols-2 gap-4"><label class="text-sm font-bold text-slate-600">반 선택<select id="selectedInspectionClassId" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">반 선택</option>${classes.map(c=>`<option value="${c.id}" ${state.selectedInspectionClassId===c.id?'selected':''}>${safe(c.name)}</option>`).join('')}</select></label><label class="text-sm font-bold text-slate-600">학생 선택<select id="selectedInspectionStudentId" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">학생 선택</option>${students.map(s=>`<option value="${s.id}" ${state.selectedInspectionStudentId===s.id?'selected':''}>${safe(s.name)}</option>`).join('')}</select></label><label class="text-sm font-bold text-slate-600">교재 선택<select id="selectedInspectionBookId" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">교재 선택</option>${assigned.map(x=>`<option value="${x.book.id}" ${state.selectedInspectionBookId===x.book.id?'selected':''}>${safe(x.book.title)}</option>`).join('')}</select></label><label class="text-sm font-bold text-slate-600">점검일<input id="selectedDate" type="date" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(state.selectedDate)}" /></label><label class="text-sm font-bold text-slate-600">시작 페이지<input id="selectedRangeStart" type="number" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(state.selectedRangeStart)}" /></label><label class="text-sm font-bold text-slate-600">끝 페이지<input id="selectedRangeEnd" type="number" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(state.selectedRangeEnd)}" /></label></div><label class="block mt-4 text-sm font-bold text-slate-600">미완료 페이지<input id="missedPages" type="text" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="예: 12,13,16-18" value="${safe(state.missedPages)}" /></label><label class="block mt-4 text-sm font-bold text-slate-600">메모<textarea id="memo" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white min-h-[100px]" placeholder="특이사항 입력">${safe(state.memo)}</textarea></label><div class="mt-5 flex gap-3"><button data-action="save-inspection" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">점검 저장</button><button data-action="open-quick-mode" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">반 순회 점검 모드</button></div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">자동 분석</h3><div class="text-xs text-slate-400">선택 범위 기준</div></div><div class="rounded-[24px] border border-slate-200 p-4 bg-white"><div class="text-sm font-black text-slate-900">해당 단원</div><div class="mt-3 flex flex-wrap gap-2">${units.length ? units.map((u)=>`<span class="unit-chip" style="background:${u.color};">${safe(u.name)} (${u.start}~${u.end})</span>`).join('') : '<span class="text-sm text-slate-400">단원이 아직 표시되지 않았습니다.</span>'}</div></div><div class="rounded-[24px] border border-slate-200 p-4 bg-white mt-4"><div class="flex items-center justify-between gap-3"><div class="text-sm font-black text-slate-900">완료 / 미완료 막대그래프</div><div class="text-sm font-black text-violet-700">${donePct}%</div></div><div class="book-track mt-4"><div class="completed-seg h-full" style="width:${donePct}%"></div></div><div class="book-track mt-2"><div class="incomplete-seg h-full" style="width:${100-donePct}%"></div></div><div class="mt-3 text-xs text-slate-500 leading-6">전체 ${total.length}쪽 중 미완료 ${missed.length}쪽 · 나머지는 자동 완료 처리됩니다.</div></div>${selectedBook ? bookMap(selectedBook) : ''}</div></div><div id="quickMode" class="card-3d rounded-[28px] p-5 ${state.quickClassId ? '' : 'hidden'}"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">반 순회 점검 모드</h3><div class="text-xs text-slate-400">수업 직후 빠른 입력</div></div><div class="mb-4 no-print"><select id="quickClassId" class="border border-slate-300 rounded-xl p-3 bg-white"><option value="">반 선택</option>${classes.map(c=>`<option value="${c.id}" ${state.quickClassId===c.id?'selected':''}>${safe(c.name)}</option>`).join('')}</select></div><div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${studentsForClass(state.quickClassId).map(s=>{ const latest = inspectionsForStudent(s.id)[0]; return `<div class="rounded-[24px] border border-slate-200 p-4 bg-white"><div class="font-black text-slate-900">${safe(s.name)}</div><div class="text-xs text-slate-500 mt-1">최근 ${latest ? fmtDate(latest.date) + ' · ' + latest.completionRate + '%' : '기록 없음'}</div><button class="mt-4 rounded-xl bg-violet-50 border border-violet-200 px-4 py-2 text-sm font-black text-violet-700" data-action="quick-fill" data-id="${s.id}">이 학생으로 불러오기</button></div>`; }).join('') || '<div class="text-slate-400 text-sm">반을 먼저 선택해주세요.</div>'}</div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">최근 점검 기록</h3><div class="text-xs text-slate-400">학생별 누적 확인</div></div><div class="grid md:grid-cols-2 gap-3 mb-4"><select id="inspectionHistoryFilterClass" class="border border-slate-300 rounded-xl p-3 bg-white"><option value="">전체 반</option>${classes.map(c=>`<option value="${c.id}" ${state.inspectionHistoryFilterClass===c.id?'selected':''}>${safe(c.name)}</option>`).join('')}</select><select id="inspectionHistoryFilterStudent" class="border border-slate-300 rounded-xl p-3 bg-white"><option value="">전체 학생</option>${state.students.filter(s=>!state.inspectionHistoryFilterClass || s.classId===state.inspectionHistoryFilterClass).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>`<option value="${s.id}" ${state.inspectionHistoryFilterStudent===s.id?'selected':''}>${safe(s.name)} · ${safe(classById(s.classId)?.name || '-')}</option>`).join('')}</select></div><div class="overflow-x-auto mini-scroll"><table class="w-full text-sm text-center"><thead class="bg-slate-50 text-slate-500 text-xs uppercase font-bold border-b"><tr><th class="py-3">날짜</th><th>반</th><th>학생</th><th>교재</th><th>범위</th><th>미완료</th><th>완료율</th></tr></thead><tbody class="divide-y divide-slate-100">${historyRows.length ? historyRows.map(r=>`<tr><td class="py-3">${safe(fmtDate(r.date))}</td><td>${safe(classById(r.classId)?.name || '-')}</td><td>${safe(studentById(r.studentId)?.name || '-')}</td><td>${safe(bookById(r.bookId)?.title || '-')}</td><td>${safe(r.rangeStart)}~${safe(r.rangeEnd)}쪽</td><td class="text-rose-600">${safe((r.missedPages || []).join(', ') || '없음')}</td><td class="font-black text-violet-700">${safe(r.completionRate)}%</td></tr>`).join('') : '<tr><td colspan="7" class="py-10 text-slate-400">기록이 없습니다.</td></tr>'}</tbody></table></div></div></div>`; }
 function reportsView(){ const teacherClassesList = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id); return `<div class="space-y-6"><div class="grid xl:grid-cols-[0.95fr_1.05fr] gap-6 no-print"><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">학생별 보고서 출력</h3><div class="text-xs text-slate-400">파일명 학생명 기준</div></div><div class="space-y-4"><select id="reportStudentId" class="w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">학생 선택</option>${(state.currentTeacher.role==='admin' ? state.students : state.students.filter(s=>teacherClassesList.some(c=>c.id===s.classId))).map(s=>`<option value="${s.id}" ${state.reportStudentId===s.id?'selected':''}>${safe(s.name)} · ${safe(classById(s.classId)?.name || '-')}</option>`).join('')}</select><div class="text-sm text-slate-500 leading-6">출력 버튼을 누른 뒤 PDF 저장 시 학생 이름으로 저장하면 됩니다.</div><div class="flex gap-3"><button data-action="build-student-report" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">학생 보고서 만들기</button><button data-action="print" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">출력 / PDF</button></div></div></div><div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">반별 전체 진행표 출력</h3><div class="text-xs text-slate-400">선생님용 관리표</div></div><div class="space-y-4"><select id="reportClassId" class="w-full border border-slate-300 rounded-xl p-3 bg-white"><option value="">반 선택</option>${teacherClassesList.map(c=>`<option value="${c.id}" ${state.reportClassId===c.id?'selected':''}>${safe(c.name)}</option>`).join('')}</select><div class="text-sm text-slate-500 leading-6">반 전체 학생의 평균 완료율과 최근 점검일을 한 장으로 출력합니다.</div><div class="flex gap-3"><button data-action="build-class-report" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black px-5 py-3">반 전체표 만들기</button><button data-action="print" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">출력 / PDF</button></div></div></div></div><div id="printArea">${state.printHtml || `<div class="card-3d rounded-[28px] p-8 text-center text-slate-400">학생별 보고서 또는 반 전체 진행표를 먼저 생성해주세요.</div>`}</div></div>`; }
-function teachersAdminView(){ if (state.currentTeacher.role !== 'admin') return `<div class="card-3d rounded-[28px] p-8 text-center text-slate-400">관리자만 접근 가능합니다.</div>`; return `<div class="card-3d rounded-[28px] p-5"><div class="flex items-center justify-between gap-3 mb-4"><h3 class="text-lg font-black text-slate-900">관리자 설정</h3><div class="text-xs text-slate-400">로그인 구조 유지</div></div><div class="grid md:grid-cols-3 gap-4">${state.teachers.map(t=>`<div class="rounded-[24px] border border-slate-200 bg-white p-4"><div class="font-black text-slate-900">${safe(t.name)}</div><div class="text-xs text-slate-500 mt-1">PIN ${safe(t.pin)} · ${safe(t.role)}</div></div>`).join('')}</div></div>`; }
+function teachersAdminView(){
+  if (state.currentTeacher.role !== 'admin') return `<div class="card-3d rounded-[28px] p-8 text-center text-slate-400">관리자만 접근 가능합니다.</div>`;
+  return `<div class="space-y-6">
+    <div class="grid xl:grid-cols-[0.92fr_1.08fr] gap-6">
+      <div class="card-3d rounded-[28px] p-5">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-black text-slate-900">강사 계정 관리</h3>
+          <div class="text-xs text-slate-400">추가 / 수정 / 삭제 / 저장</div>
+        </div>
+        <div class="space-y-4">
+          <div class="grid md:grid-cols-3 gap-3">
+            <input id="adminTeacherName" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="강사 이름" value="${safe(state.adminTeacherForm.name)}" />
+            <input id="adminTeacherPin" maxlength="4" class="border border-slate-300 rounded-xl p-3 bg-white" placeholder="PIN 4자리" value="${safe(state.adminTeacherForm.pin)}" />
+            <select id="adminTeacherRole" class="border border-slate-300 rounded-xl p-3 bg-white">
+              <option value="teacher" ${state.adminTeacherForm.role==='teacher'?'selected':''}>teacher</option>
+              <option value="admin" ${state.adminTeacherForm.role==='admin'?'selected':''}>admin</option>
+            </select>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <button data-action="admin-new-teacher" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">추가</button>
+            <button data-action="admin-save-teacher" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">저장</button>
+            <button data-action="admin-reset-teacher" class="rounded-2xl bg-slate-100 text-slate-700 font-black px-5 py-3">초기화</button>
+            ${state.adminTeacherEditId ? `<button data-action="admin-delete-teacher" data-id="${state.adminTeacherEditId}" class="rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 font-black px-5 py-3">삭제</button>` : ''}
+          </div>
+          <div class="text-xs text-slate-500 leading-6">관리자 계정은 삭제할 수 없고, 담당 반이 남아 있는 강사는 삭제가 제한됩니다.</div>
+        </div>
+      </div>
+      <div class="card-3d rounded-[28px] p-5">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h3 class="text-lg font-black text-slate-900">현재 강사 목록</h3>
+          <div class="text-xs text-slate-400">클릭하면 수정 불러오기</div>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+          ${state.teachers.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(t=>`<div class="rounded-[24px] border border-slate-200 bg-white p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-black text-slate-900">${safe(t.name)}</div>
+                <div class="text-xs text-slate-500 mt-1">PIN ${safe(t.pin)} · ${safe(t.role)}</div>
+              </div>
+              <button data-action="admin-edit-teacher" data-id="${t.id}" class="rounded-xl bg-violet-50 border border-violet-200 px-3 py-2 text-xs font-black text-violet-700">수정</button>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
 function menuBtn(view,label,icon){ return `<button data-action="view" data-view="${view}" class="w-full flex items-center gap-3 px-4 py-3 font-bold text-sm ${state.view===view?'nav-pill-active':'nav-pill'}"><i class="fas ${icon} w-5"></i>${label}</button>`; }
 function mobileMenuBtn(view,label){ return `<button data-action="view" data-view="${view}" class="rounded-full px-4 py-2.5 text-sm font-bold border whitespace-nowrap ${state.view===view?'text-white border-transparent bg-gradient-to-r from-violet-700 to-indigo-600':'text-slate-600 border-slate-200 bg-white'}">${label}</button>`; }
-function loginScreen(){ return `<div class="min-h-screen flex items-center justify-center p-4"><div class="w-full max-w-5xl grid md:grid-cols-[1.1fr_0.9fr] gap-6"><div class="hidden md:flex rounded-[36px] hero-panel p-10 flex-col justify-end relative overflow-hidden"><div class="absolute top-8 right-8 z-10 w-[190px]"><div class="text-right text-[12px] font-black tracking-[0.22em] text-[#2F4EA2]">TEXTBOOK CHECK</div></div><div class="relative z-10"><div class="mt-9 text-[13px] font-black tracking-[0.24em] text-slate-500">OPEN ACADEMY TEXTBOOK CHECK SYSTEM</div><h1 class="mt-4 text-[38px] md:text-[46px] font-black leading-[1.24]"><span class="block text-slate-900">열린학원 교재 점검</span></h1><p class="mt-7 text-[19px] md:text-[22px] font-semibold italic leading-[1.95] text-slate-600">교재를 체크하는 곳이 아니라,<br/>교재 진행을 운영하는 시스템입니다.</p><div class="mt-10 text-sm font-semibold italic text-slate-400">반 중심 세팅 · 학생 일괄 등록 · 교재 템플릿 운영</div><div class="mt-4 text-[12px] font-black text-violet-700">ver. TC-R1.0</div></div></div><div class="glass rounded-[36px] panel-shadow soft-border p-8"><div class="text-[12px] font-black tracking-[0.22em] text-[#2F4EA2]">TEXTBOOK CHECK</div><h2 class="text-3xl font-black text-slate-900 mb-2 mt-1">빠른 PIN 로그인</h2><p class="text-slate-500 mb-8">선생님을 선택하고 4자리 PIN을 입력하세요.</p><div><label class="block text-sm font-bold text-slate-700 mb-3">선생님 선택</label><div class="grid grid-cols-3 gap-3">${state.teachers.map((t,idx)=>`<button data-action="select-teacher" data-id="${t.name}" class="teacher-chip teacher-chip-${(idx%6)+1} ${state.selectedTeacherName===t.name?'teacher-chip-selected':''}">${safe(t.name)}</button>`).join('')}</div></div><div class="mt-6"><label class="block text-sm font-bold text-slate-700 mb-2">PIN 번호</label><input id="loginPin" type="password" maxlength="4" class="w-full h-16 border-2 border-slate-200 rounded-2xl text-center text-3xl tracking-[1em] font-black focus:border-violet-400 outline-none" placeholder="••••" value="${safe(state.pin)}" /></div><button data-action="login" class="mt-6 w-full h-14 rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-bold text-lg shadow-lg">로그인</button><div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-500">초기 데모 계정: 김선생 1234 / 이선생 2345 / 관리자 9999</div></div></div></div>`; }
-function layout(content){ const currentTeacherName = state.currentTeacher?.name || ''; const adminBadge = state.currentTeacher?.role==='admin' ? '<span class="inline-flex rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 text-xs font-black text-white">관리자</span>' : ''; return `<div class="hidden xl:flex fixed left-5 top-5 bottom-5 w-[260px] rounded-[30px] glass soft-border sidebar-shadow p-5 flex-col no-print"><div class="pb-6 border-b border-slate-100"><div class="text-2xl font-black text-violet-800 tracking-tight">열린학원</div><div class="text-sm text-slate-500 mt-1">교재 점검 시스템</div></div><div class="mt-6 space-y-2 flex-1">${menuBtn('dashboard','전체 정보','fa-chart-column')}${menuBtn('setup','반 세팅','fa-sitemap')}${menuBtn('inspections','학생별 교재점검','fa-clipboard-check')}${menuBtn('reports','학생별 보고서 출력','fa-file-pdf')}${menuBtn('teachers','관리자 설정','fa-user-gear')}</div><div class="mt-auto space-y-3"><div class="bg-slate-50 p-4 rounded-2xl border border-slate-200"><div class="text-xs text-slate-500 font-bold mb-1">로그인</div><div class="flex items-center justify-between gap-2"><div class="font-black text-slate-900">${safe(currentTeacherName)} 선생님</div>${adminBadge}</div></div><button data-action="logout" class="w-full rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-bold py-3 shadow-sm">로그아웃</button></div></div><main class="xl:pl-[290px] p-4 sm:p-6 space-y-6"><header class="sticky top-0 z-20 section-hero rounded-[28px] p-4 sm:p-5 no-print"><div class="flex items-start justify-between gap-3"><div><div class="text-sm font-bold text-violet-700">열린학원 교재 점검 시스템</div><h2 class="mt-1 text-2xl sm:text-3xl font-black text-slate-900">${({dashboard:'전체 정보', setup:'반 세팅', inspections:'학생별 교재점검', reports:'학생별 보고서 출력', teachers:'관리자 설정'})[state.view]}</h2></div><div class="flex items-center gap-2 no-print"><span class="hidden sm:inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] font-black text-violet-700">GitHub + Firebase Hosting</span><button data-action="print" class="px-4 py-2 bg-slate-100 rounded-full font-bold text-sm text-slate-700 hover:bg-slate-200">인쇄 / PDF</button></div></div><div class="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print">${mobileMenuBtn('dashboard','전체')}${mobileMenuBtn('setup','반 세팅')}${mobileMenuBtn('inspections','점검')}${mobileMenuBtn('reports','보고서')}${mobileMenuBtn('teachers','설정')}</div></header>${state.saveMsg ? `<div class="no-print rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">${safe(state.saveMsg)}</div>` : ''}${content}</main>`; }
+function loginScreen(){ return `<div class="min-h-screen flex items-center justify-center p-4"><div class="w-full max-w-5xl grid md:grid-cols-[1.1fr_0.9fr] gap-6"><div class="hidden md:flex rounded-[36px] hero-panel p-10 flex-col justify-end relative overflow-hidden"><div class="absolute top-8 right-8 z-10 w-[190px]"><div class="text-right text-[12px] font-black tracking-[0.22em] text-[#2F4EA2]">TEXTBOOK CHECK</div></div><div class="relative z-10"><div class="mt-9 text-[13px] font-black tracking-[0.24em] text-slate-500">OPEN ACADEMY TEXTBOOK CHECK SYSTEM</div><h1 class="mt-4 text-[38px] md:text-[46px] font-black leading-[1.24]"><span class="block text-slate-900">열린학원 교재 점검</span></h1><p class="mt-7 text-[19px] md:text-[22px] font-semibold italic leading-[1.95] text-slate-600">교재를 체크하는 곳이 아니라,<br/>교재 진행을 운영하는 시스템입니다.</p><div class="mt-10 text-sm font-semibold italic text-slate-400">반 중심 세팅 · 학생 일괄 등록 · 교재 템플릿 운영</div><div class="mt-4 text-[12px] font-black text-violet-700">ver. TC-R1.0</div></div></div><div class="glass rounded-[36px] panel-shadow soft-border p-8"><div class="text-[12px] font-black tracking-[0.22em] text-[#2F4EA2]">TEXTBOOK CHECK</div><h2 class="text-3xl font-black text-slate-900 mb-2 mt-1">빠른 PIN 로그인</h2><p class="text-slate-500 mb-8">선생님을 선택하고 4자리 PIN을 입력하세요.</p><div><label class="block text-sm font-bold text-slate-700 mb-3">선생님 선택</label><div class="grid grid-cols-3 gap-3">${state.teachers.map((t,idx)=>`<button data-action="select-teacher" data-id="${t.name}" class="teacher-chip teacher-chip-${(idx%6)+1} ${state.selectedTeacherName===t.name?'teacher-chip-selected':''}">${safe(t.name)}</button>`).join('')}</div></div><div class="mt-6"><label class="block text-sm font-bold text-slate-700 mb-2">PIN 번호</label><input id="loginPin" type="password" maxlength="4" class="w-full h-16 border-2 border-slate-200 rounded-2xl text-center text-3xl tracking-[1em] font-black focus:border-violet-400 outline-none" placeholder="••••" value="${safe(state.pin)}" /></div><button data-action="login" class="mt-6 w-full h-14 rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-bold text-lg shadow-lg">로그인</button><div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-500">초기 데모 계정: 수최 1234 / Joy 2345 / 관리자 9999</div></div></div></div>`; }
+function layout(content){ const currentTeacherName = state.currentTeacher?.name || ''; const adminBadge = state.currentTeacher?.role==='admin' ? '<span class="inline-flex rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 text-xs font-black text-white">관리자</span>' : ''; return `<div class="hidden xl:flex fixed left-5 top-5 bottom-5 w-[260px] rounded-[30px] glass soft-border sidebar-shadow p-5 flex-col no-print"><div class="pb-6 border-b border-slate-100">
+  <div class="rounded-[24px] bg-white border border-slate-200 px-4 py-4 flex items-center justify-center min-h-[92px]">
+    <img src="./logo.png" alt="열린학원 로고" class="max-h-12 w-auto object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    <div class="text-2xl font-black text-violet-800 tracking-tight hidden">열린학원</div>
+  </div>
+  <div class="text-sm text-slate-500 mt-3 text-center">교재 점검 시스템</div>
+</div><div class="mt-6 space-y-2 flex-1">${menuBtn('dashboard','전체 정보','fa-chart-column')}${menuBtn('setup','반 세팅','fa-sitemap')}${menuBtn('inspections','학생별 교재점검','fa-clipboard-check')}${menuBtn('reports','학생별 보고서 출력','fa-file-pdf')}${menuBtn('teachers','관리자 설정','fa-user-gear')}</div><div class="mt-auto space-y-3"><div class="bg-slate-50 p-4 rounded-2xl border border-slate-200"><div class="text-xs text-slate-500 font-bold mb-1">로그인</div><div class="flex items-center justify-between gap-2"><div class="font-black text-slate-900">${safe(currentTeacherName)} 선생님</div>${adminBadge}</div></div><button data-action="logout" class="w-full rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-bold py-3 shadow-sm">로그아웃</button></div></div><main class="xl:pl-[290px] p-4 sm:p-6 space-y-6"><header class="sticky top-0 z-20 section-hero rounded-[28px] p-4 sm:p-5 no-print"><div class="flex items-start justify-between gap-3"><div><div class="text-sm font-bold text-violet-700">열린학원 교재 점검 시스템</div><h2 class="mt-1 text-2xl sm:text-3xl font-black text-slate-900">${({dashboard:'전체 정보', setup:'반 세팅', inspections:'학생별 교재점검', reports:'학생별 보고서 출력', teachers:'관리자 설정'})[state.view]}</h2></div><div class="flex items-center gap-2 no-print"><span class="hidden sm:inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] font-black text-violet-700">GitHub + Firebase Hosting</span><button data-action="print" class="px-4 py-2 bg-slate-100 rounded-full font-bold text-sm text-slate-700 hover:bg-slate-200">인쇄 / PDF</button></div></div><div class="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print">${mobileMenuBtn('dashboard','전체')}${mobileMenuBtn('setup','반 세팅')}${mobileMenuBtn('inspections','점검')}${mobileMenuBtn('reports','보고서')}${mobileMenuBtn('teachers','설정')}</div></header>${state.saveMsg ? `<div class="no-print rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">${safe(state.saveMsg)}</div>` : ''}${content}</main>`; }
 function render(){ if (state.loading) { appRoot.innerHTML = `<div class="min-h-screen flex items-center justify-center text-violet-700 font-bold text-xl">데이터 불러오는 중...</div>`; bind(); return; } if (!state.currentTeacher) { appRoot.innerHTML = loginScreen(); bind(); return; } const content = state.view==='dashboard' ? dashboardView() : state.view==='setup' ? setupView() : state.view==='inspections' ? inspectionsView() : state.view==='reports' ? reportsView() : teachersAdminView(); appRoot.innerHTML = layout(content); bind(); }
 function bind(){
   appRoot.querySelectorAll('[data-action="view"]').forEach(el=>el.onclick=()=>{ state.view=el.dataset.view; render(); });
@@ -161,6 +284,9 @@ function bind(){
   document.getElementById('unitName')?.addEventListener('input', e=>state.formUnit.name=e.target.value);
   document.getElementById('unitStart')?.addEventListener('input', e=>state.formUnit.start=e.target.value);
   document.getElementById('unitEnd')?.addEventListener('input', e=>state.formUnit.end=e.target.value);
+  document.getElementById('adminTeacherName')?.addEventListener('input', e=>state.adminTeacherForm.name=e.target.value);
+  document.getElementById('adminTeacherPin')?.addEventListener('input', e=>state.adminTeacherForm.pin=e.target.value.replace(/\D/g,'').slice(0,4));
+  document.getElementById('adminTeacherRole')?.addEventListener('change', e=>state.adminTeacherForm.role=e.target.value);
   appRoot.querySelector('[data-action="save-class"]')?.addEventListener('click', saveClass);
   appRoot.querySelector('[data-action="reset-class-form"]')?.addEventListener('click', ()=>{ resetSetupForm(); render(); });
   appRoot.querySelectorAll('[data-action="student-mode"]').forEach(el=>el.onclick=()=>{ state.studentBulkMode=el.dataset.mode; render(); });
@@ -184,193 +310,14 @@ function bind(){
   appRoot.querySelectorAll('[data-action="quick-fill"]').forEach(el=>el.onclick=()=>{ state.selectedInspectionStudentId=el.dataset.id; state.selectedInspectionClassId=studentById(el.dataset.id)?.classId || ''; state.view='inspections'; render(); });
   appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', ()=>{ state.printHtml=reportForStudent(state.reportStudentId); render(); });
   appRoot.querySelector('[data-action="build-class-report"]')?.addEventListener('click', ()=>{ state.printHtml=reportForClass(state.reportClassId); render(); });
+  appRoot.querySelector('[data-action="admin-new-teacher"]')?.addEventListener('click', ()=>{ resetAdminTeacherForm(); render(); });
+  appRoot.querySelector('[data-action="admin-reset-teacher"]')?.addEventListener('click', ()=>{ resetAdminTeacherForm(); render(); });
+  appRoot.querySelector('[data-action="admin-save-teacher"]')?.addEventListener('click', saveAdminTeacher);
+  appRoot.querySelector('[data-action="admin-delete-teacher"]')?.addEventListener('click', (e)=>removeAdminTeacher(e.currentTarget.dataset.id));
+  appRoot.querySelectorAll('[data-action="admin-edit-teacher"]').forEach(el=>el.onclick=()=>loadAdminTeacherToForm(el.dataset.id));
 }
-const SIDEBAR_LOGO_SRC = './logo.png';
-
-function teacherClassCount(teacherId){ return state.classes.filter(c=>c.teacherId===teacherId && c.active!==false).length; }
-function teacherRoleLabel(role){ return role === 'admin' ? '관리자' : '강사'; }
-function teacherRoleOptions(selectedRole){ return `<option value="teacher" ${selectedRole==='teacher'?'selected':''}>강사</option><option value="admin" ${selectedRole==='admin'?'selected':''}>관리자</option>`; }
-function teacherFieldId(field, teacherId){ return `teacher-${field}-${teacherId}`; }
-function teacherFieldValue(field, teacherId){ return String(document.getElementById(teacherFieldId(field, teacherId))?.value || '').trim(); }
-function teacherNameIsDuplicate(name, currentId=''){ return state.teachers.some(t => t.id !== currentId && t.active!==false && String(t.name || '').trim() === name); }
-
-async function syncTeacherPresetNames(){
-  const teacherSnap = await getDocs(refs.teachers);
-  const teacherRows = teacherSnap.docs.map(d=>({ id:d.id, ...d.data() }));
-  const presets = [
-    { id:'t_kim', name:'수최', pin:'1234', role:'teacher', legacyNames:['김선생','김 선생',''] },
-    { id:'t_lee', name:'Joy', pin:'2345', role:'teacher', legacyNames:['이선생','이 선생',''] }
-  ];
-  const jobs = [];
-  presets.forEach(preset => {
-    const teacher = teacherRows.find(row => row.id === preset.id);
-    if (!teacher) return;
-    const currentName = String(teacher.name || '').trim();
-    const shouldRename = !currentName || preset.legacyNames.includes(currentName);
-    const shouldRepairPin = !String(teacher.pin || '').trim();
-    const shouldRepairRole = !String(teacher.role || '').trim();
-    if (!shouldRename && !shouldRepairPin && !shouldRepairRole) return;
-    jobs.push(updateDoc(doc(db,'openacademy_textbook_teachers',preset.id), {
-      ...(shouldRename ? { name:preset.name } : {}),
-      ...(shouldRepairPin ? { pin:preset.pin } : {}),
-      ...(shouldRepairRole ? { role:preset.role } : {}),
-      updatedAt:serverTimestamp()
-    }));
-  });
-  if (jobs.length) await Promise.all(jobs);
-}
-
-async function saveTeacherAdminRow(teacherId){
-  const teacher = state.teachers.find(t => t.id === teacherId);
-  if (!teacher) return alert('선생님 정보를 찾을 수 없습니다.');
-  const name = teacherFieldValue('name', teacherId);
-  const pin = teacherFieldValue('pin', teacherId);
-  const role = teacherFieldValue('role', teacherId) || teacher.role || 'teacher';
-  if (!name) return alert('선생님 이름을 입력해주세요.');
-  if (!/^\d{4}$/.test(pin)) return alert('PIN은 4자리 숫자로 입력해주세요.');
-  if (teacherNameIsDuplicate(name, teacherId)) return alert('같은 이름의 선생님이 이미 있습니다.');
-  if (state.currentTeacher?.id === teacherId && state.currentTeacher?.role === 'admin' && role !== 'admin') return alert('현재 로그인한 관리자 계정 권한은 강사로 변경할 수 없습니다.');
-  await updateDoc(doc(db,'openacademy_textbook_teachers',teacherId), { name, pin, role, updatedAt:serverTimestamp() });
-  if (state.currentTeacher?.id === teacherId) state.currentTeacher = { ...state.currentTeacher, name, pin, role };
-  notify('선생님 정보 저장 완료');
-}
-
-async function addTeacherAdminRow(){
-  const name = String(document.getElementById('teacher-new-name')?.value || '').trim();
-  const pin = String(document.getElementById('teacher-new-pin')?.value || '').trim();
-  const role = String(document.getElementById('teacher-new-role')?.value || 'teacher').trim() || 'teacher';
-  if (!name) return alert('새 선생님 이름을 입력해주세요.');
-  if (!/^\d{4}$/.test(pin)) return alert('PIN은 4자리 숫자로 입력해주세요.');
-  if (teacherNameIsDuplicate(name)) return alert('같은 이름의 선생님이 이미 있습니다.');
-  await addDoc(refs.teachers, { name, pin, role, active:true, createdAt:serverTimestamp() });
-  const nameInput = document.getElementById('teacher-new-name');
-  const pinInput = document.getElementById('teacher-new-pin');
-  const roleInput = document.getElementById('teacher-new-role');
-  if (nameInput) nameInput.value = '';
-  if (pinInput) pinInput.value = '';
-  if (roleInput) roleInput.value = 'teacher';
-  notify('선생님 추가 완료');
-}
-
-async function deleteTeacherAdminRow(teacherId){
-  const teacher = state.teachers.find(t => t.id === teacherId);
-  if (!teacher) return alert('선생님 정보를 찾을 수 없습니다.');
-  if (teacher.role === 'admin') return alert('관리자 계정은 삭제할 수 없습니다.');
-  if (teacherClassCount(teacherId) > 0) return alert('담당 반이 있는 선생님은 먼저 반 배정을 변경해야 삭제할 수 있습니다.');
-  if (!window.confirm(`${teacher.name} 선생님 계정을 삭제할까요?`)) return;
-  await updateDoc(doc(db,'openacademy_textbook_teachers',teacherId), { active:false, updatedAt:serverTimestamp() });
-  notify('선생님 삭제 완료');
-}
-
-function exposeTeacherAdminActions(){
-  window.tcSaveTeacher = (teacherId)=>saveTeacherAdminRow(teacherId).catch(err=>{ console.error(err); alert('선생님 저장 중 오류가 발생했습니다.'); });
-  window.tcAddTeacher = ()=>addTeacherAdminRow().catch(err=>{ console.error(err); alert('선생님 추가 중 오류가 발생했습니다.'); });
-  window.tcDeleteTeacher = (teacherId)=>deleteTeacherAdminRow(teacherId).catch(err=>{ console.error(err); alert('선생님 삭제 중 오류가 발생했습니다.'); });
-}
-
-function teachersAdminView(){
-  if (state.currentTeacher.role !== 'admin') return `<div class="card-3d rounded-[28px] p-8 text-center text-slate-400">관리자만 접근 가능합니다.</div>`;
-  return `<div class="space-y-6">
-    <div class="card-3d rounded-[28px] p-5">
-      <div class="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 class="text-lg font-black text-slate-900">관리자 설정</h3>
-          <div class="text-sm text-slate-500 mt-1">선생님 계정을 여기서 바로 수정, 추가, 삭제, 저장할 수 있습니다.</div>
-        </div>
-        <div class="text-xs text-slate-400">로그인 구조 유지</div>
-      </div>
-      <div class="grid xl:grid-cols-2 gap-4">
-        ${state.teachers.map(t=>{
-          const classCount = teacherClassCount(t.id);
-          const deleteLocked = t.role === 'admin' || classCount > 0;
-          return `<div class="rounded-[24px] border border-slate-200 bg-white p-5">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="text-base font-black text-slate-900">${safe(t.name)}</div>
-                <div class="mt-1 text-xs text-slate-500">문서 ID ${safe(t.id)}</div>
-              </div>
-              <span class="inline-flex rounded-full px-3 py-1 text-xs font-black ${t.role==='admin'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-violet-50 text-violet-700 border border-violet-200'}">${teacherRoleLabel(t.role)}</span>
-            </div>
-            <div class="grid md:grid-cols-3 gap-3 mt-4">
-              <label class="text-sm font-bold text-slate-600">이름<input id="${teacherFieldId('name', t.id)}" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(t.name)}" /></label>
-              <label class="text-sm font-bold text-slate-600">PIN<input id="${teacherFieldId('pin', t.id)}" type="password" maxlength="4" inputmode="numeric" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(t.pin)}" /></label>
-              <label class="text-sm font-bold text-slate-600">권한<select id="${teacherFieldId('role', t.id)}" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white">${teacherRoleOptions(t.role)}</select></label>
-            </div>
-            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500">
-              <div>담당 반 ${classCount}개</div>
-              <div>${deleteLocked ? '삭제 제한 계정' : '삭제 가능 계정'}</div>
-            </div>
-            <div class="mt-4 flex gap-3">
-              <button onclick="window.tcSaveTeacher('${t.id}')" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">저장</button>
-              <button ${deleteLocked ? 'disabled' : ''} onclick="window.tcDeleteTeacher('${t.id}')" class="rounded-2xl px-5 py-3 font-black ${deleteLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-700 border border-rose-200'}">삭제</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-    <div class="card-3d rounded-[28px] p-5">
-      <div class="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 class="text-lg font-black text-slate-900">새 선생님 추가</h3>
-          <div class="text-sm text-slate-500 mt-1">이름과 PIN을 입력하면 바로 로그인 가능한 계정이 생성됩니다.</div>
-        </div>
-        <div class="text-xs text-slate-400">현재 강사 ${state.teachers.filter(t=>t.role!=='admin').length}명</div>
-      </div>
-      <div class="grid md:grid-cols-3 gap-3">
-        <label class="text-sm font-bold text-slate-600">이름<input id="teacher-new-name" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="예: Joy" /></label>
-        <label class="text-sm font-bold text-slate-600">PIN<input id="teacher-new-pin" type="password" maxlength="4" inputmode="numeric" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="4자리 숫자" /></label>
-        <label class="text-sm font-bold text-slate-600">권한<select id="teacher-new-role" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white">${teacherRoleOptions('teacher')}</select></label>
-      </div>
-      <div class="mt-4 flex justify-end">
-        <button onclick="window.tcAddTeacher()" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black px-5 py-3">선생님 추가 저장</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function layout(content){
-  const currentTeacherName = state.currentTeacher?.name || '';
-  const adminBadge = state.currentTeacher?.role==='admin' ? '<span class="inline-flex rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 text-xs font-black text-white">관리자</span>' : '';
-  return `<div class="hidden xl:flex fixed left-5 top-5 bottom-5 w-[260px] rounded-[30px] glass soft-border sidebar-shadow p-5 flex-col no-print">
-    <div class="pb-6 border-b border-slate-100">
-      <div class="flex items-center justify-center rounded-[24px] border border-slate-200 bg-white/80 px-5 py-4 shadow-sm">
-        <img src="${SIDEBAR_LOGO_SRC}" alt="열린학원 로고" class="h-16 w-auto object-contain" />
-      </div>
-      <div class="text-sm text-slate-500 mt-3">교재 점검 시스템</div>
-    </div>
-    <div class="mt-6 space-y-2 flex-1">${menuBtn('dashboard','전체 정보','fa-chart-column')}${menuBtn('setup','반 세팅','fa-sitemap')}${menuBtn('inspections','학생별 교재점검','fa-clipboard-check')}${menuBtn('reports','학생별 보고서 출력','fa-file-pdf')}${menuBtn('teachers','관리자 설정','fa-user-gear')}</div>
-    <div class="mt-auto space-y-3">
-      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-        <div class="text-xs text-slate-500 font-bold mb-1">로그인</div>
-        <div class="flex items-center justify-between gap-2">
-          <div class="font-black text-slate-900">${safe(currentTeacherName)} 선생님</div>
-          ${adminBadge}
-        </div>
-      </div>
-      <button data-action="logout" class="w-full rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-bold py-3 shadow-sm">로그아웃</button>
-    </div>
-  </div>
-  <main class="xl:pl-[290px] p-4 sm:p-6 space-y-6">
-    <header class="sticky top-0 z-20 section-hero rounded-[28px] p-4 sm:p-5 no-print">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <div class="text-sm font-bold text-violet-700">열린학원 교재 점검 시스템</div>
-          <h2 class="mt-1 text-2xl sm:text-3xl font-black text-slate-900">${({dashboard:'전체 정보', setup:'반 세팅', inspections:'학생별 교재점검', reports:'학생별 보고서 출력', teachers:'관리자 설정'})[state.view]}</h2>
-        </div>
-        <div class="flex items-center gap-2 no-print">
-          <button data-action="print" class="px-4 py-2 bg-slate-100 rounded-full font-bold text-sm text-slate-700 hover:bg-slate-200">인쇄 / PDF</button>
-        </div>
-      </div>
-      <div class="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print">${mobileMenuBtn('dashboard','전체')}${mobileMenuBtn('setup','반 세팅')}${mobileMenuBtn('inspections','점검')}${mobileMenuBtn('reports','보고서')}${mobileMenuBtn('teachers','설정')}</div>
-    </header>
-    ${state.saveMsg ? `<div class="no-print rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">${safe(state.saveMsg)}</div>` : ''}
-    ${content}
-  </main>`;
-}
-
 await ensureSeedData();
-await syncTeacherPresetNames();
-exposeTeacherAdminActions();
+await migrateDefaultTeachers();
 subscribe();
 render();
 </script>
