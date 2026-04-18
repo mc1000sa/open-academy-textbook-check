@@ -185,7 +185,192 @@ function bind(){
   appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', ()=>{ state.printHtml=reportForStudent(state.reportStudentId); render(); });
   appRoot.querySelector('[data-action="build-class-report"]')?.addEventListener('click', ()=>{ state.printHtml=reportForClass(state.reportClassId); render(); });
 }
+const SIDEBAR_LOGO_SRC = './logo.png';
+
+function teacherClassCount(teacherId){ return state.classes.filter(c=>c.teacherId===teacherId && c.active!==false).length; }
+function teacherRoleLabel(role){ return role === 'admin' ? '관리자' : '강사'; }
+function teacherRoleOptions(selectedRole){ return `<option value="teacher" ${selectedRole==='teacher'?'selected':''}>강사</option><option value="admin" ${selectedRole==='admin'?'selected':''}>관리자</option>`; }
+function teacherFieldId(field, teacherId){ return `teacher-${field}-${teacherId}`; }
+function teacherFieldValue(field, teacherId){ return String(document.getElementById(teacherFieldId(field, teacherId))?.value || '').trim(); }
+function teacherNameIsDuplicate(name, currentId=''){ return state.teachers.some(t => t.id !== currentId && t.active!==false && String(t.name || '').trim() === name); }
+
+async function syncTeacherPresetNames(){
+  const teacherSnap = await getDocs(refs.teachers);
+  const teacherRows = teacherSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+  const presets = [
+    { id:'t_kim', name:'수최', pin:'1234', role:'teacher', legacyNames:['김선생','김 선생',''] },
+    { id:'t_lee', name:'Joy', pin:'2345', role:'teacher', legacyNames:['이선생','이 선생',''] }
+  ];
+  const jobs = [];
+  presets.forEach(preset => {
+    const teacher = teacherRows.find(row => row.id === preset.id);
+    if (!teacher) return;
+    const currentName = String(teacher.name || '').trim();
+    const shouldRename = !currentName || preset.legacyNames.includes(currentName);
+    const shouldRepairPin = !String(teacher.pin || '').trim();
+    const shouldRepairRole = !String(teacher.role || '').trim();
+    if (!shouldRename && !shouldRepairPin && !shouldRepairRole) return;
+    jobs.push(updateDoc(doc(db,'openacademy_textbook_teachers',preset.id), {
+      ...(shouldRename ? { name:preset.name } : {}),
+      ...(shouldRepairPin ? { pin:preset.pin } : {}),
+      ...(shouldRepairRole ? { role:preset.role } : {}),
+      updatedAt:serverTimestamp()
+    }));
+  });
+  if (jobs.length) await Promise.all(jobs);
+}
+
+async function saveTeacherAdminRow(teacherId){
+  const teacher = state.teachers.find(t => t.id === teacherId);
+  if (!teacher) return alert('선생님 정보를 찾을 수 없습니다.');
+  const name = teacherFieldValue('name', teacherId);
+  const pin = teacherFieldValue('pin', teacherId);
+  const role = teacherFieldValue('role', teacherId) || teacher.role || 'teacher';
+  if (!name) return alert('선생님 이름을 입력해주세요.');
+  if (!/^\d{4}$/.test(pin)) return alert('PIN은 4자리 숫자로 입력해주세요.');
+  if (teacherNameIsDuplicate(name, teacherId)) return alert('같은 이름의 선생님이 이미 있습니다.');
+  if (state.currentTeacher?.id === teacherId && state.currentTeacher?.role === 'admin' && role !== 'admin') return alert('현재 로그인한 관리자 계정 권한은 강사로 변경할 수 없습니다.');
+  await updateDoc(doc(db,'openacademy_textbook_teachers',teacherId), { name, pin, role, updatedAt:serverTimestamp() });
+  if (state.currentTeacher?.id === teacherId) state.currentTeacher = { ...state.currentTeacher, name, pin, role };
+  notify('선생님 정보 저장 완료');
+}
+
+async function addTeacherAdminRow(){
+  const name = String(document.getElementById('teacher-new-name')?.value || '').trim();
+  const pin = String(document.getElementById('teacher-new-pin')?.value || '').trim();
+  const role = String(document.getElementById('teacher-new-role')?.value || 'teacher').trim() || 'teacher';
+  if (!name) return alert('새 선생님 이름을 입력해주세요.');
+  if (!/^\d{4}$/.test(pin)) return alert('PIN은 4자리 숫자로 입력해주세요.');
+  if (teacherNameIsDuplicate(name)) return alert('같은 이름의 선생님이 이미 있습니다.');
+  await addDoc(refs.teachers, { name, pin, role, active:true, createdAt:serverTimestamp() });
+  const nameInput = document.getElementById('teacher-new-name');
+  const pinInput = document.getElementById('teacher-new-pin');
+  const roleInput = document.getElementById('teacher-new-role');
+  if (nameInput) nameInput.value = '';
+  if (pinInput) pinInput.value = '';
+  if (roleInput) roleInput.value = 'teacher';
+  notify('선생님 추가 완료');
+}
+
+async function deleteTeacherAdminRow(teacherId){
+  const teacher = state.teachers.find(t => t.id === teacherId);
+  if (!teacher) return alert('선생님 정보를 찾을 수 없습니다.');
+  if (teacher.role === 'admin') return alert('관리자 계정은 삭제할 수 없습니다.');
+  if (teacherClassCount(teacherId) > 0) return alert('담당 반이 있는 선생님은 먼저 반 배정을 변경해야 삭제할 수 있습니다.');
+  if (!window.confirm(`${teacher.name} 선생님 계정을 삭제할까요?`)) return;
+  await updateDoc(doc(db,'openacademy_textbook_teachers',teacherId), { active:false, updatedAt:serverTimestamp() });
+  notify('선생님 삭제 완료');
+}
+
+function exposeTeacherAdminActions(){
+  window.tcSaveTeacher = (teacherId)=>saveTeacherAdminRow(teacherId).catch(err=>{ console.error(err); alert('선생님 저장 중 오류가 발생했습니다.'); });
+  window.tcAddTeacher = ()=>addTeacherAdminRow().catch(err=>{ console.error(err); alert('선생님 추가 중 오류가 발생했습니다.'); });
+  window.tcDeleteTeacher = (teacherId)=>deleteTeacherAdminRow(teacherId).catch(err=>{ console.error(err); alert('선생님 삭제 중 오류가 발생했습니다.'); });
+}
+
+function teachersAdminView(){
+  if (state.currentTeacher.role !== 'admin') return `<div class="card-3d rounded-[28px] p-8 text-center text-slate-400">관리자만 접근 가능합니다.</div>`;
+  return `<div class="space-y-6">
+    <div class="card-3d rounded-[28px] p-5">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-lg font-black text-slate-900">관리자 설정</h3>
+          <div class="text-sm text-slate-500 mt-1">선생님 계정을 여기서 바로 수정, 추가, 삭제, 저장할 수 있습니다.</div>
+        </div>
+        <div class="text-xs text-slate-400">로그인 구조 유지</div>
+      </div>
+      <div class="grid xl:grid-cols-2 gap-4">
+        ${state.teachers.map(t=>{
+          const classCount = teacherClassCount(t.id);
+          const deleteLocked = t.role === 'admin' || classCount > 0;
+          return `<div class="rounded-[24px] border border-slate-200 bg-white p-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-base font-black text-slate-900">${safe(t.name)}</div>
+                <div class="mt-1 text-xs text-slate-500">문서 ID ${safe(t.id)}</div>
+              </div>
+              <span class="inline-flex rounded-full px-3 py-1 text-xs font-black ${t.role==='admin'?'bg-amber-50 text-amber-700 border border-amber-200':'bg-violet-50 text-violet-700 border border-violet-200'}">${teacherRoleLabel(t.role)}</span>
+            </div>
+            <div class="grid md:grid-cols-3 gap-3 mt-4">
+              <label class="text-sm font-bold text-slate-600">이름<input id="${teacherFieldId('name', t.id)}" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(t.name)}" /></label>
+              <label class="text-sm font-bold text-slate-600">PIN<input id="${teacherFieldId('pin', t.id)}" type="password" maxlength="4" inputmode="numeric" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" value="${safe(t.pin)}" /></label>
+              <label class="text-sm font-bold text-slate-600">권한<select id="${teacherFieldId('role', t.id)}" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white">${teacherRoleOptions(t.role)}</select></label>
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500">
+              <div>담당 반 ${classCount}개</div>
+              <div>${deleteLocked ? '삭제 제한 계정' : '삭제 가능 계정'}</div>
+            </div>
+            <div class="mt-4 flex gap-3">
+              <button onclick="window.tcSaveTeacher('${t.id}')" class="rounded-2xl bg-gradient-to-r from-violet-700 to-indigo-600 text-white font-black px-5 py-3">저장</button>
+              <button ${deleteLocked ? 'disabled' : ''} onclick="window.tcDeleteTeacher('${t.id}')" class="rounded-2xl px-5 py-3 font-black ${deleteLocked ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-50 text-rose-700 border border-rose-200'}">삭제</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="card-3d rounded-[28px] p-5">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-lg font-black text-slate-900">새 선생님 추가</h3>
+          <div class="text-sm text-slate-500 mt-1">이름과 PIN을 입력하면 바로 로그인 가능한 계정이 생성됩니다.</div>
+        </div>
+        <div class="text-xs text-slate-400">현재 강사 ${state.teachers.filter(t=>t.role!=='admin').length}명</div>
+      </div>
+      <div class="grid md:grid-cols-3 gap-3">
+        <label class="text-sm font-bold text-slate-600">이름<input id="teacher-new-name" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="예: Joy" /></label>
+        <label class="text-sm font-bold text-slate-600">PIN<input id="teacher-new-pin" type="password" maxlength="4" inputmode="numeric" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white" placeholder="4자리 숫자" /></label>
+        <label class="text-sm font-bold text-slate-600">권한<select id="teacher-new-role" class="mt-2 w-full border border-slate-300 rounded-xl p-3 bg-white">${teacherRoleOptions('teacher')}</select></label>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="window.tcAddTeacher()" class="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black px-5 py-3">선생님 추가 저장</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function layout(content){
+  const currentTeacherName = state.currentTeacher?.name || '';
+  const adminBadge = state.currentTeacher?.role==='admin' ? '<span class="inline-flex rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 text-xs font-black text-white">관리자</span>' : '';
+  return `<div class="hidden xl:flex fixed left-5 top-5 bottom-5 w-[260px] rounded-[30px] glass soft-border sidebar-shadow p-5 flex-col no-print">
+    <div class="pb-6 border-b border-slate-100">
+      <div class="flex items-center justify-center rounded-[24px] border border-slate-200 bg-white/80 px-5 py-4 shadow-sm">
+        <img src="${SIDEBAR_LOGO_SRC}" alt="열린학원 로고" class="h-16 w-auto object-contain" />
+      </div>
+      <div class="text-sm text-slate-500 mt-3">교재 점검 시스템</div>
+    </div>
+    <div class="mt-6 space-y-2 flex-1">${menuBtn('dashboard','전체 정보','fa-chart-column')}${menuBtn('setup','반 세팅','fa-sitemap')}${menuBtn('inspections','학생별 교재점검','fa-clipboard-check')}${menuBtn('reports','학생별 보고서 출력','fa-file-pdf')}${menuBtn('teachers','관리자 설정','fa-user-gear')}</div>
+    <div class="mt-auto space-y-3">
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        <div class="text-xs text-slate-500 font-bold mb-1">로그인</div>
+        <div class="flex items-center justify-between gap-2">
+          <div class="font-black text-slate-900">${safe(currentTeacherName)} 선생님</div>
+          ${adminBadge}
+        </div>
+      </div>
+      <button data-action="logout" class="w-full rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-bold py-3 shadow-sm">로그아웃</button>
+    </div>
+  </div>
+  <main class="xl:pl-[290px] p-4 sm:p-6 space-y-6">
+    <header class="sticky top-0 z-20 section-hero rounded-[28px] p-4 sm:p-5 no-print">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="text-sm font-bold text-violet-700">열린학원 교재 점검 시스템</div>
+          <h2 class="mt-1 text-2xl sm:text-3xl font-black text-slate-900">${({dashboard:'전체 정보', setup:'반 세팅', inspections:'학생별 교재점검', reports:'학생별 보고서 출력', teachers:'관리자 설정'})[state.view]}</h2>
+        </div>
+        <div class="flex items-center gap-2 no-print">
+          <button data-action="print" class="px-4 py-2 bg-slate-100 rounded-full font-bold text-sm text-slate-700 hover:bg-slate-200">인쇄 / PDF</button>
+        </div>
+      </div>
+      <div class="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print">${mobileMenuBtn('dashboard','전체')}${mobileMenuBtn('setup','반 세팅')}${mobileMenuBtn('inspections','점검')}${mobileMenuBtn('reports','보고서')}${mobileMenuBtn('teachers','설정')}</div>
+    </header>
+    ${state.saveMsg ? `<div class="no-print rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">${safe(state.saveMsg)}</div>` : ''}
+    ${content}
+  </main>`;
+}
+
 await ensureSeedData();
+await syncTeacherPresetNames();
+exposeTeacherAdminActions();
 subscribe();
 render();
 </script>
