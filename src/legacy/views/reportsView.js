@@ -1,13 +1,131 @@
 import { renderBtnSelect } from './layoutView.js';
 
+const RUBRIC_LABELS = {
+  assignment: '과제 수행률',
+  expression: '풀이 표현력',
+  grading: '채점 성실도',
+  attitude: '수업 태도',
+  understanding: '개념 이해도',
+  application: '응용 해결력'
+};
+
+const RUBRIC_KEYS = Object.keys(RUBRIC_LABELS);
+
+function rubricScore(vector, key) {
+  const score = Number(vector?.[key]);
+  if (Number.isNaN(score)) return 0;
+  return Math.min(10, Math.max(0, score));
+}
+
+function defaultProgressTone() {
+  return { bar: '#4169e1' };
+}
+
+function rubricPoints(vector, radius = 74, center = 100) {
+  return RUBRIC_KEYS.map((key, index) => {
+    const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
+    const scoreRadius = (rubricScore(vector, key) / 10) * radius;
+    const x = center + Math.cos(angle) * scoreRadius;
+    const y = center + Math.sin(angle) * scoreRadius;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
+function rubricGridPoints(scale, radius = 74, center = 100) {
+  return RUBRIC_KEYS.map((_, index) => {
+    const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
+    const gridRadius = radius * scale;
+    const x = center + Math.cos(angle) * gridRadius;
+    const y = center + Math.sin(angle) * gridRadius;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
+function rubricLabelPosition(index, radius = 88, center = 100) {
+  const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
+  return {
+    x: center + Math.cos(angle) * radius,
+    y: center + Math.sin(angle) * radius
+  };
+}
+
+export function renderRubricCompare(title, primary, secondary, secondaryLabel, safe) {
+  const escape = typeof safe === 'function' ? safe : value => String(value ?? '');
+  const grid = [0.25, 0.5, 0.75, 1].map(scale => `
+    <polygon points="${rubricGridPoints(scale)}" fill="none" stroke="rgba(148,163,184,0.22)" stroke-width="1"></polygon>
+  `).join('');
+  const axes = RUBRIC_KEYS.map((_, index) => {
+    const point = rubricGridPoints(1).split(' ')[index];
+    return `<line x1="100" y1="100" x2="${point.split(',')[0]}" y2="${point.split(',')[1]}" stroke="rgba(148,163,184,0.18)" stroke-width="1"></line>`;
+  }).join('');
+  const labels = RUBRIC_KEYS.map((key, index) => {
+    const pos = rubricLabelPosition(index);
+    const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
+    return `<text x="${pos.x.toFixed(1)}" y="${pos.y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#cbd5e1" font-size="8" font-weight="700">${escape(RUBRIC_LABELS[key])}</text>`;
+  }).join('');
+  const summary = RUBRIC_KEYS.map(key => `
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-slate-400">${escape(RUBRIC_LABELS[key])}</span>
+      <span class="font-black text-slate-100">${escape(rubricScore(primary, key).toFixed(1))}</span>
+    </div>
+  `).join('');
+
+  return `
+    <section class="rubric-report mt-4 p-4 rounded-xl bg-slate-950/40 border border-slate-800">
+      <div class="flex flex-col md:flex-row md:items-start gap-4">
+        <div class="flex-1 min-w-0">
+          <h3 class="text-sm font-black text-white mb-2">${escape(title)}</h3>
+          <div class="flex flex-wrap items-center gap-3 text-[11px] font-bold text-slate-300">
+            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-400"></span>학생</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-400"></span>${escape(secondaryLabel || '비교 평균')}</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 mt-3 text-[11px]">
+            ${summary}
+          </div>
+        </div>
+        <svg class="shrink-0 w-full max-w-[260px] mx-auto md:mx-0" viewBox="0 0 200 200" role="img" aria-label="${escape(title)}">
+          ${grid}
+          ${axes}
+          <polygon points="${rubricPoints(secondary)}" fill="rgba(52,211,153,0.18)" stroke="#34d399" stroke-width="2"></polygon>
+          <polygon points="${rubricPoints(primary)}" fill="rgba(96,165,250,0.28)" stroke="#60a5fa" stroke-width="2.5"></polygon>
+          ${labels}
+        </svg>
+      </div>
+    </section>
+  `;
+}
+
 // 1. 학생/학부모 개별 교재점검 보고서 템플릿
 export function reportForStudent(studentId, state, deps) {
-  const { studentById, classById, inspectionsForStudent, groupInspectionsByBook, bookById, averageCompletionRate, fmtDate, safe, progressTone } = deps;
+  const {
+    studentById,
+    classById,
+    inspectionsForStudent,
+    groupInspectionsByBook,
+    bookById,
+    averageCompletionRate,
+    fmtDate,
+    safe,
+    progressTone,
+    bookRubricAverage,
+    classRubricAverage,
+    studentRubricAverage,
+    students,
+    inspections
+  } = deps;
   const student = studentById(studentId);
   if (!student) return '';
   const klass = classById(student.classId);
   const rows = inspectionsForStudent(studentId);
   const grouped = groupInspectionsByBook(rows);
+  const allStudents = students || state.students || [];
+  const allInspections = inspections || state.inspections || [];
+  const studentVector = typeof studentRubricAverage === 'function'
+    ? studentRubricAverage(studentId, allInspections)
+    : {};
+  const classVector = typeof classRubricAverage === 'function'
+    ? classRubricAverage(student.classId, allStudents, allInspections)
+    : {};
   
   // 전체 평균 완료율
   const totalAvg = Math.round(averageCompletionRate(rows));
@@ -16,7 +134,10 @@ export function reportForStudent(studentId, state, deps) {
     const book = bookById(bookId);
     const avg = Math.round(averageCompletionRate(items));
     const latest = items[0];
-    const tone = progressTone(avg);
+    const tone = (typeof progressTone === 'function' ? progressTone : defaultProgressTone)(avg);
+    const bookVector = typeof bookRubricAverage === 'function'
+      ? bookRubricAverage(bookId, allInspections)
+      : {};
 
     // 미비 페이지 목록 취합
     const allMissed = new Set();
@@ -66,6 +187,9 @@ export function reportForStudent(studentId, state, deps) {
             </div>
           `).join('')}
         </div>
+
+        ${renderRubricCompare('교재별 6요소 비교', studentVector, bookVector, '같은 교재 평균', safe)}
+        ${renderRubricCompare('반 평균 6요소 비교', studentVector, classVector, '반 평균', safe)}
       </div>
     `;
   }).join('');
@@ -109,15 +233,44 @@ export function reportForStudent(studentId, state, deps) {
 
 // 2. 반별 전체 교재 진행표 템플릿
 export function reportForClass(classId, state, deps) {
-  const { classById, studentsForClass, inspectionsForStudent, averageCompletionRate, fmtDate, teacherNameById, safe } = deps;
+  const {
+    classById,
+    studentsForClass,
+    inspectionsForStudent,
+    averageCompletionRate,
+    fmtDate,
+    teacherNameById,
+    safe,
+    classRubricAverage,
+    studentRubricAverage,
+    students: allStudentsDep,
+    inspections
+  } = deps;
   const klass = classById(classId);
   if (!klass) return '';
   const students = studentsForClass(classId);
+  const allStudents = allStudentsDep || state.students || [];
+  const allInspections = inspections || state.inspections || [];
+  const classVector = typeof classRubricAverage === 'function'
+    ? classRubricAverage(classId, allStudents, allInspections)
+    : {};
+  const rubricHeader = RUBRIC_KEYS.map(key => `
+    <th class="px-3 py-3 text-center whitespace-nowrap">${safe(RUBRIC_LABELS[key])}</th>
+  `).join('');
+  const classAverageCells = RUBRIC_KEYS.map(key => `
+    <td class="px-3 py-3 text-center font-black text-emerald-300">${safe(rubricScore(classVector, key).toFixed(1))}</td>
+  `).join('');
 
   const rows = students.map(s => {
     const logs = inspectionsForStudent(s.id);
     const avg = Math.round(averageCompletionRate(logs));
     const latest = logs[0]?.date || '';
+    const vector = typeof studentRubricAverage === 'function'
+      ? studentRubricAverage(s.id, allInspections)
+      : {};
+    const rubricCells = RUBRIC_KEYS.map(key => `
+      <td class="px-3 py-3 text-center font-bold text-slate-200">${safe(rubricScore(vector, key).toFixed(1))}</td>
+    `).join('');
     
     return `
       <tr class="border-b border-slate-800/80 hover:bg-slate-900/30 text-xs">
@@ -125,6 +278,7 @@ export function reportForClass(classId, state, deps) {
         <td class="px-4 py-3 text-slate-400">${safe(s.school || '-')}</td>
         <td class="px-4 py-3 text-right font-black text-blue-400">${avg}%</td>
         <td class="px-4 py-3 text-slate-400 text-center">${safe(fmtDate(latest)) || '-'}</td>
+        ${rubricCells}
       </tr>
     `;
   }).join('');
@@ -137,7 +291,7 @@ export function reportForClass(classId, state, deps) {
         <p class="text-xs text-slate-400 mt-1.5">담당 강사: <span class="text-slate-200">${safe(teacherNameById(klass.teacherId))} T</span></p>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="class-rubric-table overflow-x-auto">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="border-b border-slate-800 bg-slate-900/40 text-[11px] font-bold text-slate-400">
@@ -145,10 +299,17 @@ export function reportForClass(classId, state, deps) {
               <th class="px-4 py-3">학교</th>
               <th class="px-4 py-3 text-right">평균 완료율</th>
               <th class="px-4 py-3 text-center">최근 점검일</th>
+              ${rubricHeader}
             </tr>
           </thead>
           <tbody>
-            ${rows || '<tr><td colspan="4" class="px-4 py-10 text-center text-slate-500">등록된 학생이 존재하지 않습니다.</td></tr>'}
+            ${rows ? `
+              <tr class="border-b border-emerald-500/20 bg-emerald-500/5 text-xs">
+                <td class="px-4 py-3 text-emerald-200 font-black" colspan="4">반 평균</td>
+                ${classAverageCells}
+              </tr>
+              ${rows}
+            ` : '<tr><td colspan="10" class="px-4 py-10 text-center text-slate-500">등록된 학생이 존재하지 않습니다.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -162,7 +323,7 @@ export function reportForClass(classId, state, deps) {
 
 // 3. 메인 보고서 뷰 렌더러
 export function renderReportsView(state, deps) {
-  const { teacherClasses, classById, safe } = deps;
+  const { teacherClasses, classById } = deps;
   const teacherClassesList = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
   const studentsList = state.currentTeacher.role === 'admin' ? state.students : state.students.filter(s => teacherClassesList.some(c => c.id === s.classId));
 
@@ -185,7 +346,10 @@ export function renderReportsView(state, deps) {
               <span class="text-xs font-bold text-slate-400">대상 학생 선택</span>
               ${renderBtnSelect({
                 id: 'reportStudentId',
-                options: studentsList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>({ value: s.id, label: `${s.name} (${classById(s.classId)?.name || '-'})` })),
+                options: studentsList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>({
+                  value: s.id,
+                  label: `${s.name} (${classById(s.classId)?.name || '-'})`
+                })),
                 selectedValue: state.reportStudentId,
                 placeholder: '배정된 학생이 없습니다.'
               })}

@@ -223,19 +223,29 @@ export function renderLayoutView({ content, currentView, currentTeacher, student
   `;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 // 칩 형태 버튼 선택기 렌더러 (타이트한 버튼 드롭다운 대체용)
 export function renderBtnSelect({ id, options, selectedValue, placeholder = '선택사항이 없습니다.' }) {
+  const safeId = escapeHtml(id);
   if (!options || options.length === 0) {
-    return `<div class="text-xs text-slate-500 p-2 font-bold">${placeholder}</div>`;
+    return `<div class="text-xs text-slate-500 p-2 font-bold">${escapeHtml(placeholder)}</div>`;
   }
   return `
-    <div class="choice-grid" id="${id}">
+    <div class="choice-grid" id="${safeId}">
       ${options.map(opt => {
         const active = String(opt.value) === String(selectedValue);
         const btnClass = active ? 'selected' : '';
         return `
-          <button type="button" data-action="select-option" data-target="${id}" data-value="${opt.value}" class="choice-button btn-choice-teacher ${btnClass}">
-            ${opt.label}
+          <button type="button" data-action="select-option" data-target="${safeId}" data-value="${escapeHtml(opt.value)}" class="choice-button btn-choice-teacher ${btnClass}">
+            ${escapeHtml(opt.label)}
           </button>
         `;
       }).join('')}

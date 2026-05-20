@@ -584,6 +584,14 @@ details.group[open] summary span {
 .incomplete-seg {
   background: linear-gradient(90deg, #f43f5e, #fb7185) !important;
 }
+.rubric-report {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.class-rubric-table {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 
 @media print {
   body {
@@ -608,5 +616,24 @@ details.group[open] summary span {
   }
   .print-report * {
     color: black !important;
+  }
+  .rubric-report {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .class-rubric-table {
+    width: 100% !important;
+    overflow: visible !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .class-rubric-table table {
+    width: 100% !important;
+    font-size: 9px !important;
+  }
+  .class-rubric-table th,
+  .class-rubric-table td {
+    padding: 5px 4px !important;
+    white-space: normal !important;
   }
 }

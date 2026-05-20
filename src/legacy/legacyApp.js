@@ -26,7 +26,14 @@ import {
   sortBookUnits,
   unitsForRange
 } from '../lib/textbookProgress.js';
-import { averageCompletionRate, classProgressRate, groupInspectionsByBook } from '../lib/reportMetrics.js';
+import {
+  averageCompletionRate,
+  bookRubricAverage,
+  classProgressRate,
+  classRubricAverage,
+  groupInspectionsByBook,
+  studentRubricAverage
+} from '../lib/reportMetrics.js';
 import { renderDashboardView } from './views/dashboardView.js';
 import { renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
@@ -1680,7 +1687,9 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', () => { 
       state.printHtml = reportForStudent(state.reportStudentId, state, { 
         studentById, classById, inspectionsForStudent, groupInspectionsByBook, 
-        bookById, averageCompletionRate, fmtDate, safe 
+        bookById, averageCompletionRate, fmtDate, safe, progressTone, bookRubricAverage,
+        classRubricAverage, studentRubricAverage, students: state.students,
+        inspections: state.inspections
       }); 
       render(); 
       setTimeout(() => {
@@ -1691,7 +1700,9 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="build-class-report"]')?.addEventListener('click', () => { 
       state.printHtml = reportForClass(state.reportClassId, state, { 
         classById, studentsForClass, inspectionsForStudent, 
-        averageCompletionRate, fmtDate, teacherNameById, safe 
+        averageCompletionRate, fmtDate, teacherNameById, safe,
+        classRubricAverage, studentRubricAverage, students: state.students,
+        inspections: state.inspections
       }); 
       render(); 
       setTimeout(() => {
