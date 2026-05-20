@@ -95,6 +95,46 @@ describe('InspectionsView Component', () => {
     expect(html).toContain('data-action="adjust-rubric-score"');
   });
 
+  it('선택한 점검일보다 미래 기록은 이전 미완료 후보로 렌더링하지 않는다', () => {
+    const datedState = {
+      ...mockState,
+      selectedDate: '2026-05-20',
+      inspections: [
+        {
+          id: 'past-insp',
+          date: '2026-05-10',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 1,
+          rangeEnd: 10,
+          missedPages: [3],
+          completionRate: 90
+        },
+        {
+          id: 'future-insp',
+          date: '2026-05-30',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 11,
+          rangeEnd: 20,
+          missedPages: [7],
+          completionRate: 90
+        }
+      ]
+    };
+    const datedDeps = {
+      ...mockDeps,
+      inspectionsForStudent: vi.fn(() => datedState.inspections)
+    };
+
+    const html = renderInspectionsView(datedState, datedDeps);
+
+    expect(html).toContain('data-source-inspection-id="past-insp"');
+    expect(html).not.toContain('data-source-inspection-id="future-insp"');
+  });
+
   it('should render separate current completion and carryover recovery labels', () => {
     const html = renderInspectionsView(mockState, mockDeps);
 

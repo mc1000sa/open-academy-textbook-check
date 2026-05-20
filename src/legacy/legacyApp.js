@@ -909,7 +909,8 @@ export async function mountLegacyApp(appRoot) {
       inspections: state.inspections,
       studentId: state.selectedInspectionStudentId,
       bookId: state.selectedInspectionBookId,
-      editingInspectionId: excludeInspectionId
+      editingInspectionId: excludeInspectionId,
+      currentDate: state.selectedDate
     });
   }
   function selectedCarryoverKeysSet() {

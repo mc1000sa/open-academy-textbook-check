@@ -43,7 +43,8 @@ export function renderInspectionsView(state, deps) {
         inspections: state.inspections,
         studentId: state.selectedInspectionStudentId,
         bookId: state.selectedInspectionBookId,
-        editingInspectionId: state.editingInspectionId
+        editingInspectionId: state.editingInspectionId,
+        currentDate: state.selectedDate
       })
     : [];
   const selectedCarryoverKeys = new Set(state.selectedCarryoverResolutionKeys || []);

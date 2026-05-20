@@ -1,4 +1,6 @@
 import { renderBtnSelect } from './layoutView.js';
+import { averageRubricVector } from '../../lib/reportMetrics.js';
+import { buildCarryoverRows } from '../../lib/textbookProgress.js';
 
 const RUBRIC_LABELS = {
   assignment: '과제 수행률',
@@ -120,7 +122,7 @@ export function reportForStudent(studentId, state, deps) {
   const grouped = groupInspectionsByBook(rows);
   const allStudents = students || state.students || [];
   const allInspections = inspections || state.inspections || [];
-  const studentVector = typeof studentRubricAverage === 'function'
+  const studentOverallVector = typeof studentRubricAverage === 'function'
     ? studentRubricAverage(studentId, allInspections)
     : {};
   const classVector = typeof classRubricAverage === 'function'
@@ -138,12 +140,14 @@ export function reportForStudent(studentId, state, deps) {
     const bookVector = typeof bookRubricAverage === 'function'
       ? bookRubricAverage(bookId, allInspections)
       : {};
+    const studentBookVector = averageRubricVector(items) || studentOverallVector;
 
     // 미비 페이지 목록 취합
-    const allMissed = new Set();
-    items.forEach(log => {
-      (log.missedPages || []).forEach(p => allMissed.add(p));
-    });
+    const allMissed = new Set(buildCarryoverRows({
+      inspections: items,
+      studentId,
+      bookId
+    }).flatMap(row => row.missedPages));
     const missedSorted = Array.from(allMissed).sort((a, b) => a - b);
 
     return `
@@ -188,8 +192,8 @@ export function reportForStudent(studentId, state, deps) {
           `).join('')}
         </div>
 
-        ${renderRubricCompare('교재별 6요소 비교', studentVector, bookVector, '같은 교재 평균', safe)}
-        ${renderRubricCompare('반 평균 6요소 비교', studentVector, classVector, '반 평균', safe)}
+        ${renderRubricCompare('교재별 6요소 비교', studentBookVector, bookVector, '같은 교재 평균', safe)}
+        ${renderRubricCompare('반 평균 6요소 비교', studentBookVector, classVector, '반 평균', safe)}
       </div>
     `;
   }).join('');

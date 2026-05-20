@@ -99,6 +99,134 @@ describe('reportsView', () => {
     expect(reportForStudent('s1', state, depsWithoutProgressTone)).toContain('완료율 90%');
   });
 
+  it('교재 카드별 점검 기록으로 학생 6요소 벡터를 계산한다', () => {
+    const twoBookState = {
+      ...state,
+      books: [
+        { id: 'b1', title: 'Book Alpha' },
+        { id: 'b2', title: 'Book Beta' }
+      ],
+      inspections: [
+        {
+          id: 'alpha-row',
+          date: '2026-05-20',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 1,
+          rangeEnd: 10,
+          missedPages: [],
+          completionRate: 100,
+          rubricScores: { expression: 10, grading: 9, attitude: 8, understanding: 7, application: 5 }
+        },
+        {
+          id: 'beta-row',
+          date: '2026-05-21',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b2',
+          rangeStart: 11,
+          rangeEnd: 20,
+          missedPages: [12, 13],
+          completionRate: 80,
+          rubricScores: { expression: 2, grading: 3, attitude: 4, understanding: 5, application: 6 }
+        }
+      ]
+    };
+    const twoBookDeps = {
+      ...deps,
+      studentById: vi.fn(id => twoBookState.students.find(student => student.id === id)),
+      classById: vi.fn(id => twoBookState.classes.find(klass => klass.id === id)),
+      inspectionsForStudent: vi.fn(studentId => twoBookState.inspections.filter(row => row.studentId === studentId)),
+      bookById: vi.fn(id => twoBookState.books.find(book => book.id === id)),
+      averageCompletionRate: vi.fn(rows => rows.reduce((sum, row) => sum + row.completionRate, 0) / rows.length),
+      studentRubricAverage: vi.fn(() => ({
+        assignment: 9,
+        expression: 6,
+        grading: 6,
+        attitude: 6,
+        understanding: 6,
+        application: 6
+      })),
+      bookRubricAverage: vi.fn(() => ({
+        assignment: 0,
+        expression: 0,
+        grading: 0,
+        attitude: 0,
+        understanding: 0,
+        application: 0
+      })),
+      classRubricAverage: vi.fn(() => ({
+        assignment: 0,
+        expression: 0,
+        grading: 0,
+        attitude: 0,
+        understanding: 0,
+        application: 0
+      })),
+      inspections: twoBookState.inspections
+    };
+
+    const html = reportForStudent('s1', twoBookState, twoBookDeps);
+    const alphaCard = html.slice(html.indexOf('Book Alpha'), html.indexOf('Book Beta'));
+    const betaCard = html.slice(html.indexOf('Book Beta'));
+
+    expect(alphaCard).toContain('<span class="font-black text-slate-100">10.0</span>');
+    expect(alphaCard).not.toContain('<span class="font-black text-slate-100">6.0</span>');
+    expect(betaCard).toContain('<span class="font-black text-slate-100">2.0</span>');
+  });
+
+  it('이후 회차에서 회수 처리된 쪽수는 보완 필요 쪽수 요약에서 제외한다', () => {
+    const carryoverState = {
+      ...state,
+      books: [{ id: 'b1', title: 'Carryover Book' }],
+      inspections: [
+        {
+          id: 'source-row',
+          date: '2026-05-10',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 1,
+          rangeEnd: 10,
+          missedPages: [3, 4],
+          completionRate: 80,
+          rubricScores: {}
+        },
+        {
+          id: 'later-row',
+          date: '2026-05-20',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 11,
+          rangeEnd: 20,
+          missedPages: [],
+          completionRate: 100,
+          rubricScores: {},
+          carryoverResolutions: [
+            { sourceInspectionId: 'source-row', sourceDate: '2026-05-10', resolvedPages: [3] }
+          ]
+        }
+      ]
+    };
+    const carryoverDeps = {
+      ...deps,
+      studentById: vi.fn(id => carryoverState.students.find(student => student.id === id)),
+      classById: vi.fn(id => carryoverState.classes.find(klass => klass.id === id)),
+      inspectionsForStudent: vi.fn(studentId => carryoverState.inspections.filter(row => row.studentId === studentId)),
+      bookById: vi.fn(id => carryoverState.books.find(book => book.id === id)),
+      averageCompletionRate: vi.fn(() => 90),
+      inspections: carryoverState.inspections
+    };
+
+    const html = reportForStudent('s1', carryoverState, carryoverDeps);
+    const card = html.slice(html.indexOf('Carryover Book'));
+
+    expect(card).not.toContain('font-bold">3');
+    expect(card).toContain('font-bold">4');
+  });
+
   it('보고서 선택 화면은 학생/반 선택 라벨과 값을 안전하게 이스케이프한다', () => {
     const maliciousStudent = '<img src=x onerror=alert(1)>';
     const maliciousClass = '<svg onload=alert(1)>';

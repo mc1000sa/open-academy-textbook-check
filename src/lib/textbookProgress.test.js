@@ -252,6 +252,41 @@ describe('textbookProgress', () => {
     ]);
   });
 
+  it('선택한 점검일 이후 기록은 이전 미완료 후보에서 제외한다', () => {
+    const inspections = [
+      {
+        id: 'past',
+        studentId: 'student-1',
+        bookId: 'book-1',
+        date: '2026-05-10',
+        missedPages: [3]
+      },
+      {
+        id: 'future',
+        studentId: 'student-1',
+        bookId: 'book-1',
+        date: '2026-05-30',
+        missedPages: [7]
+      }
+    ];
+
+    expect(
+      buildCarryoverRows({
+        inspections,
+        studentId: 'student-1',
+        bookId: 'book-1',
+        currentDate: '2026-05-20'
+      })
+    ).toEqual([
+      {
+        sourceInspectionId: 'past',
+        sourceDate: '2026-05-10',
+        missedPages: [3],
+        resolvedPages: []
+      }
+    ]);
+  });
+
   it('calculates recovery rate and resolution payloads from selected carryover page keys', () => {
     const carryoverRows = [
       {

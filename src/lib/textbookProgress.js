@@ -107,6 +107,17 @@ function compareInspectionOrder(a, b) {
   return a.fallbackIndex - b.fallbackIndex;
 }
 
+function cutoffOrderForDate(value) {
+  const dateMillis = toMillis(value);
+  if (!dateMillis) return null;
+
+  return {
+    dateMillis,
+    timestampMillis: Number.MAX_SAFE_INTEGER,
+    fallbackIndex: Number.MAX_SAFE_INTEGER
+  };
+}
+
 function isSameStudentBookInspection(inspection, studentId, bookId, editingInspectionId) {
   return (
     inspection?.id !== editingInspectionId &&
@@ -115,11 +126,22 @@ function isSameStudentBookInspection(inspection, studentId, bookId, editingInspe
   );
 }
 
-export function buildCarryoverRows({ inspections, studentId, bookId, editingInspectionId = '' }) {
+export function buildCarryoverRows({
+  inspections,
+  studentId,
+  bookId,
+  editingInspectionId = '',
+  currentDate = '',
+  currentInspectionDate = ''
+}) {
+  const cutoffOrder = cutoffOrderForDate(currentInspectionDate || currentDate);
   const targets = (inspections || [])
     .map((inspection, index) => ({ inspection, order: inspectionOrder(inspection, index) }))
     .filter(({ inspection }) => {
       return isSameStudentBookInspection(inspection, studentId, bookId, editingInspectionId);
+    })
+    .filter(({ order }) => {
+      return !cutoffOrder || compareInspectionOrder(order, cutoffOrder) < 0;
     });
 
   return targets
