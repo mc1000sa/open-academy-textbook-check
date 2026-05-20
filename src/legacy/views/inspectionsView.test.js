@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderInspectionsView, REMARK_GROUPS } from './inspectionsView.js';
+import {
+  buildCarryoverRows,
+  calculateCarryoverRecoveryRate,
+  pageResolutionKey,
+  RUBRIC_ITEMS
+} from '../../lib/textbookProgress.js';
 
 describe('InspectionsView Component', () => {
   const mockState = {
@@ -31,7 +37,8 @@ describe('InspectionsView Component', () => {
     editingInspectionId: '',
     quickClassId: 'c1',
     inspectionHistoryFilterClass: '',
-    inspectionHistoryFilterStudent: ''
+    inspectionHistoryFilterStudent: '',
+    selectedCarryoverResolutionKeys: []
   };
 
   const mockDeps = {
@@ -47,7 +54,11 @@ describe('InspectionsView Component', () => {
     classById: vi.fn(() => mockState.classes[0]),
     studentById: vi.fn(() => mockState.students[0]),
     safe: vi.fn((val) => val),
-    bookUnits: vi.fn(() => [])
+    bookUnits: vi.fn(() => []),
+    buildCarryoverRows,
+    calculateCarryoverRecoveryRate,
+    pageResolutionKey,
+    RUBRIC_ITEMS
   };
 
   it('should render inspection view correctly with state data', () => {
@@ -72,5 +83,15 @@ describe('InspectionsView Component', () => {
     };
     const html = renderInspectionsView(editingState, mockDeps);
     expect(html).toContain('기존 기록 수정 중');
+  });
+
+  it('should render carryover resolution UI and canonical rubric scores input UI', () => {
+    const html = renderInspectionsView(mockState, mockDeps);
+
+    expect(html).toContain('data-action="toggle-carryover-resolution"');
+    expect(html).toContain('data-source-inspection-id="insp1"');
+    expect(html).toContain('data-action="reset-rubric-scores"');
+    expect(html).toContain('data-key="expression"');
+    expect(html).toContain('data-action="adjust-rubric-score"');
   });
 });

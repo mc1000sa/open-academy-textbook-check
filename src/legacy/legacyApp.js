@@ -13,10 +13,16 @@ import {
   writeBatch
 } from '../services/firebaseService.js';
 import {
+  buildCarryoverResolutions,
+  buildCarryoverRows,
   calculateCompletionRate,
+  calculateCarryoverRecoveryRate,
   filterMissedPagesToRange,
+  normalizeRubricScores,
+  pageResolutionKey,
   pagesInRange,
   parseMissedPages,
+  RUBRIC_ITEMS,
   sortBookUnits,
   unitsForRange
 } from '../lib/textbookProgress.js';
@@ -25,6 +31,7 @@ import { renderDashboardView } from './views/dashboardView.js';
 import { renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
 import { renderSetupView } from './views/setupView.js';
+import { renderBookSetupView } from './views/bookSetupView.js';
 import { renderInspectionsView } from './views/inspectionsView.js';
 import { renderReportsView, reportForStudent, reportForClass } from './views/reportsView.js';
 import { renderTeachersAdminView } from './views/teachersAdminView.js';
@@ -36,7 +43,7 @@ export async function mountLegacyApp(appRoot) {
   const { db, refs } = await getFirebaseService();
 
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
-  const GRADE_OPTIONS = ['중1','중2','중3','고1','고2','고3'];
+  const GRADE_OPTIONS = ['고1','고2','고3'];
   const SUBJECT_OPTIONS = ['수학','영어','국어','과학'];
 
   const state = {
@@ -71,6 +78,9 @@ export async function mountLegacyApp(appRoot) {
     selectedRangeEnd: '',
     missedPages: '',
     memo: '',
+    // 6요소 평가 점수 (0~10점, null = 미입력)
+    rubricScores: { expression: null, grading: null, attitude: null, understanding: null, application: null },
+    selectedCarryoverResolutionKeys: [],
     quickClassId: '',
     editingInspectionId: '',
     reportStudentId: '',
@@ -91,6 +101,10 @@ export async function mountLegacyApp(appRoot) {
     setupSearchStudent: '',
     setupSearchBook: '',
     existingStudentSearch: '',
+    
+    // 아코디언 상태 관리
+    setupAccordion: { class: false, bulk: false, edit: false },
+    bookSetupAccordion: { manage: false, unit: false, assign: false },
     
     // 학생 PIN 관련 폼 상태
     studentLoginForm: { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' },
@@ -166,6 +180,23 @@ export async function mountLegacyApp(appRoot) {
         type: 'confirm',
         title,
         message,
+        confirmText: '확인',
+        cancelText: '취소',
+        resolve
+      };
+      render();
+    });
+  }
+
+  // 비동기 프롬프트 모달 구현
+  function showModalPrompt(message, defaultVal = '', title = '입력') {
+    return new Promise((resolve) => {
+      state.customModal = {
+        open: true,
+        type: 'prompt',
+        title,
+        message,
+        inputValue: defaultVal,
         confirmText: '확인',
         cancelText: '취소',
         resolve
@@ -682,12 +713,21 @@ export async function mountLegacyApp(appRoot) {
   async function saveClass() {
     const f = state.setupFormClass;
     if (!f.name || !f.teacherId || !f.grade) return showModalAlert('반 이름, 학년, 담당 강사를 입력해주세요.');
-    const ref = await addDoc(refs.classes, { ...f, active: true, createdAt: serverTimestamp() });
-    state.selectedSetupClassId = ref.id;
-    state.assigningClassId = ref.id;
-    state.selectedInspectionClassId = ref.id;
-    state.quickClassId = ref.id;
-    state.reportClassId = ref.id;
+    
+    if (f.id) {
+      await updateDoc(doc(refs.classes, f.id), { name: f.name, teacherId: f.teacherId, grade: f.grade, note: f.note });
+      state.selectedSetupClassId = f.id;
+      notify('반 수정 완료');
+    } else {
+      const ref = await addDoc(refs.classes, { name: f.name, teacherId: f.teacherId, grade: f.grade, note: f.note, active: true, createdAt: serverTimestamp() });
+      state.selectedSetupClassId = ref.id;
+      state.assigningClassId = ref.id;
+      state.selectedInspectionClassId = ref.id;
+      state.quickClassId = ref.id;
+      state.reportClassId = ref.id;
+      notify('반 생성 완료');
+    }
+    
     resetSetupForm();
     if (state.wizardOpen) state.wizardStep = 2;
     notify('반 생성 완료');
@@ -857,6 +897,20 @@ export async function mountLegacyApp(appRoot) {
     state.memo = current ? `${current}\n${text}` : text;
     render();
   }
+  function currentCarryoverRows(excludeInspectionId = state.editingInspectionId) {
+    return buildCarryoverRows({
+      inspections: state.inspections,
+      studentId: state.selectedInspectionStudentId,
+      bookId: state.selectedInspectionBookId,
+      editingInspectionId: excludeInspectionId
+    });
+  }
+  function selectedCarryoverKeysSet() {
+    return new Set(state.selectedCarryoverResolutionKeys || []);
+  }
+  function resetRubricScores() {
+    state.rubricScores = normalizeRubricScores({});
+  }
   function buildPageChecks() {
     const startEl = document.getElementById('selectedRangeStart');
     const endEl = document.getElementById('selectedRangeEnd');
@@ -870,6 +924,8 @@ export async function mountLegacyApp(appRoot) {
     state.missedPages = '';
     state.memo = '';
     state.editingInspectionId = '';
+    resetRubricScores();
+    state.selectedCarryoverResolutionKeys = [];
   }
 
   async function saveInspection() {
@@ -882,6 +938,17 @@ export async function mountLegacyApp(appRoot) {
     const missedPages = missedPagesArrayInCurrentRange();
     const completionRate = calculateCompletionRate(total, missedPages);
     const units = unitsForRange(book, start, end).map(u => u.name);
+    const duplicate = state.inspections.find(r => r.id !== state.editingInspectionId && r.studentId === student.id && r.bookId === book.id && r.date === state.selectedDate && Number(r.rangeStart) === start && Number(r.rangeEnd) === end);
+    if (duplicate) {
+      const ok = await showModalConfirm('같은 학생/교재/날짜/범위의 점검 기록이 이미 있습니다. 기존 기록을 수정으로 덮어쓸까요?\n\n취소하면 저장하지 않습니다.');
+      if (!ok) return;
+    }
+
+    const targetInspectionId = duplicate?.id || state.editingInspectionId;
+    const carryoverRows = currentCarryoverRows(targetInspectionId);
+    const selectedCarryoverKeys = [...selectedCarryoverKeysSet()];
+    const carryoverResolutions = buildCarryoverResolutions(carryoverRows, selectedCarryoverKeys);
+    const carryoverRecovery = calculateCarryoverRecoveryRate(carryoverRows, selectedCarryoverKeys);
     const payload = { 
       teacherId: state.currentTeacher.id, 
       teacherName: state.currentTeacher.name, 
@@ -891,24 +958,27 @@ export async function mountLegacyApp(appRoot) {
       date: state.selectedDate, 
       rangeStart: start, 
       rangeEnd: end, 
-      missedPages, 
-      completionRate, 
-      units, 
-      memo: state.memo, 
+      missedPages,
+      carryoverResolutions,
+      carryoverRecovery,
+      completionRate,
+      units,
+      memo: state.memo,
+      rubricScores: normalizeRubricScores(state.rubricScores),
       updatedAt: serverTimestamp() 
     };
     
-    const duplicate = state.inspections.find(r => r.id !== state.editingInspectionId && r.studentId === student.id && r.bookId === book.id && r.date === state.selectedDate && Number(r.rangeStart) === start && Number(r.rangeEnd) === end);
     if (duplicate) {
-      const ok = await showModalConfirm('같은 학생/교재/날짜/범위의 점검 기록이 이미 있습니다. 기존 기록을 수정으로 덮어쓸까요?\n\n취소하면 저장하지 않습니다.');
-      if (!ok) return;
       await updateDoc(doc(db, COLLECTION_NAMES.inspections, duplicate.id), payload);
     } else if (state.editingInspectionId) {
       await updateDoc(doc(db, COLLECTION_NAMES.inspections, state.editingInspectionId), payload);
     } else {
       await addDoc(refs.inspections, { ...payload, createdAt: serverTimestamp() });
     }
-    const summary = `${student.name} 학생 점검이 안전하게 저장되었습니다.\n\n교재: ${book.title}\n범위: ${start}~${end}쪽\n미완료: ${missedPages.length ? missedPages.join(', ') : '없음'}\n완료율: ${completionRate}%`;
+    const carryoverSummary = carryoverRecovery.totalPages > 0
+      ? `\n지난 미완료 회수: ${carryoverRecovery.resolvedPages}/${carryoverRecovery.totalPages}쪽 (${carryoverRecovery.recoveryRate}%)`
+      : '';
+    const summary = `${student.name} 학생 점검이 안전하게 저장되었습니다.\n\n교재: ${book.title}\n범위: ${start}~${end}쪽\n미완료: ${missedPages.length ? missedPages.join(', ') : '없음'}${carryoverSummary}\n완료율: ${completionRate}%`;
     resetInspectionForm();
     await showModalAlert(summary, '점검 완료');
     notify('교재 점검 저장 완료');
@@ -926,8 +996,13 @@ export async function mountLegacyApp(appRoot) {
     state.selectedRangeEnd = r.rangeEnd ?? '';
     state.missedPages = (r.missedPages || []).join(',');
     state.memo = r.memo || '';
+    state.rubricScores = normalizeRubricScores(r.rubricScores || {});
+    state.selectedCarryoverResolutionKeys = (r.carryoverResolutions || []).flatMap(resolution => {
+      return (resolution.resolvedPages || []).map(page => pageResolutionKey(resolution.sourceInspectionId, page));
+    });
     state.view = 'inspections';
     render();
+
     
     // 로드 후 부드럽게 입력 폼 위치로 스크롤
     setTimeout(() => {
@@ -1048,7 +1123,8 @@ export async function mountLegacyApp(appRoot) {
       ? renderInspectionsView(state, { 
           teacherClasses, studentsForClass, assignedBooksForClass, bookById, 
           unitsForRange, pagesInRange, missedPagesArrayInCurrentRange, 
-          inspectionsForStudent, fmtDate, classById, studentById, safe, bookUnits 
+          inspectionsForStudent, fmtDate, classById, studentById, safe, bookUnits,
+          buildCarryoverRows, calculateCarryoverRecoveryRate, pageResolutionKey, RUBRIC_ITEMS
         })
       : state.view === 'reports'
       ? renderReportsView(state, { teacherClasses, classById, safe })
@@ -1057,6 +1133,12 @@ export async function mountLegacyApp(appRoot) {
           teacherClasses, classById, studentsForClass, assignedBooksForClass, 
           bookUnits, teacherNameById, safe, filterByKeyword, 
           existingStudentProfilesForClass, bookById, setupProgress, findDuplicateStudentName 
+        })
+      : state.view === 'bookSetup'
+      ? renderBookSetupView(state, { 
+          teacherClasses, classById, assignedBooksForClass, 
+          bookUnits, safe, filterByKeyword, 
+          bookById 
         })
       : renderTeachersAdminView(state, { safe, teacherNameById });
 
@@ -1262,11 +1344,16 @@ export async function mountLegacyApp(appRoot) {
     // 커스텀 모달 바인딩 (수락 / 취소)
     appRoot.querySelector('[data-action="modal-confirm"]')?.addEventListener('click', () => {
       if (!state.customModal.open || !state.customModal.resolve) return;
+      let resValue = true;
+      if (state.customModal.type === 'prompt') {
+        const inputEl = document.getElementById('modalPromptInput');
+        resValue = inputEl ? inputEl.value : '';
+      }
       const res = state.customModal.resolve;
       state.customModal.open = false;
       state.customModal.resolve = null;
       render();
-      res(true);
+      res(resValue);
     });
 
     appRoot.querySelector('[data-action="modal-cancel"]')?.addEventListener('click', () => {
@@ -1275,7 +1362,7 @@ export async function mountLegacyApp(appRoot) {
       state.customModal.open = false;
       state.customModal.resolve = null;
       render();
-      res(false);
+      res(state.customModal.type === 'prompt' ? null : false);
     });
 
     // 테이블 헤더 정렬(th[data-sort]) 바인딩
@@ -1349,6 +1436,18 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="wizard-finish"]')?.addEventListener('click', () => { state.wizardOpen = false; state.wizardStep = 1; notify('반 세팅 마법사 완료'); render(); });
     appRoot.querySelector('[data-action="wizard-next"]')?.addEventListener('click', () => { state.wizardStep = 3; render(); });
 
+    // 아코디언 제어 바인딩
+    appRoot.querySelectorAll('[data-action="toggle-accordion"]').forEach(el => {
+      el.onclick = () => {
+        const group = el.dataset.group;
+        const target = el.dataset.target;
+        if (state[group]) {
+          state[group][target] = !state[group][target];
+          render();
+        }
+      };
+    });
+
     // 칩 버튼 형태의 선택 기능 (data-action="select-option") 바인딩
     appRoot.querySelectorAll('[data-action="select-option"]').forEach(el => {
       el.onclick = () => {
@@ -1371,11 +1470,18 @@ export async function mountLegacyApp(appRoot) {
           state.selectedRangeEnd = '';
           state.missedPages = '';
           state.memo = '';
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
         } else if (target === 'selectedInspectionStudentId') {
           state.selectedRangeStart = '';
           state.selectedRangeEnd = '';
           state.missedPages = '';
           state.memo = '';
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
+        } else if (target === 'selectedInspectionBookId') {
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
         } else if (target === 'selectedSetupClassId') {
           state.assigningClassId = value;
         } else if (target === 'inspectionHistoryFilterClass') {
@@ -1397,9 +1503,45 @@ export async function mountLegacyApp(appRoot) {
       el.onclick = async () => {
         const studentId = el.dataset.id;
         const currentPin = el.dataset.pin || '1234';
-        const input = prompt('새로운 학생용 4자리 PIN번호를 입력해주세요:', currentPin);
-        if (input !== null) {
-          await updateStudentPin(studentId, input);
+        const input = await showModalPrompt('새로운 학생용 4자리 PIN번호를 입력해주세요:', currentPin, 'PIN 변경');
+        if (input !== null && input.trim() !== '') {
+          await updateStudentPin(studentId, input.trim());
+        }
+      };
+    });
+
+    // 6요소 점수 버튼 바인딩
+    appRoot.querySelectorAll('[data-action="set-rubric-score"]').forEach(el => {
+      el.onclick = () => {
+        const rawKey = el.dataset.key;
+        const val = Number(el.dataset.val);
+        const item = RUBRIC_ITEMS.find(rubricItem => {
+          return rubricItem.key === rawKey || (rubricItem.legacyKeys || []).includes(rawKey);
+        });
+        const key = item?.key || rawKey;
+        if (!key || Number.isNaN(val)) return;
+        const currentScores = normalizeRubricScores(state.rubricScores || {});
+        // 같은 점수 다시 누르면 취소
+        currentScores[key] = currentScores[key] === val ? null : val;
+        state.rubricScores = currentScores;
+        render();
+      };
+    });
+
+    appRoot.querySelector('[data-action="reset-rubric-scores"]')?.addEventListener('click', () => {
+      resetRubricScores();
+      render();
+    });
+
+    appRoot.querySelectorAll('[data-action="edit-class"]').forEach(el => {
+      el.onclick = () => {
+        const classId = el.dataset.id;
+        const klass = classById(classId);
+        if (klass) {
+          state.setupFormClass = { id: klass.id, name: klass.name, grade: klass.grade, teacherId: klass.teacherId, note: klass.note || '' };
+          state.selectedSetupClassId = classId;
+          state.setupAccordion.class = true;
+          render();
         }
       };
     });
@@ -1415,6 +1557,26 @@ export async function mountLegacyApp(appRoot) {
       el.onchange = (e) => {
         state[id] = e.target.value;
         if (id === 'selectedSetupClassId') state.assigningClassId = e.target.value;
+        if (id === 'selectedInspectionClassId') {
+          state.selectedInspectionStudentId = '';
+          state.selectedInspectionBookId = '';
+          state.selectedRangeStart = '';
+          state.selectedRangeEnd = '';
+          state.missedPages = '';
+          state.memo = '';
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
+        } else if (id === 'selectedInspectionStudentId') {
+          state.selectedRangeStart = '';
+          state.selectedRangeEnd = '';
+          state.missedPages = '';
+          state.memo = '';
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
+        } else if (id === 'selectedInspectionBookId') {
+          resetRubricScores();
+          state.selectedCarryoverResolutionKeys = [];
+        }
         render();
       };
     });
@@ -1478,6 +1640,36 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="reset-inspection-form"]')?.addEventListener('click', () => { resetInspectionForm(); render(); });
     appRoot.querySelector('[data-action="clear-missed-pages"]')?.addEventListener('click', () => { state.missedPages = ''; render(); });
     appRoot.querySelectorAll('[data-action="toggle-missed-page"]').forEach(el => el.onclick = () => toggleMissedPage(Number(el.dataset.page)));
+    appRoot.querySelectorAll('[data-action="toggle-carryover-resolution"]').forEach(el => {
+      el.onclick = () => {
+        const sourceInspectionId = el.dataset.sourceInspectionId;
+        const page = Number(el.dataset.page);
+        if (!sourceInspectionId || Number.isNaN(page)) return;
+        const key = pageResolutionKey(sourceInspectionId, page);
+        const selectedKeys = selectedCarryoverKeysSet();
+        if (selectedKeys.has(key)) {
+          selectedKeys.delete(key);
+        } else {
+          selectedKeys.add(key);
+        }
+        state.selectedCarryoverResolutionKeys = [...selectedKeys];
+        render();
+      };
+    });
+    appRoot.querySelectorAll('[data-action="adjust-rubric-score"]').forEach(el => {
+      el.onclick = () => {
+        const key = el.dataset.key;
+        const delta = Number(el.dataset.delta);
+        if (!key || Number.isNaN(delta)) return;
+        const currentScores = normalizeRubricScores(state.rubricScores || {});
+        const current = currentScores[key];
+        if (current === null && delta < 0) return;
+        const next = current === null ? delta : current + delta;
+        currentScores[key] = Math.min(10, Math.max(0, Math.round(next * 2) / 2));
+        state.rubricScores = currentScores;
+        render();
+      };
+    });
     appRoot.querySelectorAll('[data-action="append-remark"]').forEach(el => el.onclick = () => appendRemark(el.dataset.text));
     appRoot.querySelectorAll('[data-action="edit-inspection"]').forEach(el => el.onclick = () => loadInspectionToForm(el.dataset.id));
     appRoot.querySelectorAll('[data-action="delete-inspection"]').forEach(el => el.onclick = () => deleteInspection(el.dataset.id));

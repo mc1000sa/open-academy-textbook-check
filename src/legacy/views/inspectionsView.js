@@ -1,4 +1,4 @@
-import { bookMap } from './setupView.js';
+import { bookMap } from './bookSetupView.js';
 import { renderBtnSelect } from './layoutView.js';
 
 export const REMARK_GROUPS = [
@@ -22,7 +22,11 @@ export function renderInspectionsView(state, deps) {
     classById,
     studentById,
     safe,
-    bookUnits
+    bookUnits,
+    buildCarryoverRows,
+    calculateCarryoverRecoveryRate,
+    pageResolutionKey,
+    RUBRIC_ITEMS: rubricItems
   } = deps;
 
   const classes = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id);
@@ -34,6 +38,16 @@ export function renderInspectionsView(state, deps) {
   const missed = missedPagesArrayInCurrentRange();
   const missedSet = new Set(missed);
   const donePct = total.length ? Math.round(((total.length-missed.length)/total.length)*100) : 0;
+  const carryoverRows = state.selectedInspectionStudentId && state.selectedInspectionBookId
+    ? buildCarryoverRows({
+        inspections: state.inspections,
+        studentId: state.selectedInspectionStudentId,
+        bookId: state.selectedInspectionBookId,
+        editingInspectionId: state.editingInspectionId
+      })
+    : [];
+  const selectedCarryoverKeys = new Set(state.selectedCarryoverResolutionKeys || []);
+  const carryoverRecovery = calculateCarryoverRecoveryRate(carryoverRows, selectedCarryoverKeys);
 
   // 1. 테이블 동적 정렬 로직 보완
   const sortKey = state.sortKey || 'date';
@@ -119,7 +133,114 @@ export function renderInspectionsView(state, deps) {
     </div>
   `;
 
-  // 강사 포털의 고유 컬러(Royal Blue) 톤 버튼 스타일 적용
+  const rs = state.rubricScores || {};
+  const manualRubricItems = (rubricItems || []).filter(item => !item.automatic);
+  const rubricColorByKey = {
+    expression: 'blue',
+    grading: 'indigo',
+    attitude: 'violet',
+    understanding: 'emerald',
+    application: 'amber'
+  };
+  const colorMap = {
+    blue:    { sel: 'bg-blue-500 border-blue-500 text-white',    unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-blue-500/60 hover:text-blue-300' },
+    indigo:  { sel: 'bg-indigo-500 border-indigo-500 text-white', unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-indigo-500/60 hover:text-indigo-300' },
+    violet:  { sel: 'bg-violet-500 border-violet-500 text-white', unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-violet-500/60 hover:text-violet-300' },
+    cyan:    { sel: 'bg-cyan-500 border-cyan-500 text-white',    unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-cyan-500/60 hover:text-cyan-300' },
+    emerald: { sel: 'bg-emerald-500 border-emerald-500 text-white', unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-emerald-500/60 hover:text-emerald-300' },
+    amber:   { sel: 'bg-amber-500 border-amber-500 text-slate-900', unsel: 'bg-slate-950 border-slate-800 text-slate-500 hover:border-amber-500/60 hover:text-amber-300' },
+  };
+
+  const rubricButtons = `
+    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/20 p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-xs font-extrabold text-slate-300">6요소 평가 (0~10점)</div>
+        <button type="button" data-action="reset-rubric-scores" class="ghost-button px-2.5 py-1.5 rounded-lg text-[10px] font-black">점수 초기화</button>
+      </div>
+      <div class="space-y-3">
+        ${manualRubricItems.map(item => {
+          const cur = rs[item.key];
+          const c = colorMap[rubricColorByKey[item.key]] || colorMap.blue;
+          const filled = cur !== null && cur !== undefined;
+          return `
+            <div class="flex items-center gap-3">
+              <div class="w-[130px] shrink-0">
+                <div class="text-[10px] font-bold text-slate-400 leading-tight">${safe(item.label)}</div>
+                <div class="text-[11px] font-black mt-0.5 ${filled ? 'text-white' : 'text-slate-600'}">${filled ? cur + '점' : '미입력'}</div>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <button type="button"
+                  data-action="adjust-rubric-score"
+                  data-key="${item.key}"
+                  data-delta="-0.5"
+                  class="w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
+                  -
+                </button>
+                ${[0,1,2,3,4,5,6,7,8,9,10].map(n => `
+                  <button type="button"
+                    data-action="set-rubric-score"
+                    data-key="${item.key}"
+                    data-val="${n}"
+                    class="w-7 h-7 rounded-lg border text-[11px] font-black transition-all ${cur === n ? c.sel : c.unsel}">
+                    ${n}
+                  </button>
+                `).join('')}
+                <button type="button"
+                  data-action="adjust-rubric-score"
+                  data-key="${item.key}"
+                  data-delta="0.5"
+                  class="w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
+                  +
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  const carryoverSection = carryoverRows.length ? `
+    <div class="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/20 p-4">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div class="text-xs font-extrabold text-rose-300">지난 미완료 과제 회수하기</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">이전 점검에서 남은 페이지 중 이번 회차에 회수한 페이지를 선택합니다.</div>
+        </div>
+        <div class="text-[10px] font-black text-emerald-400">${carryoverRecovery.resolvedPages}/${carryoverRecovery.totalPages}쪽 (${carryoverRecovery.recoveryRate}%)</div>
+      </div>
+      <div class="space-y-3 mt-3">
+        ${carryoverRows.map(row => `
+          <div>
+            <div class="text-[10px] font-bold text-slate-500 mb-1.5">${safe(fmtDate(row.sourceDate))} 미완료</div>
+            <div class="flex flex-wrap gap-1.5">
+              ${row.missedPages.map(page => {
+                const key = pageResolutionKey(row.sourceInspectionId, page);
+                const isResolved = selectedCarryoverKeys.has(key);
+                return `
+                  <button type="button"
+                    data-action="toggle-carryover-resolution"
+                    data-source-inspection-id="${safe(row.sourceInspectionId)}"
+                    data-page="${page}"
+                    class="min-w-10 h-8 rounded-lg border text-xs font-black transition-all flex items-center justify-center gap-1
+                    ${isResolved
+                      ? 'bg-emerald-500/80 border-emerald-500 text-white shadow-sm font-black'
+                      : 'bg-rose-950/60 border-rose-950 text-rose-300 hover:border-emerald-500/50 hover:bg-emerald-950/20'}">
+                    <span>${page}</span>
+                    ${isResolved ? '<svg class="w-3 h-3 text-white shrink-0" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="text-[10px] text-slate-500 mt-3 leading-normal">
+        총 ${carryoverRecovery.totalPages}쪽 중 <span class="text-emerald-400 font-extrabold">${carryoverRecovery.resolvedPages}쪽 완료</span> &middot; <span class="text-rose-400 font-extrabold">${carryoverRecovery.remainingPages}쪽 미완료</span>
+      </div>
+    </div>
+  ` : '';
+
   const btnClass = 'btn-teacher';
 
   return `
@@ -166,6 +287,8 @@ export function renderInspectionsView(state, deps) {
             </label>
           </div>
 
+          ${carryoverSection}
+
           <div class="mt-4 grid md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
             <label class="text-xs font-bold text-slate-400 block w-full">시작 페이지
               <input id="selectedRangeStart" type="number" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all" value="${safe(state.selectedRangeStart)}" />
@@ -187,6 +310,8 @@ export function renderInspectionsView(state, deps) {
           </label>
 
           ${remarkButtons}
+
+          ${rubricButtons}
 
           <div class="mt-6 flex flex-wrap gap-2.5">
             <button type="button" data-action="save-inspection" class="${btnClass} rounded-xl px-5 py-3 text-xs font-extrabold shadow-md">${state.editingInspectionId ? '수정 저장 완료' : '점검 내역 저장'}</button>
@@ -211,7 +336,7 @@ export function renderInspectionsView(state, deps) {
 
           <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="text-xs font-bold text-slate-300">완료 / 미완료 진행률</div>
+              <div class="text-xs font-bold text-slate-300">이번 회차 완료율</div>
               <div class="text-xs font-black text-blue-400">${donePct}%</div>
             </div>
             
@@ -224,9 +349,30 @@ export function renderInspectionsView(state, deps) {
             </div>
             
             <div class="mt-3 text-[10px] text-slate-500 leading-normal">
-              전체 ${total.length}쪽 중 미완료 ${missed.length}쪽 &middot; 나머지는 자동 완료 처리됩니다.
+              이번 범위 ${total.length}쪽 중 미완료 ${missed.length}쪽 &middot; 나머지는 자동 완료 처리됩니다.
             </div>
           </div>
+
+          ${carryoverRecovery.totalPages ? `
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
+            <div class="flex items-center justify-between gap-3">
+              <div class="text-xs font-bold text-slate-300">통합 과제 수행률</div>
+              <div class="text-xs font-black text-emerald-400">${carryoverRecovery.recoveryRate}%</div>
+            </div>
+            
+            <div class="book-track mt-3 w-full h-2 rounded-full overflow-hidden">
+              <div class="completed-seg h-full bg-emerald-500" style="width:${carryoverRecovery.recoveryRate}%"></div>
+            </div>
+            
+            <div class="book-track mt-2 w-full h-2 rounded-full overflow-hidden">
+              <div class="incomplete-seg h-full bg-rose-500/30" style="width:${100-carryoverRecovery.recoveryRate}%"></div>
+            </div>
+            
+            <div class="mt-3 text-[10px] text-slate-500 leading-normal">
+              지난 미완료 ${carryoverRecovery.totalPages}쪽 중 ${carryoverRecovery.resolvedPages}쪽 회수
+            </div>
+          </div>
+          ` : ''}
 
           ${selectedBook ? bookMap(selectedBook, { bookUnits, safe }) : ''}
         </article>
