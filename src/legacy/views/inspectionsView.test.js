@@ -94,4 +94,29 @@ describe('InspectionsView Component', () => {
     expect(html).toContain('data-key="expression"');
     expect(html).toContain('data-action="adjust-rubric-score"');
   });
+
+  it('should render separate current completion and carryover recovery labels', () => {
+    const html = renderInspectionsView(mockState, mockDeps);
+
+    expect(html).toContain('이번 회차 완료율');
+    expect(html).toContain('지난 미완료 회수율');
+    expect(html).not.toContain('통합 과제 수행률');
+  });
+
+  it('should display selected canonical rubric score value', () => {
+    const scoredState = {
+      ...mockState,
+      rubricScores: {
+        expression: 8,
+        grading: null,
+        attitude: null,
+        understanding: null,
+        application: null
+      }
+    };
+    const html = renderInspectionsView(scoredState, mockDeps);
+
+    expect(html).toContain('8점');
+    expect(html).toContain('data-key="expression"');
+  });
 });

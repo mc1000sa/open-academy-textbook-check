@@ -356,7 +356,7 @@ export function renderInspectionsView(state, deps) {
           ${carryoverRecovery.totalPages ? `
           <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="text-xs font-bold text-slate-300">통합 과제 수행률</div>
+              <div class="text-xs font-bold text-slate-300">지난 미완료 회수율</div>
               <div class="text-xs font-black text-emerald-400">${carryoverRecovery.recoveryRate}%</div>
             </div>
             
