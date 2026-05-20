@@ -1,0 +1,76 @@
+import { describe, it, expect, vi } from 'vitest';
+import { renderInspectionsView, REMARK_GROUPS } from './inspectionsView.js';
+
+describe('InspectionsView Component', () => {
+  const mockState = {
+    currentTeacher: { id: 't_kim', name: '김선생', role: 'teacher' },
+    classes: [{ id: 'c1', name: '중3 A반' }],
+    students: [{ id: 's1', name: '김다인', classId: 'c1' }],
+    books: [{ id: 'b1', title: '중3 수학', archived: false, units: [] }],
+    inspections: [
+      {
+        id: 'insp1',
+        date: '2026-05-20',
+        classId: 'c1',
+        studentId: 's1',
+        bookId: 'b1',
+        rangeStart: 1,
+        rangeEnd: 10,
+        missedPages: [3, 5],
+        completionRate: 80
+      }
+    ],
+    selectedInspectionClassId: 'c1',
+    selectedInspectionStudentId: 's1',
+    selectedInspectionBookId: 'b1',
+    selectedRangeStart: '1',
+    selectedRangeEnd: '10',
+    selectedDate: '2026-05-20',
+    missedPages: '3,5',
+    memo: '열심히 함',
+    editingInspectionId: '',
+    quickClassId: 'c1',
+    inspectionHistoryFilterClass: '',
+    inspectionHistoryFilterStudent: ''
+  };
+
+  const mockDeps = {
+    teacherClasses: vi.fn(() => mockState.classes),
+    studentsForClass: vi.fn(() => mockState.students),
+    assignedBooksForClass: vi.fn(() => [{ book: mockState.books[0] }]),
+    bookById: vi.fn(() => mockState.books[0]),
+    unitsForRange: vi.fn(() => [{ name: '1단원', color: '#ff0000', start: 1, end: 10 }]),
+    pagesInRange: vi.fn(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+    missedPagesArrayInCurrentRange: vi.fn(() => [3, 5]),
+    inspectionsForStudent: vi.fn(() => mockState.inspections),
+    fmtDate: vi.fn((d) => d),
+    classById: vi.fn(() => mockState.classes[0]),
+    studentById: vi.fn(() => mockState.students[0]),
+    safe: vi.fn((val) => val),
+    bookUnits: vi.fn(() => [])
+  };
+
+  it('should render inspection view correctly with state data', () => {
+    const html = renderInspectionsView(mockState, mockDeps);
+
+    expect(html).toContain('학생별 교재점검');
+    expect(html).toContain('중3 A반');
+    expect(html).toContain('김다인');
+    expect(html).toContain('중3 수학');
+    expect(html).toContain('80%'); // 완료율
+  });
+
+  it('should define REMARK_GROUPS properly', () => {
+    expect(REMARK_GROUPS.length).toBeGreaterThan(0);
+    expect(REMARK_GROUPS[0].group).toBe('식 관련');
+  });
+
+  it('should apply editing state description when editingInspectionId is present', () => {
+    const editingState = {
+      ...mockState,
+      editingInspectionId: 'insp1'
+    };
+    const html = renderInspectionsView(editingState, mockDeps);
+    expect(html).toContain('기존 기록 수정 중');
+  });
+});

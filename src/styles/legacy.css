@@ -1,0 +1,612 @@
+:root {
+  --oatis-navy: #050507;
+  --oatis-navy-2: #09090d;
+  --oatis-violet: #8436ff; /* Admin Neon Purple */
+  --oatis-indigo: #4169e1; /* Teacher Royal Blue */
+  --oatis-cyan: #00d6cd;   /* Student Mint */
+  --oatis-green: #10b981;
+  --oatis-rose: #f43f5e;
+  --oatis-bg: #050507;
+  --oatis-card: rgba(13, 13, 18, 0.6);
+  --oatis-border: rgba(255, 255, 255, 0.08);
+  --oatis-text: #f9f7ff;
+  --oatis-muted: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(132, 54, 255, 0.18), transparent 26rem),
+    radial-gradient(circle at 55% 48%, rgba(255, 64, 129, 0.08), transparent 24rem),
+    radial-gradient(circle at 50% 78%, rgba(0, 214, 205, 0.1), transparent 28rem),
+    #050507;
+  color: #f9f7ff;
+  font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: transparent;
+}
+
+/* 글래스모피즘 및 카드 스타일 오버라이딩 */
+.glass {
+  background: rgba(13, 13, 18, 0.65) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.soft-border {
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.sidebar-shadow {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.panel-shadow {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+}
+
+.card-3d {
+  background: rgba(20, 20, 28, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 
+    0 16px 36px rgba(0, 0, 0, 0.4), 
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(16px);
+  color: #f9f7ff !important;
+}
+
+/* Tailwind white 백그라운드 강제 오버라이딩 */
+.bg-white {
+  background-color: rgba(20, 20, 28, 0.6) !important;
+  color: #f9f7ff !important;
+}
+.text-slate-900 {
+  color: #f9f7ff !important;
+}
+.text-slate-500 {
+  color: #94a3b8 !important;
+}
+.text-slate-600 {
+  color: #cbd5e1 !important;
+}
+.text-slate-800 {
+  color: #e2e8f0 !important;
+}
+.border-slate-100, .border-slate-200, .border-slate-300 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+.bg-slate-50 {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+.bg-slate-50\/50 {
+  background-color: rgba(255, 255, 255, 0.01) !important;
+}
+
+/* 폼 입력창 스타일링 */
+input, select, textarea {
+  background-color: rgba(13, 13, 18, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f9f7ff !important;
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #00d6cd !important;
+  box-shadow: 0 0 10px rgba(0, 214, 205, 0.2);
+}
+
+/* 입체적 텍스트 호버 효과 (밑줄 없이 튀어나오고 빛나는 느낌) */
+.clickable-text {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
+}
+
+.clickable-text:hover {
+  transform: translateX(4px) scale(1.02);
+  color: #00d6cd !important;
+  text-shadow: 0 0 10px rgba(0, 214, 205, 0.5);
+}
+
+/* 우주 테마 궤도 시스템 데코레이션 */
+.hero-orbit-system {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  pointer-events: none;
+  z-index: 0;
+}
+.orbit-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.orbit-line {
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed rgba(255, 255, 255, 0.04);
+  border-radius: 50%;
+}
+.planet-dot {
+  position: absolute;
+  border-radius: 50%;
+  box-shadow: 0 0 15px currentColor;
+}
+.planet-dot.purple {
+  color: #8436ff;
+  background: #8436ff;
+  width: 14px;
+  height: 14px;
+  top: 0;
+  left: 50%;
+  margin-left: -7px;
+}
+.planet-dot.blue {
+  color: #4169e1;
+  background: #4169e1;
+  width: 10px;
+  height: 10px;
+  top: 50%;
+  left: 0;
+  margin-top: -5px;
+}
+.planet-dot.mint {
+  color: #00d6cd;
+  background: #00d6cd;
+  width: 7px;
+  height: 7px;
+  bottom: 15%;
+  right: 15%;
+}
+
+.orbit-outer {
+  width: 500px;
+  height: 500px;
+  animation: rotateOrbit 40s linear infinite;
+}
+.orbit-middle {
+  width: 380px;
+  height: 380px;
+  animation: rotateOrbit 28s linear infinite reverse;
+}
+.orbit-inner {
+  width: 260px;
+  height: 260px;
+  animation: rotateOrbit 18s linear infinite;
+}
+
+@keyframes rotateOrbit {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.central-core-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(132, 54, 255, 0.4) 0%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 포털별 전용 버튼 테마 */
+.btn-student {
+  background: linear-gradient(135deg, #00bfa5 0%, #00d6cd 100%) !important;
+  color: #050507 !important;
+  font-weight: 800;
+  border: none;
+  box-shadow: 0 8px 20px rgba(0, 214, 205, 0.25);
+  transition: all 0.25s ease;
+}
+.btn-student:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 214, 205, 0.4);
+}
+
+.btn-teacher {
+  background: linear-gradient(135deg, #4169e1 0%, #2f46ff 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  border: none;
+  box-shadow: 0 8px 20px rgba(65, 105, 225, 0.25);
+  transition: all 0.25s ease;
+}
+.btn-teacher:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(65, 105, 225, 0.4);
+}
+
+.btn-admin {
+  background: linear-gradient(135deg, #8436ff 0%, #632cd6 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  border: none;
+  box-shadow: 0 8px 20px rgba(132, 54, 255, 0.25);
+  transition: all 0.25s ease;
+}
+.btn-admin:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(132, 54, 255, 0.4);
+}
+
+/* 네온 파이프라인 & 아코디언 카드 스타일 */
+.admin-section-card {
+  background: rgba(20, 20, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 1.5rem;
+}
+.admin-section-card.open {
+  border-color: rgba(132, 54, 255, 0.3);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+.admin-section-head {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  cursor: pointer;
+  color: #f9f7ff;
+}
+.admin-section-head span {
+  display: flex;
+  flex-direction: column;
+}
+.admin-section-head strong {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.admin-section-head small {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+.admin-section-head b {
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.4rem 0.8rem;
+  border-radius: 12px;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+.admin-section-head:hover b {
+  background: rgba(255, 255, 255, 0.1);
+}
+.admin-section-body {
+  padding: 0 1.5rem 1.5rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.notification-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #f43f5e;
+  border-radius: 50%;
+  margin-left: 6px;
+  animation: pulse 1.5s infinite;
+}
+
+/* 펄스 애니메이션 */
+.pulse {
+  animation: pulseCard 2s infinite ease-in-out;
+}
+@keyframes pulseCard {
+  0% { box-shadow: 0 0 0 0 rgba(0, 214, 205, 0.2); }
+  70% { box-shadow: 0 0 0 10px rgba(0, 214, 205, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 214, 205, 0); }
+}
+
+/* 라벨 및 필드 스타일 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.field > span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+/* 버튼식 칩 선택 그리드 */
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+.choice-grid.compact-grid {
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+}
+.choice-button {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px;
+  color: #e2e8f0 !important;
+  padding: 0.7rem 0.5rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: center;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.choice-button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px);
+}
+.choice-button.selected {
+  background: linear-gradient(135deg, #4169e1, #2f46ff) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 15px rgba(65, 105, 225, 0.3);
+}
+
+/* 학생용 청록색 선택 상태 */
+.btn-choice-student.selected {
+  background: linear-gradient(135deg, #00bfa5, #00d6cd) !important;
+  border-color: transparent !important;
+  color: #050507 !important;
+  box-shadow: 0 4px 15px rgba(0, 214, 205, 0.3);
+}
+
+/* 교사용 로얄블루 선택 상태 */
+.btn-choice-teacher.selected {
+  background: linear-gradient(135deg, #4169e1, #2f46ff) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 15px rgba(65, 105, 225, 0.3);
+}
+
+/* 관리자용 네온퍼플 선택 상태 */
+.btn-choice-admin.selected {
+  background: linear-gradient(135deg, #8436ff, #632cd6) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 15px rgba(132, 54, 255, 0.3);
+}
+
+/* 중복 배지 */
+.warning-badge {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 800;
+  display: inline-block;
+  margin-left: 6px;
+}
+
+/* 빈 상태 */
+.empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+/* 메트릭 카드 */
+.metric-card {
+  background: rgba(20, 20, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.metric-card span {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 700;
+}
+.metric-card strong {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #00d6cd;
+}
+
+/* 커스텀 모달 오버레이 및 콘텐츠 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 7, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal-content {
+  background: rgba(13, 13, 18, 0.7);
+  backdrop-filter: blur(24px);
+  border-radius: 32px;
+  animation: modalScaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes modalScaleUp {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* OATIS 테이블 커스텀 스타일 */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 1rem;
+}
+th, td {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+th {
+  background-color: rgba(255, 255, 255, 0.02);
+  color: #cbd5e1;
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+th:first-child {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+th:last-child {
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+td {
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+/* 제출 기록 스크롤 영역 */
+.submissions-table-scroll {
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sticky-table {
+  border-collapse: collapse;
+}
+
+/* 디테일 요소 스타일 */
+details.group[open] summary span {
+  color: #8436ff;
+}
+
+/* 스크롤바 커스텀 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* 기타 헬퍼 버튼 */
+.ghost-button {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  transition: all 0.2s;
+}
+.ghost-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #8436ff 0%, #632cd6 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  transition: all 0.2s;
+}
+.primary-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(132, 54, 255, 0.3);
+}
+
+/* 진도율 트랙 */
+.book-track {
+  height: 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.completed-seg {
+  background: linear-gradient(90deg, #00bfa5, #00d6cd) !important;
+}
+.incomplete-seg {
+  background: linear-gradient(90deg, #f43f5e, #fb7185) !important;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  #printArea, #printArea * {
+    visibility: visible;
+  }
+  #printArea {
+    position: absolute;
+    inset: 0;
+    background: white !important;
+    color: black !important;
+  }
+  .print-report {
+    color: black !important;
+    background: white !important;
+  }
+  .print-report * {
+    color: black !important;
+  }
+}
