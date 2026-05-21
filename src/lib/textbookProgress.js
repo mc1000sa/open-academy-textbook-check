@@ -32,10 +32,12 @@ export function parseMissedPages(text) {
 }
 
 export function pagesInRange(start, end) {
+  if (String(start ?? '').trim() === '' || String(end ?? '').trim() === '') return [];
+
   const first = Number(start);
   const last = Number(end);
 
-  if (Number.isNaN(first) || Number.isNaN(last) || last < first) return [];
+  if (!Number.isFinite(first) || !Number.isFinite(last) || first < 1 || last < first) return [];
 
   return Array.from({ length: last - first + 1 }, (_, index) => first + index);
 }

@@ -28,14 +28,17 @@ import {
 } from '../lib/textbookProgress.js';
 import {
   averageCompletionRate,
-  bookRubricAverage,
   classProgressRate,
   classRubricAverage,
   groupInspectionsByBook,
   studentRubricAverage
 } from '../lib/reportMetrics.js';
+import {
+  calculateStudentDeleteAfter,
+  studentsDueForDeletion
+} from '../lib/adminStudentMaintenance.js';
 import { renderDashboardView } from './views/dashboardView.js';
-import { renderLayoutView } from './views/layoutView.js';
+import { renderCustomModalMarkup, renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
 import { renderSetupView } from './views/setupView.js';
 import { renderBookSetupView } from './views/bookSetupView.js';
@@ -60,10 +63,13 @@ export async function mountLegacyApp(appRoot) {
     currentTeacher: null,
     selectedTeacherName: '',
     pin: '',
+    loginError: '',
     view: 'inspections', // inspections | reports | setup | teachersAdmin
     teachers: [],
     classes: [],
     students: [],
+    allStudents: [],
+    studentRequests: [],
     books: [],
     classBooks: [],
     inspections: [],
@@ -100,6 +106,9 @@ export async function mountLegacyApp(appRoot) {
     inspectionHistoryFilterClass: '',
     adminTeacherForm: { id: '', name: '', pin: '', role: 'teacher' },
     adminTeacherEditId: '',
+    selectedAdminStudentIds: [],
+    adminPromotionGrade: '',
+    adminPromotionClassId: '',
     wizardOpen: false,
     wizardStep: 1,
     setupDetailPanel: '',
@@ -114,8 +123,10 @@ export async function mountLegacyApp(appRoot) {
     bookSetupAccordion: { manage: false, unit: false, assign: false },
     
     // 학생 PIN 관련 폼 상태
-    studentLoginForm: { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' },
+    studentLoginForm: { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false },
     studentSession: null, // 학생 포털 로그인 성공 세션
+    selectedStudentBookFilter: '',
+    selectedStudentRubricBookId: '',
     
     // 커스텀 모달 제어 상태
     customModal: {
@@ -298,6 +309,20 @@ export async function mountLegacyApp(appRoot) {
   function inspectionsForStudent(studentId) {
     return state.inspections.filter(i => i.studentId === studentId).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }
+  function inspectionsForStudentProfile(studentId) {
+    const students = state.allStudents || state.students || [];
+    const current = students.find(s => s.id === studentId) || (state.studentSession?.id === studentId ? state.studentSession : null);
+    const profileId = current?.studentProfileId || current?.id || studentId;
+    const linkedStudentIds = new Set(
+      students
+        .filter(s => (s.studentProfileId || s.id) === profileId)
+        .map(s => s.id)
+    );
+    linkedStudentIds.add(studentId);
+    return state.inspections
+      .filter(i => linkedStudentIds.has(i.studentId))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  }
   function teacherClasses(teacherId) {
     return state.classes.filter(c => c.teacherId === teacherId && c.active !== false);
   }
@@ -325,6 +350,15 @@ export async function mountLegacyApp(appRoot) {
   }
   function findDuplicateStudentName(classId, name, school = '') {
     return state.students.find(s => s.classId === classId && String(s.name || '').trim() === String(name || '').trim() && String(s.school || '').trim() === String(school || '').trim() && s.active !== false);
+  }
+
+  function findPendingStudentRequest(classId, name, school = '') {
+    return (state.studentRequests || []).find(req =>
+      (req.status || 'pending') === 'pending' &&
+      String(req.classId || '') === String(classId || '') &&
+      String(req.name || '').trim() === String(name || '').trim() &&
+      String(req.school || '').trim() === String(school || '').trim()
+    );
   }
 
   function existingStudentProfilesForClass(classId) {
@@ -363,6 +397,8 @@ export async function mountLegacyApp(appRoot) {
       grade: klass.grade || source.grade || '',
       classId,
       active: true,
+      status: 'active',
+      studentProfileId: source.studentProfileId || source.id,
       pin: source.pin || '1234',
       pinFailedCount: 0,
       pinLocked: false,
@@ -565,7 +601,15 @@ export async function mountLegacyApp(appRoot) {
   function subscribe() {
     onSnapshot(refs.teachers, snap => { state.teachers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
     onSnapshot(refs.classes, snap => { state.classes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); if (!state.selectedSetupClassId && state.classes.length) state.selectedSetupClassId = state.classes[0].id; if (!state.assigningClassId && state.classes.length) state.assigningClassId = state.classes[0].id; render(); });
-    onSnapshot(refs.students, snap => { state.students = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
+    onSnapshot(refs.students, snap => {
+      state.allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+      state.students = state.allStudents.filter(x => x.active !== false && x.status !== 'withdrawn');
+      render();
+    });
+    onSnapshot(refs.studentRequests, snap => {
+      state.studentRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
+    });
     onSnapshot(refs.books, snap => { state.books = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
     onSnapshot(refs.classBooks, snap => { state.classBooks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
     onSnapshot(refs.inspections, snap => { state.inspections = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true); state.loading = false; render(); });
@@ -605,12 +649,27 @@ export async function mountLegacyApp(appRoot) {
   async function handleLogin() {
     const normalizedPin = String(state.pin || '').replace(/\D/g, '').trim();
     const selectedTeacherId = String(state.selectedTeacherName || '').trim();
-    if (!selectedTeacherId) return showModalAlert('선생님을 먼저 선택해주세요.');
+    if (!selectedTeacherId) {
+      state.loginError = '선생님을 먼저 선택해주세요.';
+      render();
+      return;
+    }
     const teacher = state.teachers.find(t => String(t.id || '').trim() === selectedTeacherId);
-    if (!teacher) return showModalAlert('선생님 정보를 찾을 수 없습니다.');
-    if (String(teacher.pin || '').replace(/\D/g, '') !== normalizedPin) return showModalAlert('PIN이 올바르지 않습니다.');
+    if (!teacher) {
+      state.loginError = '선생님 정보를 찾을 수 없습니다.';
+      render();
+      return;
+    }
+    if (String(teacher.pin || '').replace(/\D/g, '') !== normalizedPin) {
+      state.pin = '';
+      state.loginError = 'PIN 번호가 올바르지 않습니다.';
+      render();
+      return;
+    }
     
     state.currentTeacher = teacher;
+    state.loginError = '';
+    state.customModal = { open: false, type: 'alert', title: '', message: '', resolve: null };
     state.view = 'inspections';
     const firstClass = teacher.role === 'admin' ? state.classes[0] : teacherClasses(teacher.id)[0];
     state.selectedSetupClassId = firstClass?.id || '';
@@ -621,7 +680,7 @@ export async function mountLegacyApp(appRoot) {
     
     if (teacher.role === 'admin') {
       state.portal = 'admin';
-      state.view = 'setup';
+      state.view = 'teachersAdmin';
     } else {
       state.portal = 'teacher';
       state.view = 'inspections';
@@ -671,7 +730,9 @@ export async function mountLegacyApp(appRoot) {
     state.studentSession = student;
     state.portal = 'student';
     state.view = 'studentPortal';
-    state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' };
+    state.selectedStudentBookFilter = '';
+    state.selectedStudentRubricBookId = '';
+    state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
     notify('학생 대시보드 로그인 성공!');
     render();
   }
@@ -690,25 +751,26 @@ export async function mountLegacyApp(appRoot) {
     if (findDuplicateStudentName(form.classId, cleanName, cleanSchool)) {
       return showModalAlert('이미 반에 등록된 동일한 이름과 학교의 학생이 있습니다.');
     }
+    if (findPendingStudentRequest(form.classId, cleanName, cleanSchool)) {
+      return showModalAlert('이미 관리자 승인 대기 중인 신규생 등록 요청이 있습니다.');
+    }
 
     const regPin = String(form.pin || '').replace(/\D/g, '').trim();
     if (!/^\d{4}$/.test(regPin)) {
       return showModalAlert('초기 PIN은 4자리 숫자로 입력해야 합니다.');
     }
 
-    await addDoc(refs.students, {
+    await addDoc(refs.studentRequests, {
       name: cleanName,
       school: cleanSchool,
       grade: klass.grade,
       classId: form.classId,
       pin: regPin,
-      pinFailedCount: 0,
-      pinLocked: false,
-      active: true,
+      status: 'pending',
       createdAt: serverTimestamp()
     });
 
-    await showModalAlert('학생 등록이 완료되었습니다. 설정하신 4자리 PIN으로 로그인해 주세요.');
+    await showModalAlert('신규생 등록 요청이 접수되었습니다. 관리자 승인 후 설정한 4자리 PIN으로 로그인할 수 있습니다.');
     state.loginStep = 'login';
     state.studentLoginForm.pin = '';
     render();
@@ -772,7 +834,9 @@ export async function mountLegacyApp(appRoot) {
         school: cleanSchool, 
         grade: klass.grade, 
         classId, 
-        active: true, 
+        active: true,
+        status: 'active',
+        studentProfileId: newRef.id,
         pin: '1234', 
         pinFailedCount: 0, 
         pinLocked: false, 
@@ -795,6 +859,171 @@ export async function mountLegacyApp(appRoot) {
     if (!ok) return;
     await updateDoc(doc(db, COLLECTION_NAMES.students, studentId), { active: false, updatedAt: serverTimestamp() });
     notify('학생 삭제 완료');
+  }
+
+  async function approveStudentRequest(requestId) {
+    const req = state.studentRequests.find(item => item.id === requestId);
+    if (!req) return showModalAlert('신규생 요청 정보를 찾을 수 없습니다.');
+    if (!req.classId || !req.name) return showModalAlert('요청에 반 또는 이름 정보가 부족합니다.');
+    const klass = classById(req.classId);
+    if (!klass) return showModalAlert('요청한 반 정보를 찾을 수 없습니다.');
+
+    const studentRef = doc(refs.students);
+    await setDoc(studentRef, {
+      name: String(req.name || '').trim(),
+      school: String(req.school || '').trim(),
+      grade: req.grade || klass.grade || '',
+      classId: req.classId,
+      active: true,
+      status: 'active',
+      studentProfileId: studentRef.id,
+      pin: String(req.pin || '1234').replace(/\D/g, '').slice(0, 4) || '1234',
+      pinFailedCount: 0,
+      pinLocked: false,
+      createdAt: serverTimestamp()
+    });
+    await updateDoc(doc(db, COLLECTION_NAMES.studentRequests, requestId), {
+      status: 'approved',
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    notify('신규생 등록 요청을 승인했습니다.');
+  }
+
+  async function rejectStudentRequest(requestId) {
+    await updateDoc(doc(db, COLLECTION_NAMES.studentRequests, requestId), {
+      status: 'rejected',
+      updatedAt: serverTimestamp()
+    });
+    notify('신규생 등록 요청을 보류/거절 처리했습니다.');
+  }
+
+  async function updateAdminStudentClass(studentId) {
+    const classId = document.getElementById(`adminStudentClass-${studentId}`)?.value || '';
+    const klass = classById(classId);
+    if (!klass) return showModalAlert('이동할 반을 선택해주세요.');
+    await updateDoc(doc(db, COLLECTION_NAMES.students, studentId), {
+      classId,
+      grade: klass.grade || '',
+      active: true,
+      status: 'active',
+      updatedAt: serverTimestamp()
+    });
+    notify('학생 소속 반을 수정했습니다.');
+  }
+
+  async function withdrawAdminStudent(studentId) {
+    const student = (state.allStudents || state.students).find(s => s.id === studentId);
+    if (!student) return showModalAlert('학생 정보를 찾을 수 없습니다.');
+    const ok = await showModalConfirm(`${student.name} 학생을 퇴원 처리할까요?\n퇴원 처리된 학생은 3개월 후 삭제 예정 대상으로 표시됩니다.`);
+    if (!ok) return;
+    const withdrawnAt = new Date();
+    await updateDoc(doc(db, COLLECTION_NAMES.students, studentId), {
+      active: false,
+      status: 'withdrawn',
+      withdrawnAt,
+      deleteAfter: calculateStudentDeleteAfter(withdrawnAt),
+      updatedAt: serverTimestamp()
+    });
+    state.selectedAdminStudentIds = state.selectedAdminStudentIds.filter(id => id !== studentId);
+    notify('학생을 퇴원 처리했습니다.');
+  }
+
+  async function deleteAdminStudent(studentId) {
+    const student = (state.allStudents || state.students).find(s => s.id === studentId);
+    if (!student) return showModalAlert('학생 정보를 찾을 수 없습니다.');
+    const ok = await showModalConfirm(`${student.name} 학생 데이터를 삭제 표시할까요?\n점검 기록은 보존되며 학생 계정만 숨겨집니다.`);
+    if (!ok) return;
+    await updateDoc(doc(db, COLLECTION_NAMES.students, studentId), {
+      active: false,
+      deleted: true,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    state.selectedAdminStudentIds = state.selectedAdminStudentIds.filter(id => id !== studentId);
+    notify('학생 데이터를 삭제 표시했습니다.');
+  }
+
+  async function runPromotionClone() {
+    const ids = state.selectedAdminStudentIds || [];
+    if (!ids.length) return showModalAlert('승급 복제할 학생을 먼저 선택해주세요.');
+    const grade = state.adminPromotionGrade || '';
+    const classId = state.adminPromotionClassId || '';
+    const klass = classById(classId);
+    if (!grade) return showModalAlert('새 학년을 선택해주세요.');
+    if (!klass) return showModalAlert('새 반을 선택해주세요.');
+    const targetKeys = new Set();
+    const duplicatedTargets = [];
+    ids.forEach(studentId => {
+      const student = (state.allStudents || state.students).find(s => s.id === studentId);
+      if (!student) return;
+      const key = `${classId}__${String(student.name || '').trim()}__${String(student.school || '').trim()}`;
+      const existing = state.students.find(s =>
+        s.id !== studentId &&
+        s.classId === classId &&
+        String(s.name || '').trim() === String(student.name || '').trim() &&
+        String(s.school || '').trim() === String(student.school || '').trim() &&
+        s.active !== false
+      );
+      if (targetKeys.has(key) || existing) duplicatedTargets.push(student.name || '이름 없음');
+      targetKeys.add(key);
+    });
+    if (duplicatedTargets.length) {
+      return showModalAlert(`새 반에 이미 같은 학생이 있거나 선택 목록 안에 중복이 있습니다.\n확인 필요: ${duplicatedTargets.join(', ')}`);
+    }
+    const ok = await showModalConfirm(`선택한 학생 ${ids.length}명을 ${grade} / ${klass.name} 학생으로 복제 생성할까요?\n기존 학생과 점검 기록은 보존됩니다.`);
+    if (!ok) return;
+
+    const batch = writeBatch(db);
+    ids.forEach(studentId => {
+      const student = (state.allStudents || state.students).find(s => s.id === studentId);
+      if (!student) return;
+      const profileId = student.studentProfileId || student.id;
+      const newRef = doc(refs.students);
+      batch.update(doc(db, COLLECTION_NAMES.students, studentId), {
+        active: false,
+        status: 'promoted',
+        studentProfileId: profileId,
+        promotedToStudentId: newRef.id,
+        promotedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      batch.set(newRef, {
+        name: student.name || '',
+        school: student.school || '',
+        grade,
+        classId,
+        active: true,
+        status: 'active',
+        studentProfileId: profileId,
+        previousStudentId: student.id,
+        pin: student.pin || '1234',
+        pinFailedCount: 0,
+        pinLocked: false,
+        createdAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    state.selectedAdminStudentIds = [];
+    notify(`학생 ${ids.length}명을 승급 복제했습니다.`);
+  }
+
+  async function purgeDueWithdrawnStudents() {
+    const dueStudents = studentsDueForDeletion(state.allStudents || []);
+    if (!dueStudents.length) return showModalAlert('현재 삭제 예정일이 지난 퇴원 학생이 없습니다.');
+    const ok = await showModalConfirm(`삭제 예정일이 지난 퇴원 학생 ${dueStudents.length}명을 삭제 표시할까요?`);
+    if (!ok) return;
+    const batch = writeBatch(db);
+    dueStudents.forEach(student => {
+      batch.update(doc(db, COLLECTION_NAMES.students, student.id), {
+        active: false,
+        deleted: true,
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    notify(`퇴원 학생 ${dueStudents.length}명을 삭제 표시했습니다.`);
   }
 
   async function saveBook() {
@@ -829,6 +1058,20 @@ export async function mountLegacyApp(appRoot) {
     await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
     state.formUnit = { name: '', start: '', end: '' };
     notify('단원 추가 완료');
+  }
+
+  async function toggleUnitStudentVisible(bookId, unitId) {
+    const book = bookById(bookId);
+    if (!book) return showModalAlert('교재 정보를 찾을 수 없습니다.');
+    const units = bookUnits(book).map(unit => {
+      if (unit.id !== unitId) return unit;
+      return {
+        ...unit,
+        visibleToStudent: unit.visibleToStudent === false
+      };
+    });
+    await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
+    notify('학생 화면 단원 공개 설정을 변경했습니다.');
   }
 
   async function saveUnitBulk() {
@@ -984,7 +1227,7 @@ export async function mountLegacyApp(appRoot) {
       await addDoc(refs.inspections, { ...payload, createdAt: serverTimestamp() });
     }
     const carryoverSummary = carryoverRecovery.totalPages > 0
-      ? `\n지난 미완료 회수: ${carryoverRecovery.resolvedPages}/${carryoverRecovery.totalPages}쪽 (${carryoverRecovery.recoveryRate}%)`
+      ? `\n지난 미완료 재검 완료: ${carryoverRecovery.resolvedPages}/${carryoverRecovery.totalPages}쪽 (${carryoverRecovery.recoveryRate}%)`
       : '';
     const summary = `${student.name} 학생 점검이 안전하게 저장되었습니다.\n\n교재: ${book.title}\n범위: ${start}~${end}쪽\n미완료: ${missedPages.length ? missedPages.join(', ') : '없음'}${carryoverSummary}\n완료율: ${completionRate}%`;
     resetInspectionForm();
@@ -1071,6 +1314,15 @@ export async function mountLegacyApp(appRoot) {
     return renderLoginView(state, safe);
   }
 
+  function loginModalMarkup() {
+    const accentColor = state.portal === 'admin'
+      ? '#8436ff'
+      : state.portal === 'student'
+      ? '#00d6cd'
+      : '#4169e1';
+    return renderCustomModalMarkup(state.customModal, safe, accentColor);
+  }
+
   function layout(content) {
     return renderLayoutView({
       content,
@@ -1092,7 +1344,7 @@ export async function mountLegacyApp(appRoot) {
     
     // 메인 관문 (gateway) 분기
     if (state.portal === 'gateway') {
-      appRoot.innerHTML = loginScreen();
+      appRoot.innerHTML = loginModalMarkup() + loginScreen();
       bind();
       return;
     }
@@ -1100,12 +1352,12 @@ export async function mountLegacyApp(appRoot) {
     // 학생 단독 대시보드 포털 렌더링
     if (state.portal === 'student') {
       if (!state.studentSession) {
-        appRoot.innerHTML = loginScreen();
+        appRoot.innerHTML = loginModalMarkup() + loginScreen();
         bind();
         return;
       }
       const content = renderStudentPortalView(state, {
-        inspectionsForStudent,
+        inspectionsForStudent: inspectionsForStudentProfile,
         bookById,
         bookUnits,
         averageCompletionRate,
@@ -1122,7 +1374,7 @@ export async function mountLegacyApp(appRoot) {
 
     // 교사 및 관리자 포털 렌더링
     if (!state.currentTeacher) {
-      appRoot.innerHTML = loginScreen();
+      appRoot.innerHTML = loginModalMarkup() + loginScreen();
       bind();
       return;
     }
@@ -1166,8 +1418,9 @@ export async function mountLegacyApp(appRoot) {
       state.portal = el.dataset.portal;
       state.loginStep = 'login';
       state.pin = '';
+      state.loginError = '';
       state.selectedTeacherName = '';
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' };
+      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
       
       if (el.dataset.portal === 'admin') {
         const adminTeacher = state.teachers.find(t => t.role === 'admin') || { id: 't_admin' };
@@ -1182,25 +1435,53 @@ export async function mountLegacyApp(appRoot) {
       state.currentTeacher = null;
       state.studentSession = null;
       state.pin = '';
+      state.loginError = '';
       state.selectedTeacherName = '';
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' };
+      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
       render();
     });
 
     appRoot.querySelectorAll('[data-action="select-teacher"]').forEach(el => el.onclick = () => { 
       state.selectedTeacherName = el.dataset.id; 
+      state.pin = '';
+      state.loginError = '';
       render(); 
     });
 
     const loginPin = document.getElementById('loginPin');
     if (loginPin) {
-      loginPin.oninput = (e) => state.pin = e.target.value.replace(/\D/g, '');
+      loginPin.value = state.pin || '';
+      loginPin.oninput = (e) => {
+        state.pin = e.target.value.replace(/\D/g, '');
+        if (state.loginError) {
+          state.loginError = '';
+          document.getElementById('loginErrorMessage')?.remove();
+          loginPin.classList.remove(
+            'border-rose-500',
+            'bg-rose-950/30',
+            'text-rose-100',
+            'focus:border-rose-400',
+            'shadow-[0_0_0_3px_rgba(244,63,94,0.18)]'
+          );
+          loginPin.classList.add(state.portal === 'admin' ? 'focus:border-[#8436ff]' : 'focus:border-[#4169e1]');
+        }
+      };
       loginPin.onkeydown = (e) => {
+        if (state.customModal.open) {
+          e.preventDefault();
+          return;
+        }
         if (e.key === 'Enter') {
           e.preventDefault();
           handleLogin();
         }
       };
+    }
+    const autofocusEl = document.querySelector('[data-autofocus="true"]');
+    if (autofocusEl) {
+      window.requestAnimationFrame(() => {
+        autofocusEl.focus();
+      });
     }
 
     appRoot.querySelector('[data-action="login"]')?.addEventListener('click', handleLogin);
@@ -1209,6 +1490,7 @@ export async function mountLegacyApp(appRoot) {
       state.studentSession = null;
       state.portal = 'gateway';
       state.pin = ''; 
+      state.loginError = '';
       state.selectedTeacherName = ''; 
       render(); 
     });
@@ -1297,7 +1579,7 @@ export async function mountLegacyApp(appRoot) {
     // 학생 회원가입 / 비밀번호 변경 단계 바인딩
     appRoot.querySelectorAll('[data-action="student-step"]').forEach(el => el.onclick = () => {
       state.loginStep = el.dataset.step;
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '' };
+      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
       render();
     });
 
@@ -1306,7 +1588,24 @@ export async function mountLegacyApp(appRoot) {
     const regSchool = document.getElementById('studentRegSchool');
     if (regSchool) regSchool.oninput = (e) => state.studentLoginForm.school = e.target.value;
     const regPin = document.getElementById('studentRegPin');
-    if (regPin) regPin.oninput = (e) => state.studentLoginForm.pin = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (regPin) {
+      regPin.value = state.studentLoginForm.pin || '';
+      regPin.onfocus = () => {
+        const pos = regPin.value.length;
+        regPin.setSelectionRange(pos, pos);
+      };
+      regPin.oninput = (e) => {
+        const nextPin = e.target.value.replace(/\D/g, '').slice(0, 4);
+        state.studentLoginForm.pin = nextPin;
+        e.target.value = nextPin;
+      };
+      regPin.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleStudentRegister();
+        }
+      };
+    }
     appRoot.querySelector('[data-action="student-register-submit"]')?.addEventListener('click', handleStudentRegister);
 
     // 학생 포털 대시보드 내 비밀번호 변경 바인딩
@@ -1336,6 +1635,12 @@ export async function mountLegacyApp(appRoot) {
         render();
       };
     });
+    appRoot.querySelectorAll('[data-action="select-student-rubric-book"]').forEach(el => {
+      el.onclick = () => {
+        state.selectedStudentRubricBookId = el.dataset.id || '';
+        render();
+      };
+    });
     
     appRoot.querySelector('[data-action="student-pin-change-submit"]')?.addEventListener('click', async () => {
       const { newPin, confirmNewPin } = state.studentLoginForm;
@@ -1349,10 +1654,8 @@ export async function mountLegacyApp(appRoot) {
       render();
     });
 
-    // 커스텀 모달 바인딩 (수락 / 취소)
-    appRoot.querySelector('[data-action="modal-confirm"]')?.addEventListener('click', () => {
+    function resolveCustomModal(resValue) {
       if (!state.customModal.open || !state.customModal.resolve) return;
-      let resValue = true;
       if (state.customModal.type === 'prompt') {
         const inputEl = document.getElementById('modalPromptInput');
         resValue = inputEl ? inputEl.value : '';
@@ -1362,9 +1665,15 @@ export async function mountLegacyApp(appRoot) {
       state.customModal.resolve = null;
       render();
       res(resValue);
+    }
+
+    // 커스텀 모달 바인딩 (수락 / 취소)
+    const modalConfirmButton = document.querySelector('[data-action="modal-confirm"]');
+    modalConfirmButton?.addEventListener('click', () => {
+      resolveCustomModal(true);
     });
 
-    appRoot.querySelector('[data-action="modal-cancel"]')?.addEventListener('click', () => {
+    document.querySelector('[data-action="modal-cancel"]')?.addEventListener('click', () => {
       if (!state.customModal.open || !state.customModal.resolve) return;
       const res = state.customModal.resolve;
       state.customModal.open = false;
@@ -1372,6 +1681,16 @@ export async function mountLegacyApp(appRoot) {
       render();
       res(state.customModal.type === 'prompt' ? null : false);
     });
+    document.onkeydown = state.customModal.open ? (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        resolveCustomModal(true);
+      }
+    } : null;
+    if (state.customModal.open && modalConfirmButton) {
+      window.requestAnimationFrame(() => modalConfirmButton.focus());
+    }
 
     // 테이블 헤더 정렬(th[data-sort]) 바인딩
     appRoot.querySelectorAll('th[data-sort]').forEach(el => {
@@ -1596,7 +1915,15 @@ export async function mountLegacyApp(appRoot) {
     ['selectedRangeStart', 'selectedRangeEnd'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.oninput = (e) => { state[id] = e.target.value; };
+      el.oninput = (e) => {
+        state[id] = e.target.value;
+        window.clearTimeout(state.rangeRenderTimer);
+        state.rangeRenderTimer = window.setTimeout(() => {
+          if (String(state.selectedRangeStart || '').trim() && String(state.selectedRangeEnd || '').trim()) {
+            render();
+          }
+        }, 180);
+      };
     });
     document.getElementById('setupClassName')?.addEventListener('input', e => state.setupFormClass.name = e.target.value);
     document.getElementById('setupClassGrade')?.addEventListener('change', e => state.setupFormClass.grade = e.target.value);
@@ -1636,6 +1963,9 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="save-unit"]')?.addEventListener('click', saveUnit);
     appRoot.querySelector('[data-action="save-unit-bulk"]')?.addEventListener('click', saveUnitBulk);
     appRoot.querySelector('[data-action="clear-unit-bulk"]')?.addEventListener('click', () => { state.bulkUnitText = ''; render(); });
+    appRoot.querySelectorAll('[data-action="toggle-unit-student-visible"]').forEach(el => {
+      el.onclick = () => toggleUnitStudentVisible(el.dataset.book, el.dataset.unit);
+    });
     appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false }; state.editingBookId = b.id; state.selectedBookManageId = b.id; render(); });
     appRoot.querySelectorAll('[data-action="clone-book"]').forEach(el => el.onclick = () => cloneBook(el.dataset.id));
     appRoot.querySelectorAll('[data-action="toggle-book-archive"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (b) toggleArchiveBook(b.id, !!b.archived); });
@@ -1688,7 +2018,7 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', () => { 
       state.printHtml = reportForStudent(state.reportStudentId, state, { 
         studentById, classById, inspectionsForStudent, groupInspectionsByBook, 
-        bookById, averageCompletionRate, fmtDate, safe, progressTone, bookRubricAverage,
+        bookById, averageCompletionRate, fmtDate, safe, progressTone,
         classRubricAverage, studentRubricAverage, students: state.students,
         inspections: state.inspections
       }); 
@@ -1718,6 +2048,36 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="admin-edit-teacher"]').forEach(el => el.onclick = () => loadAdminTeacherToForm(el.dataset.id));
     appRoot.querySelectorAll('[data-action="delete-class"]').forEach(el => el.onclick = () => removeClass(el.dataset.id));
     appRoot.querySelectorAll('[data-action="delete-book"]').forEach(el => el.onclick = () => removeBook(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="approve-student-request"]').forEach(el => el.onclick = () => approveStudentRequest(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="reject-student-request"]').forEach(el => el.onclick = () => rejectStudentRequest(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="admin-update-student-class"]').forEach(el => el.onclick = () => updateAdminStudentClass(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="admin-withdraw-student"]').forEach(el => el.onclick = () => withdrawAdminStudent(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="admin-delete-student"]').forEach(el => el.onclick = () => deleteAdminStudent(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="toggle-admin-student-select"]').forEach(el => {
+      el.onchange = () => {
+        const ids = new Set(state.selectedAdminStudentIds || []);
+        if (el.checked) ids.add(el.dataset.id);
+        else ids.delete(el.dataset.id);
+        state.selectedAdminStudentIds = [...ids];
+        render();
+      };
+    });
+    appRoot.querySelectorAll('[data-action="admin-set-promotion-grade"]').forEach(el => {
+      el.onclick = () => {
+        state.adminPromotionGrade = el.dataset.grade;
+        render();
+      };
+    });
+    appRoot.querySelectorAll('[data-action="admin-set-promotion-class"]').forEach(el => {
+      el.onclick = () => {
+        const klass = classById(el.dataset.id);
+        state.adminPromotionClassId = el.dataset.id;
+        if (klass?.grade) state.adminPromotionGrade = klass.grade;
+        render();
+      };
+    });
+    appRoot.querySelector('[data-action="admin-run-promotion-clone"]')?.addEventListener('click', runPromotionClone);
+    appRoot.querySelector('[data-action="admin-purge-due-withdrawn-students"]')?.addEventListener('click', purgeDueWithdrawnStudents);
 
     appRoot.querySelector('[data-action="save-login-config"]')?.addEventListener('click', saveLoginConfig);
     document.getElementById('configSplashTitleLine1')?.addEventListener('input', e => state.adminLoginConfigForm.splashTitleLine1 = e.target.value);

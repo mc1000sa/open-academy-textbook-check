@@ -1,5 +1,9 @@
 import { renderBtnSelect } from './layoutView.js';
-import { averageRubricVector } from '../../lib/reportMetrics.js';
+import {
+  averageRubricVector,
+  rubricComparisonForStudentClass,
+  rubricComparisonForStudentBook
+} from '../../lib/reportMetrics.js';
 import { buildCarryoverRows } from '../../lib/textbookProgress.js';
 
 const RUBRIC_LABELS = {
@@ -23,7 +27,7 @@ function defaultProgressTone() {
   return { bar: '#4169e1' };
 }
 
-function rubricPoints(vector, radius = 74, center = 100) {
+function rubricPoints(vector, radius = 68, center = 100) {
   return RUBRIC_KEYS.map((key, index) => {
     const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
     const scoreRadius = (rubricScore(vector, key) / 10) * radius;
@@ -33,7 +37,7 @@ function rubricPoints(vector, radius = 74, center = 100) {
   }).join(' ');
 }
 
-function rubricGridPoints(scale, radius = 74, center = 100) {
+function rubricGridPoints(scale, radius = 68, center = 100) {
   return RUBRIC_KEYS.map((_, index) => {
     const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
     const gridRadius = radius * scale;
@@ -43,7 +47,17 @@ function rubricGridPoints(scale, radius = 74, center = 100) {
   }).join(' ');
 }
 
-function rubricLabelPosition(index, radius = 88, center = 100) {
+function rubricCircles(vector, color, radius = 68, center = 100, hollow = false) {
+  return RUBRIC_KEYS.map((key, index) => {
+    const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
+    const scoreRadius = (rubricScore(vector, key) / 10) * radius;
+    const x = center + Math.cos(angle) * scoreRadius;
+    const y = center + Math.sin(angle) * scoreRadius;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${hollow ? '2.7' : '2.9'}" fill="${hollow ? '#0f172a' : color}" stroke="${color}" stroke-width="${hollow ? '2' : '1'}"></circle>`;
+  }).join('');
+}
+
+function rubricLabelPosition(index, radius = 93, center = 100) {
   const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
   return {
     x: center + Math.cos(angle) * radius,
@@ -63,7 +77,8 @@ export function renderRubricCompare(title, primary, secondary, secondaryLabel, s
   const labels = RUBRIC_KEYS.map((key, index) => {
     const pos = rubricLabelPosition(index);
     const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
-    return `<text x="${pos.x.toFixed(1)}" y="${pos.y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#cbd5e1" font-size="8" font-weight="700">${escape(RUBRIC_LABELS[key])}</text>`;
+    const dy = index === 0 ? -3 : index === 3 ? 5 : 0;
+    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#cbd5e1" font-size="7.2" font-weight="700">${escape(RUBRIC_LABELS[key])}</text>`;
   }).join('');
   const summary = RUBRIC_KEYS.map(key => `
     <div class="flex items-center justify-between gap-2">
@@ -85,11 +100,13 @@ export function renderRubricCompare(title, primary, secondary, secondaryLabel, s
             ${summary}
           </div>
         </div>
-        <svg class="shrink-0 w-full max-w-[260px] mx-auto md:mx-0" viewBox="0 0 200 200" role="img" aria-label="${escape(title)}">
+        <svg class="shrink-0 w-full max-w-[300px] mx-auto md:mx-0 overflow-visible" viewBox="-28 -24 256 248" role="img" aria-label="${escape(title)}">
           ${grid}
           ${axes}
-          <polygon points="${rubricPoints(secondary)}" fill="rgba(52,211,153,0.18)" stroke="#34d399" stroke-width="2"></polygon>
-          <polygon points="${rubricPoints(primary)}" fill="rgba(96,165,250,0.28)" stroke="#60a5fa" stroke-width="2.5"></polygon>
+          <polygon points="${rubricPoints(secondary)}" fill="rgba(52,211,153,0.08)" stroke="#34d399" stroke-width="3" stroke-dasharray="5 4" stroke-linejoin="round"></polygon>
+          <polygon points="${rubricPoints(primary)}" fill="rgba(96,165,250,0.24)" stroke="#60a5fa" stroke-width="2.4" stroke-linejoin="round"></polygon>
+          ${rubricCircles(secondary, '#34d399', 68, 100, true)}
+          ${rubricCircles(primary, '#60a5fa')}
           ${labels}
         </svg>
       </div>
@@ -109,7 +126,6 @@ export function reportForStudent(studentId, state, deps) {
     fmtDate,
     safe,
     progressTone,
-    bookRubricAverage,
     classRubricAverage,
     studentRubricAverage,
     students,
@@ -137,10 +153,20 @@ export function reportForStudent(studentId, state, deps) {
     const avg = Math.round(averageCompletionRate(items));
     const latest = items[0];
     const tone = (typeof progressTone === 'function' ? progressTone : defaultProgressTone)(avg);
-    const bookVector = typeof bookRubricAverage === 'function'
-      ? bookRubricAverage(bookId, allInspections)
-      : {};
-    const studentBookVector = averageRubricVector(items) || studentOverallVector;
+    const comparison = rubricComparisonForStudentBook({
+      studentId,
+      bookId,
+      students: allStudents,
+      inspections: allInspections
+    });
+    const classComparison = rubricComparisonForStudentClass({
+      studentId,
+      classId: student.classId,
+      students: allStudents,
+      inspections: allInspections
+    });
+    const bookVector = comparison.bookAverageVector || {};
+    const studentBookVector = comparison.studentVector || averageRubricVector(items) || studentOverallVector;
 
     // 미비 페이지 목록 취합
     const allMissed = new Set(buildCarryoverRows({
@@ -192,8 +218,8 @@ export function reportForStudent(studentId, state, deps) {
           `).join('')}
         </div>
 
-        ${renderRubricCompare('교재별 6요소 비교', studentBookVector, bookVector, '같은 교재 평균', safe)}
-        ${renderRubricCompare('반 평균 6요소 비교', studentBookVector, classVector, '반 평균', safe)}
+        ${renderRubricCompare('해당 교재 평균 vs 학생 6요소', studentBookVector, bookVector, '해당 교재 평균', safe)}
+        ${renderRubricCompare('반 평균 6요소 비교', classComparison.studentVector || studentOverallVector, classComparison.classAverageVector || classVector, '반 평균', safe)}
       </div>
     `;
   }).join('');

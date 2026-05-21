@@ -1,3 +1,43 @@
+import { averageRubricVector, bookRubricAverageForActiveStudents } from '../../lib/reportMetrics.js';
+import { renderRubricCompare } from './reportsView.js';
+
+function pagesInSimpleRange(start, end) {
+  const first = Number(start);
+  const last = Number(end);
+  if (!Number.isFinite(first) || !Number.isFinite(last) || first < 1 || last < first) return [];
+  return Array.from({ length: last - first + 1 }, (_, index) => first + index);
+}
+
+function unitCompletionRows(book, logs, bookUnits) {
+  const units = (typeof bookUnits === 'function' ? bookUnits(book) : [...(book?.units || [])])
+    .filter(unit => unit.visibleToStudent !== false);
+  return units.map(unit => {
+    const unitPages = new Set(pagesInSimpleRange(unit.start, unit.end));
+    const checkedPages = new Set();
+    const missedPages = new Set();
+
+    (logs || []).forEach(log => {
+      pagesInSimpleRange(log.rangeStart, log.rangeEnd).forEach(page => {
+        if (unitPages.has(page)) checkedPages.add(page);
+      });
+      (log.missedPages || []).map(Number).forEach(page => {
+        if (unitPages.has(page)) missedPages.add(page);
+      });
+    });
+
+    const checkedCount = checkedPages.size;
+    const completedCount = Math.max(0, checkedCount - missedPages.size);
+    const completionRate = checkedCount ? Math.round((completedCount / checkedCount) * 100) : 0;
+
+    return {
+      ...unit,
+      checkedCount,
+      missedCount: missedPages.size,
+      completionRate
+    };
+  });
+}
+
 export function renderStudentPortalView(state, utils) {
   const {
     inspectionsForStudent,
@@ -61,6 +101,23 @@ export function renderStudentPortalView(state, utils) {
 
   // 전체 교재의 평균 완료율
   const totalAvg = Math.round(averageCompletionRate(myInspections));
+  const selectedRubricBookId = state.selectedStudentRubricBookId || '';
+  const selectedRubricBookItem = selectedRubricBookId
+    ? bookList.find(item => item.book.id === selectedRubricBookId)
+    : null;
+  const selectedRubricStudentVector = selectedRubricBookItem
+    ? averageRubricVector(selectedRubricBookItem.logs)
+    : {};
+  const selectedRubricBookVector = selectedRubricBookItem
+    ? bookRubricAverageForActiveStudents(selectedRubricBookItem.book.id, state.students, state.inspections)
+    : {};
+  const selectedHistoryBookId = state.selectedStudentBookFilter || '';
+  const selectedHistoryBookItem = selectedHistoryBookId
+    ? bookList.find(item => item.book.id === selectedHistoryBookId)
+    : null;
+  const selectedUnitRows = selectedHistoryBookItem
+    ? unitCompletionRows(selectedHistoryBookItem.book, selectedHistoryBookItem.logs, bookUnits)
+    : [];
 
   // 포털 테마: 청록색(Mint)
   const pipeColor = '#00d6cd';
@@ -216,7 +273,7 @@ export function renderStudentPortalView(state, utils) {
             ` : ''}
           </div>
           
-          <div class="space-y-3 max-h-60 overflow-y-auto pr-1">
+          <div class="space-y-3 max-h-72 overflow-y-auto pr-2 pt-1 pb-1">
             ${(() => {
               // 선택된 교재 필터가 있으면 필터링
               const filteredInspections = state.selectedStudentBookFilter
@@ -240,13 +297,13 @@ export function renderStudentPortalView(state, utils) {
                 const unitText = unitNames ? ` (${unitNames})` : '';
 
                 return `
-                  <div class="p-3 bg-slate-900/30 rounded-xl soft-border text-xs flex justify-between items-center gap-2">
-                    <div>
+                  <div class="p-3 bg-slate-900/30 rounded-xl soft-border text-xs flex justify-between items-start gap-3">
+                    <div class="min-w-0">
                       <span class="font-extrabold text-slate-200 block">${safe(book?.title || '알 수 없는 교재')}</span>
-                      <span class="text-slate-400 mt-1 block">범위: ${log.rangeStart}~${log.rangeEnd}쪽${safe(unitText)} (완료율 ${log.completionRate}%)</span>
+                      <span class="text-slate-400 mt-1 block leading-relaxed">범위: ${log.rangeStart}~${log.rangeEnd}쪽${safe(unitText)} (완료율 ${log.completionRate}%)</span>
                     </div>
-                    <div class="text-right">
-                      <span class="text-[#00d6cd] font-black block" title="점검일: ${fmtDate(log.date)}">${round}회차 점검</span>
+                    <div class="text-right shrink-0 min-w-[72px] pt-0.5">
+                      <span class="text-[#00d6cd] font-black block whitespace-nowrap leading-none" title="점검일: ${fmtDate(log.date)}">${round}회차 점검</span>
                       <span class="text-[10px] text-slate-500">${safe(log.teacherName)}T</span>
                     </div>
                   </div>
@@ -254,6 +311,78 @@ export function renderStudentPortalView(state, utils) {
               }).join('');
             })()}
           </div>
+
+          <div class="mt-5 pt-5 border-t border-slate-800/80">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h4 class="text-xs font-black text-slate-200">단원별 완료율</h4>
+                <p class="text-[10px] text-slate-500 mt-1">교재 필터에서 선택한 교재 기준으로 표시됩니다.</p>
+              </div>
+              ${selectedHistoryBookItem ? `<span class="text-[10px] font-black text-[#00d6cd]">${safe(selectedHistoryBookItem.book.title)}</span>` : ''}
+            </div>
+            ${!selectedHistoryBookItem ? `
+              <div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-5 text-center text-xs text-slate-500">
+                교재 필터에서 교재를 하나 선택하면 단원별 막대 그래프가 표시됩니다.
+              </div>
+            ` : selectedUnitRows.length ? `
+              <div class="space-y-3">
+                ${selectedUnitRows.map(unit => `
+                  <div>
+                    <div class="flex items-center justify-between gap-3 text-[11px] mb-1.5">
+                      <span class="font-bold text-slate-300 truncate">${safe(unit.name)}</span>
+                      <span class="font-black text-slate-100 shrink-0">${unit.completionRate}%</span>
+                    </div>
+                    <div class="h-2.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden">
+                      <div class="h-full rounded-full" style="width: ${unit.completionRate}%; background: linear-gradient(90deg,#00d6cd,#4169e1);"></div>
+                    </div>
+                    <div class="mt-1 text-[10px] text-slate-500">
+                      ${safe(unit.start)}~${safe(unit.end)}쪽 · 점검 ${unit.checkedCount}쪽 · 미완료 ${unit.missedCount}쪽
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-5 text-center text-xs text-slate-500">
+                이 교재에는 등록된 단원 정보가 없습니다.
+              </div>
+            `}
+          </div>
+        </article>
+      </section>
+
+      <!-- 교재별 6요소 비교 차트 -->
+      <section class="mb-8">
+        <article class="card-3d p-6 rounded-2xl">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-800/80">
+            <div class="flex items-center">
+              <div style="width: 4px; height: 1rem; background: ${pipeColor}; margin-right: 0.6rem; border-radius: 2px; box-shadow: 0 0 8px ${pipeColor};"></div>
+              <h3 class="text-sm font-bold text-slate-200">교재별 6요소 비교</h3>
+            </div>
+            ${bookList.length > 0 ? `
+              <div class="flex flex-wrap gap-1.5 items-center">
+                <span class="text-[11px] font-bold text-slate-500 mr-1 select-none">교재 선택:</span>
+                ${bookList.map(item => `
+                  <button type="button" data-action="select-student-rubric-book" data-id="${item.book.id}" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold transition-all border ${selectedRubricBookId === item.book.id ? 'bg-[#00d6cd] text-slate-950 border-[#00d6cd]' : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white'}">
+                    ${safe(item.book.title)}
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+
+          ${bookList.length === 0 ? `
+            <div class="text-xs text-slate-500 text-center py-8">비교할 교재 점검 기록이 아직 없습니다.</div>
+          ` : selectedRubricBookItem ? `
+            <div class="mb-3 text-xs text-slate-400">
+              선택 교재: <span class="font-black text-slate-100">${safe(selectedRubricBookItem.book.title)}</span>
+            </div>
+            ${renderRubricCompare('해당 교재 평균 vs 나의 6요소', selectedRubricStudentVector, selectedRubricBookVector, '해당 교재 평균', safe)}
+          ` : `
+            <div class="rounded-2xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-8 text-center">
+              <div class="text-sm font-black text-slate-300">교재를 하나 선택하면 6요소 비교가 표시됩니다.</div>
+              <div class="text-xs text-slate-500 mt-2">전체 교재 평균이 아니라, 선택한 교재 기준으로만 비교합니다.</div>
+            </div>
+          `}
         </article>
       </section>
 

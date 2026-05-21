@@ -8,12 +8,25 @@ export function bookMap(book, deps) {
     <div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/20 p-4 shadow-inner">
       <div class="text-xs font-extrabold text-slate-300 mb-3">${safe(book.title)} 단원 맵</div>
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
-        ${list.map(u => `
+        ${list.map(u => {
+          const visibleToStudent = u.visibleToStudent !== false;
+          return `
           <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3 shadow-sm">
-            <div class="text-xs font-extrabold text-slate-200 truncate" title="${safe(u.name)}">${safe(u.name)}</div>
-            <div class="text-[10px] text-slate-500 mt-1 font-bold">${u.start}~${u.end}쪽 (${Number(u.end) - Number(u.start) + 1}p)</div>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-xs font-extrabold text-slate-200 truncate" title="${safe(u.name)}">${safe(u.name)}</div>
+                <div class="text-[10px] text-slate-500 mt-1 font-bold">${u.start}~${u.end}쪽 (${Number(u.end) - Number(u.start) + 1}p)</div>
+              </div>
+              <span class="shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black ${visibleToStudent ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-500'}">
+                ${visibleToStudent ? '공개' : '숨김'}
+              </span>
+            </div>
+            <button type="button" data-action="toggle-unit-student-visible" data-book="${book.id}" data-unit="${u.id}" class="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[10px] font-bold text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300 transition-colors">
+              학생 화면 ${visibleToStudent ? '숨기기' : '공개하기'}
+            </button>
           </div>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     </div>
   `;

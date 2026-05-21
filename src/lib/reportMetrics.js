@@ -86,6 +86,38 @@ export function bookRubricAverage(bookId, inspections) {
   return averageRubricVector((inspections || []).filter(inspection => inspection.bookId === bookId));
 }
 
+export function studentBookRubricAverage(studentId, bookId, inspections) {
+  return averageRubricVector((inspections || []).filter(inspection => {
+    return inspection.studentId === studentId && inspection.bookId === bookId;
+  }));
+}
+
+export function bookRubricAverageForActiveStudents(bookId, students, inspections) {
+  const activeStudentIds = new Set(
+    (students || [])
+      .filter(student => {
+        return student.active !== false &&
+          student.deleted !== true &&
+          student.status !== 'withdrawn' &&
+          student.status !== 'promoted';
+      })
+      .map(student => student.id)
+  );
+
+  if (!activeStudentIds.size) return averageRubricVector([]);
+
+  return averageRubricVector((inspections || []).filter(inspection => {
+    return inspection.bookId === bookId && activeStudentIds.has(inspection.studentId);
+  }));
+}
+
+export function rubricComparisonForStudentBook({ studentId, bookId, students, inspections }) {
+  return {
+    studentVector: studentBookRubricAverage(studentId, bookId, inspections),
+    bookAverageVector: bookRubricAverageForActiveStudents(bookId, students, inspections)
+  };
+}
+
 export function classRubricAverage(classId, students, inspections) {
   const activeStudentIds = new Set(
     (students || [])
@@ -94,4 +126,11 @@ export function classRubricAverage(classId, students, inspections) {
   );
 
   return averageRubricVector((inspections || []).filter(inspection => activeStudentIds.has(inspection.studentId)));
+}
+
+export function rubricComparisonForStudentClass({ studentId, classId, students, inspections }) {
+  return {
+    studentVector: studentRubricAverage(studentId, inspections),
+    classAverageVector: classRubricAverage(classId, students, inspections)
+  };
 }

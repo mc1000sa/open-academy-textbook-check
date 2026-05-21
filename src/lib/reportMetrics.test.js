@@ -3,9 +3,13 @@ import {
   averageCompletionRate,
   averageRubricVector,
   bookRubricAverage,
+  bookRubricAverageForActiveStudents,
   classProgressRate,
   classRubricAverage,
   groupInspectionsByBook,
+  rubricComparisonForStudentClass,
+  rubricComparisonForStudentBook,
+  studentBookRubricAverage,
   studentRubricAverage
 } from './reportMetrics.js';
 
@@ -164,6 +168,63 @@ describe('reportMetrics', () => {
     expect(classRubricAverage('c1', students, inspections)).toMatchObject({
       assignment: 9,
       expression: 9
+    });
+  });
+
+  it('calculates student-book and active textbook average vectors for report radar comparison', () => {
+    const students = [
+      { id: 's1', active: true },
+      { id: 's2', active: true },
+      { id: 's3', active: false },
+      { id: 's4', active: true, status: 'promoted' }
+    ];
+    const inspections = [
+      { studentId: 's1', bookId: 'b1', completionRate: 100, rubricScores: { expression: 10 } },
+      { studentId: 's1', bookId: 'b2', completionRate: 50, rubricScores: { expression: 5 } },
+      { studentId: 's2', bookId: 'b1', completionRate: 80, rubricScores: { expression: 8 } },
+      { studentId: 's3', bookId: 'b1', completionRate: 10, rubricScores: { expression: 1 } },
+      { studentId: 's4', bookId: 'b1', completionRate: 20, rubricScores: { expression: 2 } }
+    ];
+
+    expect(studentBookRubricAverage('s1', 'b1', inspections)).toMatchObject({
+      assignment: 10,
+      expression: 10
+    });
+    expect(bookRubricAverageForActiveStudents('b1', students, inspections)).toMatchObject({
+      assignment: 9,
+      expression: 9
+    });
+    expect(rubricComparisonForStudentBook({
+      studentId: 's1',
+      bookId: 'b1',
+      students,
+      inspections
+    })).toMatchObject({
+      studentVector: { assignment: 10, expression: 10 },
+      bookAverageVector: { assignment: 9, expression: 9 }
+    });
+  });
+
+  it('calculates student and class average vectors for class radar comparison', () => {
+    const students = [
+      { id: 's1', classId: 'c1', active: true },
+      { id: 's2', classId: 'c1', active: true },
+      { id: 's3', classId: 'c2', active: true }
+    ];
+    const inspections = [
+      { studentId: 's1', completionRate: 100, rubricScores: { expression: 10 } },
+      { studentId: 's2', completionRate: 80, rubricScores: { expression: 8 } },
+      { studentId: 's3', completionRate: 20, rubricScores: { expression: 2 } }
+    ];
+
+    expect(rubricComparisonForStudentClass({
+      studentId: 's1',
+      classId: 'c1',
+      students,
+      inspections
+    })).toMatchObject({
+      studentVector: { assignment: 10, expression: 10 },
+      classAverageVector: { assignment: 9, expression: 9 }
     });
   });
 });

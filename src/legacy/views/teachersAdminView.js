@@ -12,17 +12,26 @@ export function renderTeachersAdminView(state, deps) {
   const exp = state.adminCardExpanded || {};
   const purpleTheme = '#8436ff'; // 관리자 전용 네온 퍼플
   const btnClass = 'btn-admin';
+  const allStudents = (state.allStudents || state.students || []).filter(s => s.deleted !== true);
+  const managedStudents = allStudents.filter(s => s.status !== 'promoted');
+  const withdrawnStudents = allStudents.filter(s => s.status === 'withdrawn');
+  const pendingRequests = (state.studentRequests || []).filter(req => (req.status || 'pending') === 'pending');
+  const selectedAdminStudentIds = new Set(state.selectedAdminStudentIds || []);
+  const promotionGrades = Array.from(new Set([...state.classes.map(c => c.grade).filter(Boolean), '고1', '고2', '고3']));
+  const selectedPromotionGrade = state.adminPromotionGrade || '';
+  const selectedPromotionClassId = state.adminPromotionClassId || '';
 
   // 아코디언 카드 헬퍼 (React AccordionCard의 외양과 구조 완전 일치)
-  function renderAdminAccordion({ id, title, subtitle, pipeColor = purpleTheme, open = false, childrenHtml }) {
+  function renderAdminAccordion({ id, title, subtitle, pipeColor = purpleTheme, open = false, childrenHtml, alert = false, badgeText = '' }) {
     return `
-      <article id="card-${id}" class="admin-section-card card-3d rounded-2xl p-5 ${open ? 'open' : ''}">
+      <article id="card-${id}" class="admin-section-card card-3d rounded-2xl p-5 ${open ? 'open' : ''} ${alert ? 'admin-section-card-alert' : ''}">
         <button type="button" data-action="toggle-admin-card" data-card-id="${id}" class="admin-section-head w-full flex items-center justify-between text-left focus:outline-none">
           <div class="flex items-center">
             <div class="pipe-bar" style="width: 4.5px; height: 1.1rem; background: ${pipeColor}; margin-right: 0.75rem; border-radius: 2px; box-shadow: 0 0 10px ${pipeColor}44;"></div>
             <span class="text-sm font-extrabold text-white">${safe(title)}</span>
           </div>
           <div class="flex items-center gap-2">
+            ${badgeText ? `<span class="rounded-full border border-rose-400/40 bg-rose-500/15 px-2 py-1 text-[10px] font-black text-rose-200">${safe(badgeText)}</span>` : ''}
             <span class="text-[10px] text-slate-500 font-bold">${safe(subtitle)}</span>
             <span class="text-slate-400 font-extrabold text-xs transition-transform duration-200 ${open ? 'rotate-180' : ''}">▼</span>
           </div>
@@ -34,6 +43,17 @@ export function renderTeachersAdminView(state, deps) {
         ` : ''}
       </article>
     `;
+  }
+
+  function classByName(classId) {
+    return state.classes.find(c => String(c.id) === String(classId))?.name || '-';
+  }
+
+  function formatMaybeDate(value) {
+    if (!value) return '-';
+    const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
   }
 
   // 각 카드 내부 HTML 정의
@@ -216,6 +236,111 @@ export function renderTeachersAdminView(state, deps) {
     </div>
   `;
 
+  const requestApprovalHtml = `
+    <div class="space-y-3">
+      <div class="rounded-xl border border-violet-500/20 bg-violet-950/10 px-4 py-3">
+        <div class="text-xs font-extrabold text-violet-200">신규생 등록 요청 대기 ${pendingRequests.length}건</div>
+        <div class="text-[10px] text-slate-500 mt-1">학생/학부모 등록 요청을 확인한 뒤 기존 학생 데이터로 승인합니다.</div>
+      </div>
+      <div class="space-y-2 max-h-72 overflow-y-auto mini-scroll pr-1">
+        ${pendingRequests.length ? pendingRequests.map(req => `
+          <div class="rounded-xl border border-slate-800 bg-slate-900/20 px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div>
+              <div class="font-extrabold text-slate-100">${safe(req.name || '이름 없음')}</div>
+              <div class="text-[10px] text-slate-500 mt-1">${safe(req.school || '-')} &middot; ${safe(req.grade || classByName(req.classId) || '-')} &middot; 요청 반: ${safe(classByName(req.classId))}</div>
+            </div>
+            <div class="flex gap-1.5">
+              <button type="button" data-action="approve-student-request" data-id="${req.id}" class="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500 hover:text-white transition-all">승인</button>
+              <button type="button" data-action="reject-student-request" data-id="${req.id}" class="rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-[11px] font-bold text-slate-300 hover:bg-slate-700 transition-all">보류</button>
+            </div>
+          </div>
+        `).join('') : '<div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-8 text-center text-xs text-slate-500">대기 중인 신규생 등록 요청이 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+
+  const classOptionsHtml = (selectedClassId = '') => state.classes.map(c => `
+    <option value="${safe(c.id)}" ${String(selectedClassId) === String(c.id) ? 'selected' : ''}>${safe(c.name)} (${safe(c.grade || '-')})</option>
+  `).join('');
+
+  const studentManagementHtml = `
+    <div class="space-y-3">
+      <div class="text-[10px] text-slate-500">학생별 소속 반 수정, 퇴원 처리, 삭제 표시를 진행합니다. 점검 기록은 별도 보존됩니다.</div>
+      <div class="space-y-2 max-h-96 overflow-y-auto mini-scroll pr-1">
+        ${managedStudents.length ? managedStudents.map(s => `
+          <div class="rounded-xl border ${s.status === 'withdrawn' ? 'border-amber-500/30 bg-amber-950/10' : 'border-slate-800 bg-slate-900/20'} px-4 py-3 text-xs">
+            <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" data-action="toggle-admin-student-select" data-id="${s.id}" ${selectedAdminStudentIds.has(s.id) ? 'checked' : ''} />
+                <span>
+                  <span class="font-extrabold text-slate-100">${safe(s.name)}</span>
+                  <span class="text-[10px] text-slate-500 ml-2">${safe(s.school || '-')} &middot; ${safe(s.grade || '-')} &middot; ${safe(classByName(s.classId))}</span>
+                  ${s.status === 'withdrawn' ? '<span class="ml-2 text-[10px] text-amber-300 font-black">퇴원</span>' : ''}
+                </span>
+              </label>
+              <div class="flex flex-wrap gap-1.5 items-center">
+                <select id="adminStudentClass-${safe(s.id)}" class="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] text-slate-200">
+                  ${classOptionsHtml(s.classId)}
+                </select>
+                <button type="button" data-action="admin-update-student-class" data-id="${s.id}" class="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[10px] font-bold text-slate-200 hover:bg-slate-700">반 수정</button>
+                <button type="button" data-action="admin-withdraw-student" data-id="${s.id}" class="rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-[10px] font-bold text-amber-300 hover:bg-amber-500 hover:text-white">퇴원</button>
+                <button type="button" data-action="admin-delete-student" data-id="${s.id}" class="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 text-[10px] font-bold text-rose-300 hover:bg-rose-500 hover:text-white">삭제</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-8 text-center text-xs text-slate-500">관리할 학생 데이터가 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+
+  const bulkStudentEditHtml = `
+    <div class="space-y-4">
+      <div class="rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-3 text-xs text-slate-300">
+        선택된 학생 <span class="font-black text-violet-300">${selectedAdminStudentIds.size}명</span>을 새 학년/새 반 학생으로 복제 생성합니다. 기존 학생과 기록은 그대로 보존됩니다.
+      </div>
+      <div class="space-y-4">
+        <div>
+          <div class="text-xs font-bold text-slate-400 mb-2">새 학년 선택</div>
+          <div class="flex flex-wrap gap-1.5">
+            ${promotionGrades.map(grade => `
+              <button type="button" data-action="admin-set-promotion-grade" data-grade="${safe(grade)}" class="rounded-lg border px-3 py-2 text-xs font-black transition-all ${selectedPromotionGrade === grade ? 'border-violet-500 bg-violet-500 text-white' : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-violet-500/60 hover:text-white'}">${safe(grade)}</button>
+            `).join('')}
+          </div>
+        </div>
+        <div>
+          <div class="text-xs font-bold text-slate-400 mb-2">새 반 선택</div>
+          <div class="grid md:grid-cols-2 gap-2">
+            ${state.classes.map(c => `
+              <button type="button" data-action="admin-set-promotion-class" data-id="${safe(c.id)}" class="rounded-xl border px-3 py-3 text-left transition-all ${selectedPromotionClassId === c.id ? 'border-violet-500 bg-violet-500/20 text-white' : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-violet-500/60 hover:text-white'}">
+                <span class="block text-xs font-black">${safe(c.name)}</span>
+                <span class="block text-[10px] mt-1 text-slate-500">${safe(c.grade || '-')} · ${safe(teacherNameById(c.teacherId))}T</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+      <button type="button" data-action="admin-run-promotion-clone" class="${btnClass} rounded-xl px-5 py-2.5 text-xs font-extrabold shadow-md">선택 학생 승급 복제 실행</button>
+    </div>
+  `;
+
+  const retentionHtml = `
+    <div class="space-y-3">
+      <div class="rounded-xl border border-amber-500/20 bg-amber-950/10 px-4 py-3">
+        <div class="text-xs font-extrabold text-amber-200">퇴원 학생 ${withdrawnStudents.length}명</div>
+        <div class="text-[10px] text-slate-500 mt-1">퇴원 처리된 학생은 삭제 예정일이 지나면 정리 대상이 됩니다. 현재는 관리자 버튼으로 실행하는 배치 구조입니다.</div>
+      </div>
+      <button type="button" data-action="admin-purge-due-withdrawn-students" class="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 text-xs font-extrabold text-rose-300 hover:bg-rose-500 hover:text-white transition-all">삭제 예정일 지난 퇴원 학생 정리</button>
+      <div class="space-y-2 max-h-52 overflow-y-auto mini-scroll pr-1">
+        ${withdrawnStudents.length ? withdrawnStudents.map(s => `
+          <div class="rounded-xl border border-slate-800 bg-slate-900/20 px-4 py-3 text-xs">
+            <div class="font-extrabold text-slate-100">${safe(s.name)}</div>
+            <div class="text-[10px] text-slate-500 mt-1">삭제 예정일: ${safe(formatMaybeDate(s.deleteAfter))}</div>
+          </div>
+        `).join('') : '<div class="text-xs text-slate-500 py-4 text-center">퇴원 처리된 학생이 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+
   return `
     <div class="space-y-6">
       
@@ -247,10 +372,44 @@ export function renderTeachersAdminView(state, deps) {
             open: !!exp.classes,
             childrenHtml: classesHtml
           })}
+
+          ${renderAdminAccordion({
+            id: 'studentRequests',
+            title: '신규생 등록 요청 확인 및 승인',
+            subtitle: pendingRequests.length ? `${pendingRequests.length}건 신청 대기` : '대기 요청 없음',
+            alert: pendingRequests.length > 0,
+            badgeText: pendingRequests.length ? `${pendingRequests.length}건` : '',
+            open: !!exp.studentRequests,
+            childrenHtml: requestApprovalHtml
+          })}
+
+          ${renderAdminAccordion({
+            id: 'studentManagement',
+            title: '학생 관리',
+            subtitle: '반 수정, 퇴원, 삭제',
+            open: !!exp.studentManagement,
+            childrenHtml: studentManagementHtml
+          })}
         </div>
 
         <!-- RIGHT COLUMN -->
         <div class="space-y-6">
+          ${renderAdminAccordion({
+            id: 'bulkStudentEdit',
+            title: '학생 일괄 승급 복제',
+            subtitle: '기존 기록 보존 후 새 학생 생성',
+            open: !!exp.bulkStudentEdit,
+            childrenHtml: bulkStudentEditHtml
+          })}
+
+          ${renderAdminAccordion({
+            id: 'studentRetention',
+            title: '퇴원 학생 자동 삭제 준비',
+            subtitle: '3개월 후 삭제 배치 구조',
+            open: !!exp.studentRetention,
+            childrenHtml: retentionHtml
+          })}
+
           ${renderAdminAccordion({
             id: 'loginSplash',
             title: '로그인 & 스플래시 화면 설정',

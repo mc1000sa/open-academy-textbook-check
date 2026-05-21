@@ -25,6 +25,12 @@ describe('textbookProgress', () => {
     expect(pagesInRange('a', 3)).toEqual([]);
   });
 
+  it('returns no pages when the range input is empty', () => {
+    expect(pagesInRange('', '')).toEqual([]);
+    expect(pagesInRange('', 10)).toEqual([]);
+    expect(pagesInRange(1, '')).toEqual([]);
+  });
+
   it('sorts book units by start page without mutating the book', () => {
     const book = {
       units: [

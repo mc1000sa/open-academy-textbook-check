@@ -40,6 +40,30 @@ describe('renderLoginView', () => {
     expect(html).toContain('value="&quot;123"');
   });
 
+  it('marks the teacher PIN input for focus after a teacher is selected', () => {
+    const html = renderLoginView({
+      portal: 'teacher',
+      teachers: [{ id: 't1', name: 'Joy', role: 'teacher' }],
+      selectedTeacherName: 't1',
+      pin: ''
+    }, escapeHtml);
+
+    expect(html).toContain('id="loginPin"');
+    expect(html).toContain('data-autofocus="true"');
+  });
+
+  it('marks the admin PIN input for focus immediately', () => {
+    const html = renderLoginView({
+      portal: 'admin',
+      teachers: [{ id: 't_admin', name: 'Admin', role: 'admin' }],
+      selectedTeacherName: 't_admin',
+      pin: ''
+    }, escapeHtml);
+
+    expect(html).toContain('id="loginPin"');
+    expect(html).toContain('data-autofocus="true"');
+  });
+
   it('renders student portal cascading steps and filters', () => {
     const state = {
       portal: 'student',

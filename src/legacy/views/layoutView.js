@@ -46,6 +46,33 @@ export function renderMobileMenuButton({ currentView, view, label, portalTheme }
   `;
 }
 
+export function renderCustomModalMarkup(customModal, safe, accentColor = '#4169e1') {
+  if (!customModal || !customModal.open) return '';
+
+  const isConfirmOrPrompt = customModal.type === 'confirm' || customModal.type === 'prompt';
+  return `
+      <div class="modal-overlay" style="position: fixed !important; top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; z-index: 99999 !important; display: grid !important; place-items: center !important; padding: 1rem !important; background: rgba(5, 5, 7, 0.75) !important; backdrop-filter: blur(10px);">
+        <div class="glass-card modal-content" style="max-width: 420px; width: 90%; text-align: center; padding: 2.5rem 2rem; border: 1px solid rgba(255, 255, 255, 0.15); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); margin: 0 auto;">
+          ${customModal.title ? `<h3 style="margin-top: 0; margin-bottom: 1.5rem; color: ${accentColor}; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;">${safe(customModal.title)}</h3>` : ''}
+          <p style="margin-bottom: 1.5rem; line-height: 1.7; white-space: pre-wrap; word-break: keep-all; font-size: 0.95rem; color: rgba(255, 255, 255, 0.85);">${safe(customModal.message)}</p>
+          ${customModal.type === 'prompt' ? `
+            <input type="text" id="modalPromptInput" class="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-center text-white mb-6 font-mono text-lg outline-none focus:border-[${accentColor}]" value="${safe(customModal.inputValue || '')}" autocomplete="off" autofocus />
+          ` : ''}
+          <div class="submit-row" style="gap: 0.75rem; display: flex; justify-content: center;">
+            ${isConfirmOrPrompt ? `
+              <button type="button" data-action="modal-cancel" class="ghost-button" style="flex: 1; padding: 0.85rem; font-size: 0.9rem; border-radius: 12px;">
+                ${safe(customModal.cancelText || '취소')}
+              </button>
+            ` : ''}
+            <button type="button" data-action="modal-confirm" class="primary-button" style="flex: 1; padding: 0.85rem; font-size: 0.9rem; border-radius: 12px; background: linear-gradient(135deg, ${accentColor} 0%, #2f46ff 100%);">
+              ${safe(customModal.confirmText || '확인')}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+}
+
 export function renderLayoutView({ content, currentView, currentTeacher, studentSession, portal, saveMsg, customModal }, safe) {
   const currentTeacherName = currentTeacher?.name || '';
   
@@ -66,12 +93,8 @@ export function renderLayoutView({ content, currentView, currentTeacher, student
     // 학생 포털은 사이드바를 제거한 1컬럼 레이아웃으로 넓고 시원하게 렌더링 (사이드바 HTML 공백 처리)
     menuHtml = '';
   } else if (portal === 'admin') {
-    menuHtml += renderMenuButton({ currentView, view: 'setup', label: '반/학생 설정', icon: 'fa-users', portalTheme: 'admin' });
-    menuHtml += renderMenuButton({ currentView, view: 'bookSetup', label: '교재 관리', icon: 'fa-book', portalTheme: 'admin' });
     menuHtml += renderMenuButton({ currentView, view: 'teachersAdmin', label: '관리자 설정', icon: 'fa-user-gear', portalTheme: 'admin' });
     
-    mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'setup', label: '반/학생 설정', portalTheme: 'admin' });
-    mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'bookSetup', label: '교재 관리', portalTheme: 'admin' });
     mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'teachersAdmin', label: '설정', portalTheme: 'admin' });
   } else {
     // teacher 포털

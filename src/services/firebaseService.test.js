@@ -7,6 +7,7 @@ describe('firebaseService', () => {
       teachers: 'openacademy_textbook_teachers',
       classes: 'openacademy_textbook_classes',
       students: 'openacademy_textbook_students',
+      studentRequests: 'openacademy_textbook_student_requests',
       books: 'openacademy_textbook_books',
       classBooks: 'openacademy_textbook_class_books',
       inspections: 'openacademy_textbook_inspections',

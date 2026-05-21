@@ -139,7 +139,7 @@ describe('InspectionsView Component', () => {
     const html = renderInspectionsView(mockState, mockDeps);
 
     expect(html).toContain('이번 회차 완료율');
-    expect(html).toContain('지난 미완료 회수율');
+    expect(html).toContain('지난 미완료 재검 완료율');
     expect(html).not.toContain('통합 과제 수행률');
   });
 

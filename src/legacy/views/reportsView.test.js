@@ -84,10 +84,10 @@ describe('reportsView', () => {
     inspections: state.inspections
   };
 
-  it('학생 보고서에 교재별/반 평균 6요소 비교를 표시한다', () => {
+  it('학생 보고서에 교재 평균/반 평균 6요소 비교를 표시한다', () => {
     const html = reportForStudent('s1', state, deps);
 
-    expect(html).toContain('교재별 6요소 비교');
+    expect(html).toContain('해당 교재 평균 vs 학생 6요소');
     expect(html).toContain('반 평균 6요소 비교');
     expect(html).toContain('풀이 표현력');
   });
@@ -170,9 +170,13 @@ describe('reportsView', () => {
     const html = reportForStudent('s1', twoBookState, twoBookDeps);
     const alphaCard = html.slice(html.indexOf('Book Alpha'), html.indexOf('Book Beta'));
     const betaCard = html.slice(html.indexOf('Book Beta'));
+    const alphaBookChart = alphaCard.slice(
+      alphaCard.indexOf('해당 교재 평균 vs 학생 6요소'),
+      alphaCard.indexOf('반 평균 6요소 비교')
+    );
 
-    expect(alphaCard).toContain('<span class="font-black text-slate-100">10.0</span>');
-    expect(alphaCard).not.toContain('<span class="font-black text-slate-100">6.0</span>');
+    expect(alphaBookChart).toContain('<span class="font-black text-slate-100">10.0</span>');
+    expect(alphaBookChart).not.toContain('<span class="font-black text-slate-100">6.0</span>');
     expect(betaCard).toContain('<span class="font-black text-slate-100">2.0</span>');
   });
 

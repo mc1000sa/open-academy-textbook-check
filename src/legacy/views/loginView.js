@@ -98,6 +98,8 @@ export function renderLoginView(state, safe) {
   // 2. 학생 포털 로그인 및 등록 신청 폼
   if (state.portal === 'student') {
     const activeTeacherId = state.studentLoginForm.teacherId || '';
+    const activeSchool = state.studentLoginForm.school || '';
+    const schoolConfirmed = !!state.studentLoginForm.schoolConfirmed || !!activeSchool;
     const activeGrade = state.studentLoginForm.grade || '';
     const activeClassId = state.studentLoginForm.classId || '';
     const activeStudentId = state.studentLoginForm.studentId || '';
@@ -107,6 +109,12 @@ export function renderLoginView(state, safe) {
 
     // 선택된 선생님의 개설 반들에 존재하는 학년 목록 추출
     const teacherClasses = activeTeacherId ? state.classes.filter(c => c.teacherId === activeTeacherId) : [];
+    const teacherClassIds = new Set(teacherClasses.map(c => c.id));
+    const availableSchools = Array.from(new Set((state.allStudents || state.students || [])
+      .filter(s => !activeTeacherId || teacherClassIds.has(s.classId))
+      .map(s => String(s.school || '').trim())
+      .filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'ko'));
     const availableGrades = Array.from(new Set(teacherClasses.map(c => c.grade))).sort();
 
     // 선택한 선생님 & 학년에 맞는 반 목록
@@ -236,20 +244,42 @@ export function renderLoginView(state, safe) {
                 <label class="block text-xs font-bold text-slate-400 mb-2">1단계: 담당 선생님</label>
                 <div class="choice-grid">
                   ${activeTeachers.map(t => `
-                    <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, teacherId: t.id, grade: '', classId: '' })}' class="choice-button btn-choice-student ${activeTeacherId === t.id ? 'selected' : ''}">
+                    <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, teacherId: t.id, school: '', schoolConfirmed: false, grade: '', classId: '', pin: '' })}' class="choice-button btn-choice-student ${activeTeacherId === t.id ? 'selected' : ''}">
                       ${safe(t.name)} T
                     </button>
                   `).join('')}
                 </div>
               </div>
 
-              <!-- 2단계: 학년 선택 -->
+              <!-- 2단계: 학교 선택 -->
               ${activeTeacherId ? `
                 <div class="transition-all duration-300">
-                  <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 학년 선택</label>
+                  <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 학교 선택</label>
+                  <div class="choice-grid">
+                    <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, school: '', schoolConfirmed: true, grade: '', classId: '', pin: '' })}' class="choice-button btn-choice-student ${schoolConfirmed && !activeSchool ? 'selected' : ''}">
+                      학교 미선택
+                    </button>
+                    ${availableSchools.map(school => `
+                      <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, school, schoolConfirmed: true, grade: '', classId: '', pin: '' })}' class="choice-button btn-choice-student ${activeSchool === school ? 'selected' : ''}">
+                        ${safe(school)}
+                      </button>
+                    `).join('')}
+                  </div>
+                  ${availableSchools.length === 0 ? `<div class="text-[10px] text-slate-500 mt-2">등록된 학교명이 아직 없으면 학교 미선택으로 신청하세요.</div>` : ''}
+                </div>
+              ` : `
+                <div class="p-3.5 rounded-xl bg-slate-900/20 border border-dashed border-slate-800/60 text-center text-xs text-slate-500 select-none">
+                  선생님을 선택하시면 학교 선택이 활성화됩니다.
+                </div>
+              `}
+
+              <!-- 3단계: 학년 선택 -->
+              ${activeTeacherId && schoolConfirmed ? `
+                <div class="transition-all duration-300">
+                  <label class="block text-xs font-bold text-slate-400 mb-2">3단계: 학년 선택</label>
                   <div class="choice-grid">
                     ${availableGrades.map(g => `
-                      <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, grade: g, classId: '' })}' class="choice-button btn-choice-student ${activeGrade === g ? 'selected' : ''}">
+                      <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, grade: g, classId: '', pin: '' })}' class="choice-button btn-choice-student ${activeGrade === g ? 'selected' : ''}">
                         ${safe(g)}
                       </button>
                     `).join('')}
@@ -257,17 +287,17 @@ export function renderLoginView(state, safe) {
                 </div>
               ` : `
                 <div class="p-3.5 rounded-xl bg-slate-900/20 border border-dashed border-slate-800/60 text-center text-xs text-slate-500 select-none">
-                  선생님을 선택하시면 학년 선택이 활성화됩니다.
+                  학교를 선택하시면 학년 선택이 활성화됩니다.
                 </div>
               `}
 
-              <!-- 3단계: 소속 반 선택 -->
+              <!-- 4단계: 소속 반 선택 -->
               ${activeTeacherId && activeGrade ? `
                 <div class="transition-all duration-300">
-                  <label class="block text-xs font-bold text-slate-400 mb-2">3단계: 소속 반 선택</label>
+                  <label class="block text-xs font-bold text-slate-400 mb-2">4단계: 소속 반 선택</label>
                   <div class="choice-grid">
                     ${filteredClasses.map(c => `
-                      <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, classId: c.id })}' class="choice-button btn-choice-student ${activeClassId === c.id ? 'selected' : ''}">
+                      <button type="button" data-action="select-option" data-target="studentLoginForm" data-value='${JSON.stringify({ ...state.studentLoginForm, classId: c.id, pin: '' })}' class="choice-button btn-choice-student ${activeClassId === c.id ? 'selected' : ''}">
                         ${safe(c.name)}
                       </button>
                     `).join('')}
@@ -280,20 +310,15 @@ export function renderLoginView(state, safe) {
               ` : ''}
 
               <!-- 인풋 영역 -->
-              <div class="${activeClassId ? 'opacity-100' : 'opacity-40 pointer-events-none'} transition-opacity duration-300 space-y-4">
+              <div class="${activeClassId ? 'opacity-100' : 'opacity-40'} transition-opacity duration-300 space-y-4">
                 <div>
-                  <label class="block text-xs font-bold text-slate-400 mb-2">4단계: 이름 입력</label>
+                  <label class="block text-xs font-bold text-slate-400 mb-2">5단계: 이름 입력</label>
                   <input type="text" id="studentRegName" placeholder="실명을 입력해 주세요" class="w-full p-3 text-sm rounded-xl bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.name || '')}" ${!activeClassId ? 'disabled' : ''} />
                 </div>
 
                 <div>
-                  <label class="block text-xs font-bold text-slate-400 mb-2">5단계: 학교 입력 <span class="text-[10px] text-slate-500 font-medium">(선택)</span></label>
-                  <input type="text" id="studentRegSchool" placeholder="예: 파주중" class="w-full p-3 text-sm rounded-xl bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.school || '')}" ${!activeClassId ? 'disabled' : ''} />
-                </div>
-
-                <div>
                   <label class="block text-xs font-bold text-slate-400 mb-2">6단계: 사용할 4자리 PIN 비밀번호</label>
-                  <input type="password" id="studentRegPin" maxlength="4" placeholder="숫자 4자리 설정" class="w-full p-3 text-sm rounded-xl text-center text-lg font-bold bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.pin || '')}" ${!activeClassId ? 'disabled' : ''} />
+                  <input type="password" id="studentRegPin" maxlength="4" inputmode="numeric" autocomplete="new-password" placeholder="숫자 4자리 설정" class="w-full p-3 text-sm rounded-xl text-center text-lg font-bold bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.pin || '')}" ${!activeClassId ? 'disabled' : ''} />
                 </div>
               </div>
 
@@ -316,6 +341,7 @@ export function renderLoginView(state, safe) {
 
   // 3. 교사 포털 로그인 폼
   if (state.portal === 'teacher') {
+    const hasLoginError = !!state.loginError;
     return `
       <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
         <div class="w-full max-w-lg glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
@@ -350,7 +376,8 @@ export function renderLoginView(state, safe) {
             <!-- PIN 번호 입력 -->
             <div>
               <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 4자리 PIN 번호</label>
-              <input id="loginPin" type="password" maxlength="4" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black focus:border-[#4169e1] outline-none" placeholder="••••" value="${safe(state.pin)}" ${!state.selectedTeacherName ? 'disabled' : ''} />
+              <input id="loginPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" name="teacherPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#4169e1]'}" placeholder="••••" value="${safe(state.pin)}" ${state.selectedTeacherName ? 'data-autofocus="true"' : ''} ${!state.selectedTeacherName ? 'disabled' : ''} />
+              ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 
             <button type="button" data-action="login" class="btn-teacher w-full h-12 rounded-xl text-sm font-extrabold" ${!state.selectedTeacherName ? 'disabled' : ''}>
@@ -364,6 +391,7 @@ export function renderLoginView(state, safe) {
 
   // 4. 원장/관리자 로그인 폼
   if (state.portal === 'admin') {
+    const hasLoginError = !!state.loginError;
     const adminAccount = state.teachers.find(t => t.role === 'admin') || { id: 't_admin', name: '관리자' };
 
     return `
@@ -403,7 +431,8 @@ export function renderLoginView(state, safe) {
             <div>
               <label class="block text-xs font-bold text-slate-400 mb-2">관리자 4자리 PIN 패스워드</label>
               <!-- input 활성화를 위해 selectedTeacherName 상태가 필요하여 강제 설정하게끔 처리 -->
-              <input id="loginPin" type="password" maxlength="4" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black focus:border-[#8436ff] outline-none" placeholder="••••" value="${safe(state.pin)}" />
+              <input id="loginPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" name="adminPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#8436ff]'}" placeholder="••••" value="${safe(state.pin)}" data-autofocus="true" />
+              ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 
             <!-- 관리자 로그인 액션에 바인딩되도록 render()에서 강제 매핑해 주기 위함 -->

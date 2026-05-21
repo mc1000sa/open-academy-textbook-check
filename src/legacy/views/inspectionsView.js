@@ -1,6 +1,16 @@
 import { bookMap } from './bookSetupView.js';
 import { renderBtnSelect } from './layoutView.js';
 
+function unitChipTextColor(hex) {
+  const clean = String(hex || '').replace('#', '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#0f172a';
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 150 ? '#0f172a' : '#ffffff';
+}
+
 export const REMARK_GROUPS = [
   { group:'식 관련', items:['글씨를 매우 잘 쓰는 학생입니다.','풀이 과정을 꼼꼼하게 정리하는 편입니다.','수학적 체계가 전혀 안 잡혀 있습니다.','식을 세우는 과정에서 중간 단계가 자주 생략됩니다.','계산 과정은 맞지만 정리 습관이 더 필요합니다.'] },
   { group:'채점 관련', items:['채점 약속을 잘 지켜서 매우 깔끔하게 했습니다.','오답 표시가 부족해 다시 확인이 필요합니다.','틀린 문제를 다시 고치는 습관이 필요합니다.','채점은 되어 있으나 오답 정리가 부족합니다.'] },
@@ -98,8 +108,8 @@ export function renderInspectionsView(state, deps) {
     <div class="mt-4 rounded-2xl border border-blue-500/20 bg-slate-900/40 p-4">
       <div class="flex items-center justify-between gap-3 mb-3">
         <div>
-          <div class="text-xs font-extrabold text-slate-200">미완료 페이지 체크하기</div>
-          <div class="text-[10px] text-slate-500 mt-0.5">완료하지 못한 페이지만 눌러주세요. 다시 누르면 해제됩니다.</div>
+          <div class="text-xs font-extrabold text-slate-200">이번 회차 미완료 페이지 체크</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">이번 범위에서 아직 완료하지 못한 페이지만 선택합니다. 다시 누르면 해제됩니다.</div>
         </div>
         <button type="button" data-action="clear-missed-pages" class="ghost-button px-2.5 py-1.5 rounded-lg text-[10px] font-black">체크 초기화</button>
       </div>
@@ -109,7 +119,7 @@ export function renderInspectionsView(state, deps) {
     </div>
   ` : `
     <div class="mt-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/20 p-5 text-xs text-slate-500 text-center">
-      시작 페이지와 끝 페이지 입력 후 <b>페이지 체크 만들기</b>를 누르면 체크박스처럼 선택할 수 있습니다.
+      시작 페이지와 끝 페이지를 입력하면 체크박스처럼 선택할 수 있습니다.
     </div>
   `;
 
@@ -205,8 +215,8 @@ export function renderInspectionsView(state, deps) {
     <div class="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/20 p-4">
       <div class="flex items-center justify-between gap-3 mb-2">
         <div>
-          <div class="text-xs font-extrabold text-rose-300">지난 미완료 과제 회수하기</div>
-          <div class="text-[10px] text-slate-400 mt-0.5">이전 점검에서 남은 페이지 중 이번 회차에 회수한 페이지를 선택합니다.</div>
+          <div class="text-xs font-extrabold text-rose-300">지난 미완료 과제 재검</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">지난 점검에서 미완료였던 페이지 중, 이번에 완료한 페이지만 선택합니다.</div>
         </div>
         <div class="text-[10px] font-black text-emerald-400">${carryoverRecovery.resolvedPages}/${carryoverRecovery.totalPages}쪽 (${carryoverRecovery.recoveryRate}%)</div>
       </div>
@@ -331,7 +341,7 @@ export function renderInspectionsView(state, deps) {
           <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
             <div class="text-xs font-bold text-slate-300">해당 대단원</div>
             <div class="mt-3 flex flex-wrap gap-1.5">
-              ${units.length ? units.map((u)=>`<span class="unit-chip text-[10px] py-1 px-2.5 font-bold" style="background:${u.color};">${safe(u.name)} (${u.start}~${u.end})</span>`).join('') : '<span class="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>'}
+              ${units.length ? units.map((u)=>`<span class="unit-chip text-[10px] py-1 px-2.5 font-bold" style="background:${safe(u.color)}; color:${unitChipTextColor(u.color)}; border:1px solid rgba(255,255,255,0.18);">${safe(u.name)} (${u.start}~${u.end})</span>`).join('') : '<span class="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>'}
             </div>
           </div>
 
@@ -357,7 +367,7 @@ export function renderInspectionsView(state, deps) {
           ${carryoverRecovery.totalPages ? `
           <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="text-xs font-bold text-slate-300">지난 미완료 회수율</div>
+              <div class="text-xs font-bold text-slate-300">지난 미완료 재검 완료율</div>
               <div class="text-xs font-black text-emerald-400">${carryoverRecovery.recoveryRate}%</div>
             </div>
             
@@ -370,7 +380,7 @@ export function renderInspectionsView(state, deps) {
             </div>
             
             <div class="mt-3 text-[10px] text-slate-500 leading-normal">
-              지난 미완료 ${carryoverRecovery.totalPages}쪽 중 ${carryoverRecovery.resolvedPages}쪽 회수
+              지난 미완료 ${carryoverRecovery.totalPages}쪽 중 ${carryoverRecovery.resolvedPages}쪽 재검 완료
             </div>
           </div>
           ` : ''}
