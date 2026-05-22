@@ -67,9 +67,13 @@ export function renderBookSetupView(state, deps) {
     teacherClasses,
     classById,
     assignedBooksForClass,
+    completedBooksForClass,
     bookUnits,
     safe,
-    bookById
+    bookById,
+    standardSubjectForBook,
+    standardUnitNames,
+    fmtDate
   } = deps;
 
   const availableClasses = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
@@ -77,12 +81,32 @@ export function renderBookSetupView(state, deps) {
   const archivedBooks = state.books.filter(b => b.archived).sort((a, b) => String(a.title).localeCompare(String(b.title), 'ko'));
 
   const GRADE_OPTIONS = ['고1', '고2', '고3'];
-  const SUBJECT_OPTIONS = ['수학', '영어', '국어', '과학'];
+  const STANDARD_SUBJECT_OPTIONS = (state.standardUnitSubjects || []).map(subject => subject.label);
+  const SUBJECT_OPTIONS = [...new Set([...STANDARD_SUBJECT_OPTIONS, '수학', '영어', '국어', '과학'])];
 
   const isAdmin = state.currentTeacher?.role === 'admin';
   const btnClass = isAdmin ? 'btn-admin' : 'btn-teacher';
   
   const acc = state.bookSetupAccordion || { manage: true, unit: false, assign: false };
+  const selectedBookForUnits = bookById(state.selectedBookManageId);
+  const standardSubject = selectedBookForUnits && typeof standardSubjectForBook === 'function'
+    ? standardSubjectForBook(selectedBookForUnits)
+    : null;
+  const selectedStandardUnitIds = new Set(state.formUnit.standardUnitIds || []);
+  const selectedStandardNames = typeof standardUnitNames === 'function'
+    ? standardUnitNames([...selectedStandardUnitIds])
+    : [];
+  const activeAssignedBooks = state.assigningClassId && typeof assignedBooksForClass === 'function'
+    ? assignedBooksForClass(state.assigningClassId)
+    : [];
+  const completedAssignedBooks = state.assigningClassId && typeof completedBooksForClass === 'function'
+    ? completedBooksForClass(state.assigningClassId)
+    : [];
+  const formatCompletedDate = (value) => {
+    const raw = value?.toDate?.() || value;
+    const formatted = typeof fmtDate === 'function' ? fmtDate(raw) : '';
+    return formatted === '-' ? '' : formatted;
+  };
 
   // 1. 교재 자산 관리 콘텐츠
   const manageContent = `
@@ -197,6 +221,35 @@ export function renderBookSetupView(state, deps) {
         </label>
       </div>
 
+      <div class="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4">
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div class="text-xs font-extrabold text-cyan-200">표준 소단원 연결</div>
+            <div class="text-[10px] text-slate-500 mt-1">교재 목차명과 달라도 같은 표준단원 ID로 묶어 나중에 단원별 통계를 볼 수 있습니다.</div>
+          </div>
+          ${selectedStandardNames.length ? `<span class="shrink-0 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-black text-cyan-200">${selectedStandardNames.length}개 선택</span>` : ''}
+        </div>
+        ${standardSubject ? `
+          <div class="text-[10px] font-bold text-slate-400 mb-2">교과목: ${safe(standardSubject.label)}</div>
+          <div class="flex flex-wrap gap-1.5">
+            ${standardSubject.units.filter(unit => unit.active !== false).map(unit => `
+              <button type="button" data-action="toggle-unit-standard" data-id="${safe(unit.id)}" class="rounded-full border px-3 py-1.5 text-[10px] font-extrabold transition-all ${selectedStandardUnitIds.has(unit.id) ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-200'}">
+                ${safe(unit.label)}
+              </button>
+            `).join('')}
+          </div>
+          ${selectedStandardNames.length ? `
+            <div class="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-[10px] text-slate-400">
+              연결됨: <span class="font-black text-cyan-200">${safe(selectedStandardNames.join(' + '))}</span>
+            </div>
+          ` : ''}
+        ` : `
+          <div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-5 text-center text-xs text-slate-500">
+            선택한 교재의 과목이 표준단원 과목과 연결되어 있지 않습니다. 교재 과목을 공통수학1, 대수처럼 선택하면 버튼이 표시됩니다.
+          </div>
+        `}
+      </div>
+
       <button type="button" data-action="save-unit" class="rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold px-4 py-2.5 text-xs transition-colors shadow-sm">단원 개별 추가</button>
 
       <label class="block text-xs font-bold text-slate-400 mt-4">엑셀/텍스트 일괄 붙여넣기 반영 <span class="text-[10px] text-slate-400 font-medium">(구분자: 슬래시 '/')</span>
@@ -240,22 +293,47 @@ export function renderBookSetupView(state, deps) {
         `).join('')}
       </div>
 
-      <span class="text-xs font-bold text-slate-400 block mt-2">현재 반 배정 교재 이력 (정렬 조정):</span>
+      <div class="flex items-center justify-between gap-3 mt-2">
+        <span class="text-xs font-bold text-slate-400 block">현재 진행 중 교재 (정렬 조정):</span>
+        <span class="text-[10px] font-black text-cyan-300">${activeAssignedBooks.length}권 진행 중</span>
+      </div>
       <div class="space-y-2 max-h-48 overflow-y-auto mini-scroll pr-1">
-        ${assignedBooksForClass(state.assigningClassId).length ? assignedBooksForClass(state.assigningClassId).map((x, idx) => `
+        ${activeAssignedBooks.length ? activeAssignedBooks.map((x, idx) => `
           <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs shadow-sm">
-            <div>
+            <div class="min-w-0">
               <div class="font-black text-slate-200">${idx + 1}. ${safe(x.book.title)}</div>
               <div class="text-[10px] text-slate-500 mt-0.5 font-bold">${idx === 0 ? '메인 교재' : '부교재'} &middot; ${safe(x.book.subject || '-')}</div>
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex shrink-0 flex-wrap justify-end items-center gap-1.5">
               <button type="button" data-action="move-assign" data-id="${x.link.id}" data-dir="up" class="rounded bg-slate-800/50 hover:bg-slate-200 border border-slate-800 px-2 py-1 text-[10px] font-black text-slate-500">▲</button>
               <button type="button" data-action="move-assign" data-id="${x.link.id}" data-dir="down" class="rounded bg-slate-800/50 hover:bg-slate-200 border border-slate-800 px-2 py-1 text-[10px] font-black text-slate-500">▼</button>
-              <button type="button" data-action="remove-assign" data-id="${x.link.id}" class="rounded bg-rose-50 border border-rose-100 hover:bg-rose-500 hover:text-white px-2 py-1 text-[10px] font-black text-rose-500 transition-colors">제거</button>
+              <button type="button" data-action="complete-assign" data-id="${x.link.id}" class="rounded border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white px-2 py-1 text-[10px] font-black text-emerald-300 transition-colors">진행 종료</button>
+              <button type="button" data-action="remove-assign" data-id="${x.link.id}" class="rounded border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500 hover:text-white px-2 py-1 text-[10px] font-black text-rose-300 transition-colors">연결 삭제</button>
             </div>
           </div>
         `).join('') : '<div class="rounded-xl border border-dashed border-slate-700 bg-slate-900/20 px-4 py-8 text-center text-xs font-bold text-slate-400">현재 반에 배정된 교재가 없습니다.</div>'}
       </div>
+
+      <details class="group rounded-xl border border-slate-800 bg-slate-900/20 p-3">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-black text-slate-300">
+          <span>완료된 교재 이력 (${completedAssignedBooks.length}권)</span>
+          <span class="text-[10px] text-slate-500 transition-transform group-open:rotate-180">▼</span>
+        </summary>
+        <div class="mt-3 space-y-2 max-h-44 overflow-y-auto mini-scroll pr-1">
+          ${completedAssignedBooks.length ? completedAssignedBooks.map(x => `
+            <div class="rounded-xl border border-slate-800 bg-slate-950/40 px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs shadow-sm">
+              <div class="min-w-0">
+                <div class="font-black text-slate-300">${safe(x.book.title)}</div>
+                <div class="text-[10px] text-slate-500 mt-0.5 font-bold">${safe(x.book.subject || '-')} &middot; ${formatCompletedDate(x.link.completedAt) || '완료 처리됨'}</div>
+              </div>
+              <div class="flex shrink-0 flex-wrap justify-end items-center gap-1.5">
+                <button type="button" data-action="reactivate-assign" data-id="${x.link.id}" class="rounded border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500 hover:text-white px-2 py-1 text-[10px] font-black text-cyan-300 transition-colors">다시 진행</button>
+                <button type="button" data-action="remove-assign" data-id="${x.link.id}" class="rounded border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500 hover:text-white px-2 py-1 text-[10px] font-black text-rose-300 transition-colors">연결 삭제</button>
+              </div>
+            </div>
+          `).join('') : '<div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-6 text-center text-xs font-bold text-slate-500">아직 완료 처리된 교재가 없습니다.</div>'}
+        </div>
+      </details>
     </div>
   `;
 

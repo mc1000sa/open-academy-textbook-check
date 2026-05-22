@@ -9,3 +9,74 @@ body,
 body {
   min-height: 100%;
 }
+
+.aurora-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.06), transparent 34rem),
+    linear-gradient(180deg, rgba(8, 11, 22, 0.96) 0%, rgba(4, 5, 10, 0.98) 58%, #050507 100%);
+}
+
+.aurora-layer {
+  position: absolute;
+  width: min(72vw, 980px);
+  height: min(42vw, 560px);
+  border-radius: 999px;
+  filter: blur(58px);
+  opacity: 0.46;
+  mix-blend-mode: screen;
+  transform: translate3d(0, 0, 0);
+  animation: auroraFloat 11s ease-in-out infinite alternate;
+}
+
+.aurora-layer-cyan {
+  left: -10%;
+  top: 4%;
+  background: radial-gradient(circle, rgba(0, 214, 205, 0.88), rgba(0, 214, 205, 0) 68%);
+}
+
+.aurora-layer-blue {
+  right: -16%;
+  top: 10%;
+  background: radial-gradient(circle, rgba(65, 105, 225, 0.82), rgba(65, 105, 225, 0) 68%);
+  animation-duration: 13s;
+  animation-delay: -4s;
+}
+
+.aurora-layer-violet {
+  left: 24%;
+  bottom: -20%;
+  background: radial-gradient(circle, rgba(132, 54, 255, 0.78), rgba(132, 54, 255, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -8s;
+}
+
+.aurora-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 76%);
+}
+
+@keyframes auroraFloat {
+  from {
+    transform: translate3d(-6%, -3%, 0) rotate(-8deg) scale(1);
+  }
+  to {
+    transform: translate3d(8%, 6%, 0) rotate(10deg) scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-layer {
+    animation: none;
+  }
+}

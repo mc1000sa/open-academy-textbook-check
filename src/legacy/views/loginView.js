@@ -9,51 +9,44 @@ export function renderLoginView(state, safe) {
   // 1. 관문 게이트웨이 화면
   if (state.portal === 'gateway') {
     return `
-      <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-        <!-- 배경 장식: 우주 궤도 시스템 -->
-        <div class="hero-orbit-system">
-          <div class="orbit-container orbit-outer"><div class="orbit-line"></div><div class="planet-dot purple"></div></div>
-          <div class="orbit-container orbit-middle"><div class="orbit-line"></div><div class="planet-dot blue"></div></div>
-          <div class="orbit-container orbit-inner"><div class="orbit-line"></div><div class="planet-dot mint"></div></div>
-          <div class="central-core-glow"></div>
-        </div>
-
-        <div class="w-full max-w-5xl grid md:grid-cols-[1fr_1.1fr] gap-8 relative z-10 items-center">
+      <div class="oatis-splash-screen min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+        <div class="oatis-splash-grid w-full max-w-6xl grid lg:grid-cols-[1.05fr_0.95fr] gap-5 md:gap-8 relative z-10 items-stretch">
           
           <!-- 좌측 인트로 카드 -->
-          <div class="hidden md:flex rounded-[36px] hero-panel p-10 flex-col justify-between text-white min-h-[480px]">
+          <div class="hidden md:flex rounded-[34px] hero-panel splash-brand-panel p-8 lg:p-10 flex-col justify-between text-white min-h-[520px]">
             <div>
-              <div class="text-[30px] font-black tracking-tight text-[#00d6cd]">${safe(config.splashTitleLine2)}</div>
+              <div class="splash-kicker">OPEN ACADEMY</div>
+              <div class="mt-3 text-[34px] font-black tracking-tight text-white">${safe(config.splashTitleLine2)}</div>
               <div class="mt-2 text-sm font-semibold text-slate-300">${safe(config.splashSubtitle)}</div>
             </div>
             
             <div class="relative">
               <h1 class="font-black leading-[1.1]">
-                <span class="block text-2xl text-slate-100">${safe(config.splashTitleLine1)}</span>
-                <span class="block mt-2 text-5xl text-white font-extrabold" style="text-shadow: 0 0 15px rgba(255,255,255,0.2);">${safe(config.splashTitleLine2)}</span>
+                <span class="block text-2xl lg:text-3xl text-slate-100">${safe(config.splashTitleLine1)}</span>
+                <span class="block mt-3 text-5xl lg:text-6xl text-white font-extrabold">${safe(config.splashTitleLine2)}</span>
               </h1>
-              <p class="mt-6 text-sm leading-relaxed text-slate-300">${config.splashDescription}</p>
+              <p class="mt-6 max-w-md text-sm leading-7 text-slate-300">${config.splashDescription}</p>
             </div>
 
-            <div class="flex items-center justify-between pt-6 border-t border-white/5">
+            <div class="flex items-center justify-between gap-4 pt-6 border-t border-white/10">
               <div class="text-[11px] font-bold text-sky-200">ver. OATIS-R2.0</div>
               <div class="text-[10px] text-slate-400 font-medium">Creative by mOOn_Math</div>
             </div>
           </div>
 
-          <!-- 우측 포털 진입 관문 (배경 투명화) -->
-          <div class="p-8 md:p-10 flex flex-col justify-center min-h-[480px] bg-transparent">
+          <!-- 우측 포털 진입 관문 -->
+          <div class="splash-portal-panel p-6 md:p-8 flex flex-col justify-center min-h-[520px]">
             <div class="text-center mb-8">
-              <span class="px-3 py-1 rounded-full text-[11px] font-black tracking-wider bg-purple-500/10 text-[#8436ff] border border-purple-500/20">
+              <span class="splash-kicker-pill px-3 py-1 rounded-full text-[11px] font-black tracking-wider bg-purple-500/10 text-[#c4b5fd] border border-purple-500/20">
                 GATEWAY
               </span>
-              <h2 class="text-2xl font-black text-white mt-4">열린학원 수학교재점검</h2>
-              <p class="text-xs text-slate-400 mt-2">이용할 전용 포털을 클릭하여 진입해 주세요.</p>
+              <h2 class="text-2xl md:text-3xl font-black text-white mt-4">열린학원 수학교재점검</h2>
+              <p class="text-xs md:text-sm text-slate-400 mt-2">필요한 포털만 고르면 바로 시작합니다.</p>
             </div>
 
             <div class="flex flex-col gap-4">
               <!-- 학생 포털 -->
-              <button type="button" data-action="switch-portal" data-portal="student" class="w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#00d6cd]/30 group flex justify-between items-center">
+              <button type="button" data-action="switch-portal" data-portal="student" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#00d6cd]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#00d6cd] block mb-1">STUDENT PORTAL</span>
                   <strong class="text-lg font-extrabold text-white">학생 / 학부모 포털</strong>
@@ -65,7 +58,7 @@ export function renderLoginView(state, safe) {
               </button>
 
               <!-- 교사 포털 -->
-              <button type="button" data-action="switch-portal" data-portal="teacher" class="w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#4169e1]/30 group flex justify-between items-center">
+              <button type="button" data-action="switch-portal" data-portal="teacher" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#4169e1]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#4169e1] block mb-1">TEACHER PORTAL</span>
                   <strong class="text-lg font-extrabold text-white">담당 강사 포털</strong>
@@ -77,7 +70,7 @@ export function renderLoginView(state, safe) {
               </button>
 
               <!-- 관리자 포털 -->
-              <button type="button" data-action="switch-portal" data-portal="admin" class="w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#8436ff]/30 group flex justify-between items-center">
+              <button type="button" data-action="switch-portal" data-portal="admin" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#8436ff]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#8436ff] block mb-1">ADMINISTRATOR</span>
                   <strong class="text-lg font-extrabold text-white">원장 / 관리자 포털</strong>
@@ -124,11 +117,11 @@ export function renderLoginView(state, safe) {
     const studentsInClass = activeClassId ? state.students.filter(s => s.classId === activeClassId && s.active !== false) : [];
 
     return `
-      <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
         <div class="w-full max-w-lg glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-              <span>← 관문으로</span>
+              <span>← Back</span>
             </button>
             <span class="px-3 py-1 rounded-full text-[10px] font-black bg-[#00d6cd]/10 text-[#00d6cd] soft-border">
               STUDENT LOGIN
@@ -343,11 +336,11 @@ export function renderLoginView(state, safe) {
   if (state.portal === 'teacher') {
     const hasLoginError = !!state.loginError;
     return `
-      <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
         <div class="w-full max-w-lg glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-              <span>← 관문으로</span>
+              <span>← Back</span>
             </button>
             <span class="px-3 py-1 rounded-full text-[10px] font-black bg-[#4169e1]/10 text-[#4169e1] soft-border">
               TEACHER PORTAL
@@ -356,7 +349,7 @@ export function renderLoginView(state, safe) {
 
           <div class="text-center mb-6">
             <h2 class="text-xl font-extrabold text-white">담당 교사 빠른 로그인</h2>
-            <p class="text-xs text-slate-400 mt-1">선생님 이름을 선택하고 4자리 PIN을 입력하세요.</p>
+              <p class="text-xs text-slate-400 mt-1">선생님 이름을 선택하고 6자리 PIN을 입력하세요.</p>
           </div>
 
           <div class="space-y-6">
@@ -375,8 +368,8 @@ export function renderLoginView(state, safe) {
 
             <!-- PIN 번호 입력 -->
             <div>
-              <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 4자리 PIN 번호</label>
-              <input id="loginPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" name="teacherPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#4169e1]'}" placeholder="••••" value="${safe(state.pin)}" ${state.selectedTeacherName ? 'data-autofocus="true"' : ''} ${!state.selectedTeacherName ? 'disabled' : ''} />
+              <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 6자리 PIN 번호</label>
+              <input id="loginPin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" name="teacherPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#4169e1]'}" placeholder="••••••" value="${safe(state.pin)}" ${state.selectedTeacherName ? 'data-autofocus="true"' : ''} ${!state.selectedTeacherName ? 'disabled' : ''} />
               ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 
@@ -395,11 +388,11 @@ export function renderLoginView(state, safe) {
     const adminAccount = state.teachers.find(t => t.role === 'admin') || { id: 't_admin', name: '관리자' };
 
     return `
-      <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
         <div class="w-full max-w-md glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-              <span>← 관문으로</span>
+              <span>← Back</span>
             </button>
             <span class="px-3 py-1 rounded-full text-[10px] font-black bg-[#8436ff]/10 text-[#8436ff] soft-border">
               ADMIN LOGIN
@@ -429,9 +422,9 @@ export function renderLoginView(state, safe) {
             </script>
 
             <div>
-              <label class="block text-xs font-bold text-slate-400 mb-2">관리자 4자리 PIN 패스워드</label>
+              <label class="block text-xs font-bold text-slate-400 mb-2">관리자 6자리 PIN 패스워드</label>
               <!-- input 활성화를 위해 selectedTeacherName 상태가 필요하여 강제 설정하게끔 처리 -->
-              <input id="loginPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" name="adminPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[1em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#8436ff]'}" placeholder="••••" value="${safe(state.pin)}" data-autofocus="true" />
+              <input id="loginPin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" name="adminPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#8436ff]'}" placeholder="••••••" value="${safe(state.pin)}" data-autofocus="true" />
               ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 
@@ -439,7 +432,7 @@ export function renderLoginView(state, safe) {
             <button type="button" data-action="login" class="btn-admin w-full h-12 rounded-xl text-sm font-extrabold">
               관리자 모드 시작
             </button>
-            <p class="text-[10px] text-slate-500 mt-1.5 text-center">원장용 기본 PIN 번호는 <strong>9999</strong> 입니다.</p>
+            <p class="text-[10px] text-slate-500 mt-1.5 text-center">원장용 기본 PIN 번호는 <strong>999999</strong> 입니다.</p>
           </div>
         </div>
       </div>

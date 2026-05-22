@@ -37,6 +37,12 @@ import {
   calculateStudentDeleteAfter,
   studentsDueForDeletion
 } from '../lib/adminStudentMaintenance.js';
+import {
+  DEFAULT_STANDARD_UNIT_SUBJECTS,
+  normalizeStandardUnitSubjects,
+  standardUnitLabelsForIds,
+  standardUnitSubjectByLabel
+} from '../lib/standardUnits.js';
 import { renderDashboardView } from './views/dashboardView.js';
 import { renderCustomModalMarkup, renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
@@ -55,6 +61,7 @@ export async function mountLegacyApp(appRoot) {
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
   const GRADE_OPTIONS = ['고1','고2','고3'];
   const SUBJECT_OPTIONS = ['수학','영어','국어','과학'];
+  const STAFF_PIN_LENGTH = 6;
 
   const state = {
     loading: true,
@@ -79,8 +86,12 @@ export async function mountLegacyApp(appRoot) {
     studentBulkMode: 'nameSchool',
     selectedBookManageId: '',
     formBook: { title: '', subject: '수학', grade: '', publisher: '열린학원', active: true },
-    formUnit: { name: '', start: '', end: '' },
+    formUnit: { name: '', start: '', end: '', standardUnitIds: [] },
     bulkUnitText: '',
+    standardUnitSubjects: normalizeStandardUnitSubjects(DEFAULT_STANDARD_UNIT_SUBJECTS),
+    selectedStandardSubjectCode: 'common_math_1',
+    standardUnitNewName: '',
+    standardUnitInsertOrder: '',
     editingBookId: '',
     assigningClassId: '',
     selectedInspectionClassId: '',
@@ -151,7 +162,7 @@ export async function mountLegacyApp(appRoot) {
       splashSubtitle: 'Open Academy Textbook Insight System',
       splashDescription: '교재 점검을 기록하는 수준을 넘어,<br/>진행 흐름과 운영 상태를 한눈에 보는 시스템입니다.',
       loginTitle: '빠른 PIN 로그인',
-      loginDescription: '선생님을 선택하고 4자리 PIN을 입력하세요.',
+      loginDescription: '선생님을 선택하고 6자리 PIN을 입력하세요.',
       loginInfoText: '초기 로그인 계정은 관리자 설정에서 관리됩니다.',
       primaryColor: '#384bff',
       fontFamily: "'SUIT', sans-serif",
@@ -297,14 +308,49 @@ export async function mountLegacyApp(appRoot) {
   function bookById(id) {
     return state.books.find(b => b.id === id) || null;
   }
+  function standardUnitNames(ids = []) {
+    return standardUnitLabelsForIds(state.standardUnitSubjects, ids);
+  }
+  function displayUnitName(unit) {
+    const linkedNames = standardUnitNames(unit?.standardUnitIds || []);
+    return linkedNames.length ? linkedNames.join(', ') : (unit?.name || '');
+  }
   function bookUnits(book) {
+    return sortBookUnits(book).map(unit => ({
+      ...unit,
+      name: displayUnitName(unit)
+    }));
+  }
+  function rawBookUnits(book) {
     return sortBookUnits(book);
+  }
+  function standardSubjectForBook(book) {
+    return standardUnitSubjectByLabel(state.standardUnitSubjects, book?.subject || '');
+  }
+  function unitsForRangeWithStandardNames(book, start, end) {
+    return unitsForRange(book, start, end).map(unit => ({
+      ...unit,
+      name: displayUnitName(unit)
+    }));
   }
   function studentsForClass(classId) {
     return state.students.filter(s => s.classId === classId && s.active !== false).sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'));
   }
+  function classBookStatus(link) {
+    return link?.status || 'active';
+  }
+  function classBookCompletedTime(link) {
+    const value = link?.completedAt || link?.updatedAt || link?.createdAt || '';
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (typeof value?.toDate === 'function') return value.toDate().getTime();
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
   function assignedBooksForClass(classId) {
-    return state.classBooks.filter(x => x.classId === classId && x.active !== false).sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map(x => ({ link: x, book: bookById(x.bookId) })).filter(x => x.book && !x.book.archived);
+    return state.classBooks.filter(x => x.classId === classId && x.active !== false && classBookStatus(x) === 'active').sort((a, b) => Number(a.order || 0) - Number(b.order || 0)).map(x => ({ link: x, book: bookById(x.bookId) })).filter(x => x.book && !x.book.archived);
+  }
+  function completedBooksForClass(classId) {
+    return state.classBooks.filter(x => x.classId === classId && x.active !== false && classBookStatus(x) === 'completed').sort((a, b) => classBookCompletedTime(b) - classBookCompletedTime(a)).map(x => ({ link: x, book: bookById(x.bookId) })).filter(x => x.book);
   }
   function inspectionsForStudent(studentId) {
     return state.inspections.filter(i => i.studentId === studentId).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -420,7 +466,7 @@ export async function mountLegacyApp(appRoot) {
         splashSubtitle: 'Open Academy Textbook Insight System',
         splashDescription: '교재 점검을 기록하는 수준을 넘어,<br/>진행 흐름과 운영 상태를 한눈에 보는 시스템입니다.',
         loginTitle: '빠른 PIN 로그인',
-        loginDescription: '선생님을 선택하고 4자리 PIN을 입력하세요.',
+        loginDescription: '선생님을 선택하고 6자리 PIN을 입력하세요.',
         loginInfoText: '초기 로그인 계정은 관리자 설정에서 관리됩니다.',
         primaryColor: '#384bff',
         fontFamily: "'SUIT', sans-serif",
@@ -433,26 +479,21 @@ export async function mountLegacyApp(appRoot) {
     if (!teacherSnap.empty) return;
     const batch = writeBatch(db);
     [
-      { id: 't_admin', name: '관리자', pin: '9999', role: 'admin', active: true },
-      { id: 't_kim', name: '수최', pin: '1234', role: 'teacher', active: true },
-      { id: 't_lee', name: 'Joy', pin: '2345', role: 'teacher', active: true }
+      { id: 't_admin', name: '관리자', pin: '999999', role: 'admin', active: true },
+      { id: 't_kim', name: '수최', pin: '123456', role: 'teacher', active: true }
     ].forEach(t => batch.set(doc(db, COLLECTION_NAMES.teachers, t.id), { ...t, createdAt: serverTimestamp() }));
     [
-      { id: 'b1', title: '중3 영어 시험대비', subject: '영어', grade: '중3', publisher: '열린학원', active: true, archived: false, units: [{ id: uid(), name: '문법 1', start: 1, end: 20, color: pastel(0) }, { id: uid(), name: '문법 2', start: 21, end: 45, color: pastel(1) }, { id: uid(), name: '서술형', start: 46, end: 70, color: pastel(2) }] },
-      { id: 'b2', title: '고1 독해 특강', subject: '영어', grade: '고1', publisher: '열린학원', active: true, archived: false, units: [{ id: uid(), name: 'Unit 1', start: 1, end: 25, color: pastel(3) }, { id: uid(), name: 'Unit 2', start: 26, end: 52, color: pastel(4) }, { id: uid(), name: 'Unit 3', start: 53, end: 88, color: pastel(5) }] }
+      { id: 'b1', title: '공통수학1 샘플 교재', subject: '공통수학1', grade: '고1', publisher: '열린학원', active: true, archived: false, units: [{ id: uid(), name: '다항식의 연산', start: 1, end: 20, color: pastel(0), standardUnitIds: ['common_math_1_polynomial_operations'] }, { id: uid(), name: '나머지정리', start: 21, end: 40, color: pastel(1), standardUnitIds: ['common_math_1_remainder_theorem'] }] }
     ].forEach(b => batch.set(doc(db, COLLECTION_NAMES.books, b.id), { ...b, createdAt: serverTimestamp() }));
     [
-      { id: 'c1', name: '중3 A반', teacherId: 't_kim', grade: '중3', note: '시험대비반', active: true },
-      { id: 'c2', name: '고1 독해반', teacherId: 't_lee', grade: '고1', note: '독해집중', active: true }
+      { id: 'c1', name: '고1 샘플반', teacherId: 't_kim', grade: '고1', note: '수학 교재점검 샘플반', active: true }
     ].forEach(c => batch.set(doc(db, COLLECTION_NAMES.classes, c.id), { ...c, createdAt: serverTimestamp() }));
     [
-      { id: 's1', name: '김다인', classId: 'c1', grade: '중3', school: '파주중', active: true, pin: '1234', pinFailedCount: 0, pinLocked: false },
-      { id: 's2', name: '박서윤', classId: 'c1', grade: '중3', school: '문산중', active: true, pin: '1234', pinFailedCount: 0, pinLocked: false },
-      { id: 's3', name: '이하준', classId: 'c2', grade: '고1', school: '파주고', active: true, pin: '1234', pinFailedCount: 0, pinLocked: false }
+      { id: 's1', name: '김다인', classId: 'c1', grade: '고1', school: '파주고', active: true, pin: '1234', pinFailedCount: 0, pinLocked: false },
+      { id: 's2', name: '박서윤', classId: 'c1', grade: '고1', school: '문산고', active: true, pin: '1234', pinFailedCount: 0, pinLocked: false }
     ].forEach(s => batch.set(doc(db, COLLECTION_NAMES.students, s.id), { ...s, createdAt: serverTimestamp() }));
     [
-      { id: 'cb1', classId: 'c1', bookId: 'b1', order: 1, main: true, active: true },
-      { id: 'cb2', classId: 'c2', bookId: 'b2', order: 1, main: true, active: true }
+      { id: 'cb1', classId: 'c1', bookId: 'b1', order: 1, main: true, active: true, status: 'active' }
     ].forEach(l => batch.set(doc(db, COLLECTION_NAMES.classBooks, l.id), { ...l, createdAt: serverTimestamp() }));
 
     await batch.commit();
@@ -462,9 +503,8 @@ export async function mountLegacyApp(appRoot) {
     const teacherSnap = await getDocs(refs.teachers);
     if (teacherSnap.empty) return;
     const renameMap = {
-      t_kim: { name: '수최', pin: '1234', role: 'teacher', active: true },
-      t_lee: { name: 'Joy', pin: '2345', role: 'teacher', active: true },
-      t_admin: { name: '관리자', pin: '9999', role: 'admin', active: true }
+      t_kim: { name: '수최', pin: '123456', role: 'teacher', active: true },
+      t_admin: { name: '관리자', pin: '999999', role: 'admin', active: true }
     };
     const batch = writeBatch(db);
     let changed = 0;
@@ -494,7 +534,7 @@ export async function mountLegacyApp(appRoot) {
   async function saveAdminTeacher() {
     const form = state.adminTeacherForm;
     if (!form.name.trim()) return showModalAlert('강사 이름을 입력해주세요.');
-    if (!/^\d{4}$/.test(String(form.pin || ''))) return showModalAlert('PIN은 4자리 숫자로 입력해주세요.');
+    if (!new RegExp(`^\\d{${STAFF_PIN_LENGTH}}$`).test(String(form.pin || ''))) return showModalAlert(`강사/관리자 PIN은 ${STAFF_PIN_LENGTH}자리 숫자로 입력해주세요.`);
     if (!['admin', 'teacher'].includes(form.role)) return showModalAlert('권한을 선택해주세요.');
     const duplicate = state.teachers.find(t => t.id !== state.adminTeacherEditId && String(t.name || '').trim() === form.name.trim() && t.active !== false);
     if (duplicate) return showModalAlert('같은 이름의 강사가 이미 있습니다.');
@@ -620,8 +660,63 @@ export async function mountLegacyApp(appRoot) {
         state.adminLoginConfigForm = { ...state.adminLoginConfigForm, ...docLoginSplash.data() };
         applyThemeColor(state.loginConfig.primaryColor, state.loginConfig.fontFamily, state.loginConfig.fontScale);
       }
+      const docStandardUnits = snap.docs.find(d => d.id === 'standard_units');
+      state.standardUnitSubjects = normalizeStandardUnitSubjects(docStandardUnits?.data()?.subjects);
+      if (!state.standardUnitSubjects.some(subject => subject.code === state.selectedStandardSubjectCode)) {
+        state.selectedStandardSubjectCode = state.standardUnitSubjects[0]?.code || 'common_math_1';
+      }
       render();
     });
+  }
+
+  async function saveStandardUnitSubjects(message = '표준단원 설정 저장 완료') {
+    state.standardUnitSubjects = normalizeStandardUnitSubjects(state.standardUnitSubjects);
+    await setDoc(doc(db, COLLECTION_NAMES.configs, 'standard_units'), {
+      subjects: state.standardUnitSubjects,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    notify(message);
+  }
+
+  async function saveStandardUnitName(unitId) {
+    const input = document.getElementById(`standardUnitName-${unitId}`);
+    const nextLabel = String(input?.value || '').trim();
+    if (!nextLabel) return showModalAlert('표준단원명을 입력해주세요.');
+    state.standardUnitSubjects = normalizeStandardUnitSubjects(state.standardUnitSubjects).map(subject => ({
+      ...subject,
+      units: subject.units.map(unit => unit.id === unitId ? { ...unit, label: nextLabel } : unit)
+    }));
+    await saveStandardUnitSubjects('표준단원명 수정 완료');
+  }
+
+  async function addStandardUnit() {
+    const subjectCode = state.selectedStandardSubjectCode;
+    const label = String(state.standardUnitNewName || '').trim();
+    if (!subjectCode || !label) return showModalAlert('추가할 표준단원명을 입력해주세요.');
+    const id = `${subjectCode}_custom_${uid()}`;
+    state.standardUnitSubjects = normalizeStandardUnitSubjects(state.standardUnitSubjects).map(subject => {
+      if (subject.code !== subjectCode) return subject;
+      const units = subject.units.filter(unit => unit.active !== false);
+      const maxOrder = units.length + 1;
+      const requestedOrder = Number(state.standardUnitInsertOrder);
+      const insertOrder = Number.isFinite(requestedOrder)
+        ? Math.min(Math.max(1, Math.round(requestedOrder)), maxOrder)
+        : maxOrder;
+      const reorderedUnits = subject.units.map(unit => ({
+        ...unit,
+        order: Number(unit.order || 0) >= insertOrder ? Number(unit.order || 0) + 1 : Number(unit.order || 0)
+      }));
+      return {
+        ...subject,
+        units: [
+          ...reorderedUnits,
+          { id, label, order: insertOrder, active: true }
+        ]
+      };
+    });
+    state.standardUnitNewName = '';
+    state.standardUnitInsertOrder = '';
+    await saveStandardUnitSubjects('표준단원 추가 완료');
   }
 
   async function saveLoginConfig() {
@@ -657,6 +752,12 @@ export async function mountLegacyApp(appRoot) {
     const teacher = state.teachers.find(t => String(t.id || '').trim() === selectedTeacherId);
     if (!teacher) {
       state.loginError = '선생님 정보를 찾을 수 없습니다.';
+      render();
+      return;
+    }
+    if (!new RegExp(`^\\d{${STAFF_PIN_LENGTH}}$`).test(normalizedPin)) {
+      state.pin = '';
+      state.loginError = `PIN 번호는 ${STAFF_PIN_LENGTH}자리 숫자입니다.`;
       render();
       return;
     }
@@ -1050,20 +1151,31 @@ export async function mountLegacyApp(appRoot) {
     const book = bookById(state.selectedBookManageId);
     if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
     const start = Number(state.formUnit.start), end = Number(state.formUnit.end);
-    if (!state.formUnit.name || !start || !end) return showModalAlert('단원명과 페이지를 입력해주세요.');
+    const selectedStandardUnitIds = [...new Set(state.formUnit.standardUnitIds || [])];
+    const linkedNames = standardUnitNames(selectedStandardUnitIds);
+    const unitName = String(state.formUnit.name || linkedNames.join(', ')).trim();
+    if (!unitName || !start || !end) return showModalAlert('표준단원 또는 단원명과 페이지를 입력해주세요.');
     if (end < start) return showModalAlert('끝 페이지는 시작 페이지보다 크거나 같아야 합니다.');
-    const overlap = bookUnits(book).some(u => !(Number(u.end) < start || Number(u.start) > end));
+    const overlap = rawBookUnits(book).some(u => !(Number(u.end) < start || Number(u.start) > end));
     if (overlap) return showModalAlert('기존 단원과 페이지가 겹칩니다.');
-    const units = [...bookUnits(book), { id: uid(), name: state.formUnit.name, start, end, color: pastel(bookUnits(book).length) }];
+    const currentUnits = rawBookUnits(book);
+    const units = [...currentUnits, {
+      id: uid(),
+      name: unitName,
+      standardUnitIds: selectedStandardUnitIds,
+      start,
+      end,
+      color: pastel(currentUnits.length)
+    }];
     await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
-    state.formUnit = { name: '', start: '', end: '' };
+    state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
     notify('단원 추가 완료');
   }
 
   async function toggleUnitStudentVisible(bookId, unitId) {
     const book = bookById(bookId);
     if (!book) return showModalAlert('교재 정보를 찾을 수 없습니다.');
-    const units = bookUnits(book).map(unit => {
+    const units = rawBookUnits(book).map(unit => {
       if (unit.id !== unitId) return unit;
       return {
         ...unit,
@@ -1079,7 +1191,7 @@ export async function mountLegacyApp(appRoot) {
     if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
     const lines = String(state.bulkUnitText || '').split('\n').map(v => v.trim()).filter(Boolean);
     if (!lines.length) return showModalAlert('붙여넣기 단원 텍스트를 입력해주세요.');
-    const next = [...bookUnits(book)];
+    const next = [...rawBookUnits(book)];
     for (const line of lines) {
       const [name, s, e] = line.split('/').map(v => v.trim());
       const start = Number(s), end = Number(e);
@@ -1100,19 +1212,38 @@ export async function mountLegacyApp(appRoot) {
 
   async function assignBook(classId, bookId) {
     if (!classId || !bookId) return showModalAlert('반과 교재를 선택해주세요.');
-    const exists = state.classBooks.find(x => x.classId === classId && x.bookId === bookId && x.active !== false);
-    if (exists) return showModalAlert('이미 배정된 교재입니다.');
+    const exists = state.classBooks.find(x => x.classId === classId && x.bookId === bookId && x.active !== false && classBookStatus(x) === 'active');
+    if (exists) return showModalAlert('이미 진행 중인 교재입니다.');
+    const completed = state.classBooks.find(x => x.classId === classId && x.bookId === bookId && x.active !== false && classBookStatus(x) === 'completed');
+    if (completed) return showModalAlert('이미 완료 이력에 있는 교재입니다. 아래 완료된 교재 이력에서 다시 진행을 눌러주세요.');
     const order = assignedBooksForClass(classId).length + 1;
-    await addDoc(refs.classBooks, { classId, bookId, order, main: order === 1, active: true, createdAt: serverTimestamp() });
+    await addDoc(refs.classBooks, { classId, bookId, order, main: order === 1, active: true, status: 'active', createdAt: serverTimestamp() });
     notify('반별 교재 배정 완료');
     render();
   }
 
+  async function completeAssign(linkId) {
+    const ok = await showModalConfirm('이 반에서 해당 교재를 진행 종료할까요?\n학생 화면과 점검 선택 목록에서는 숨겨지고, 기존 점검 기록은 유지됩니다.', '교재 진행 종료');
+    if (!ok) return;
+    await updateDoc(doc(db, COLLECTION_NAMES.classBooks, linkId), { status: 'completed', completedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    notify('교재 진행 종료 완료');
+  }
+
+  async function reactivateAssign(linkId) {
+    const link = state.classBooks.find(x => x.id === linkId);
+    if (!link) return;
+    const activeDuplicate = state.classBooks.find(x => x.id !== linkId && x.classId === link.classId && x.bookId === link.bookId && x.active !== false && classBookStatus(x) === 'active');
+    if (activeDuplicate) return showModalAlert('이미 같은 교재가 진행 중입니다.');
+    const order = assignedBooksForClass(link.classId).length + 1;
+    await updateDoc(doc(db, COLLECTION_NAMES.classBooks, linkId), { status: 'active', order, main: order === 1, completedAt: null, updatedAt: serverTimestamp() });
+    notify('완료 교재를 다시 진행 중으로 전환했습니다.');
+  }
+
   async function removeAssign(linkId) {
-    const ok = await showModalConfirm('이 반에서 해당 교재 배정을 해제하시겠습니까?');
+    const ok = await showModalConfirm('이 반과 교재의 연결을 삭제하시겠습니까?\n점검 기록은 삭제되지 않지만, 완료 이력 목록에서도 사라집니다.', '교재 연결 삭제');
     if (!ok) return;
     await updateDoc(doc(db, COLLECTION_NAMES.classBooks, linkId), { active: false, updatedAt: serverTimestamp() });
-    notify('배정 해제 완료');
+    notify('교재 연결 삭제 완료');
   }
 
   async function moveAssign(linkId, dir) {
@@ -1188,7 +1319,9 @@ export async function mountLegacyApp(appRoot) {
     const total = pagesInRange(start, end);
     const missedPages = missedPagesArrayInCurrentRange();
     const completionRate = calculateCompletionRate(total, missedPages);
-    const units = unitsForRange(book, start, end).map(u => u.name);
+    const rangeUnits = unitsForRange(book, start, end);
+    const units = rangeUnits.map(u => displayUnitName(u));
+    const standardUnitIds = [...new Set(rangeUnits.flatMap(u => u.standardUnitIds || []))];
     const duplicate = state.inspections.find(r => r.id !== state.editingInspectionId && r.studentId === student.id && r.bookId === book.id && r.date === state.selectedDate && Number(r.rangeStart) === start && Number(r.rangeEnd) === end);
     if (duplicate) {
       const ok = await showModalConfirm('같은 학생/교재/날짜/범위의 점검 기록이 이미 있습니다. 기존 기록을 수정으로 덮어쓸까요?\n\n취소하면 저장하지 않습니다.');
@@ -1214,6 +1347,7 @@ export async function mountLegacyApp(appRoot) {
       carryoverRecovery,
       completionRate,
       units,
+      standardUnitIds,
       memo: state.memo,
       rubricScores: normalizeRubricScores(state.rubricScores),
       updatedAt: serverTimestamp() 
@@ -1365,7 +1499,8 @@ export async function mountLegacyApp(appRoot) {
         fmtDate,
         safe,
         progressTone,
-        unitsForRange
+        unitsForRange: unitsForRangeWithStandardNames,
+        assignedBooksForClass
       });
       appRoot.innerHTML = layout(content);
       bind();
@@ -1382,7 +1517,7 @@ export async function mountLegacyApp(appRoot) {
     const content = state.view === 'inspections'
       ? renderInspectionsView(state, { 
           teacherClasses, studentsForClass, assignedBooksForClass, bookById, 
-          unitsForRange, pagesInRange, missedPagesArrayInCurrentRange, 
+          unitsForRange: unitsForRangeWithStandardNames, pagesInRange, missedPagesArrayInCurrentRange, 
           inspectionsForStudent, fmtDate, classById, studentById, safe, bookUnits,
           buildCarryoverRows, calculateCarryoverRecoveryRate, pageResolutionKey, RUBRIC_ITEMS
         })
@@ -1396,9 +1531,9 @@ export async function mountLegacyApp(appRoot) {
         })
       : state.view === 'bookSetup'
       ? renderBookSetupView(state, { 
-          teacherClasses, classById, assignedBooksForClass, 
+          teacherClasses, classById, assignedBooksForClass, completedBooksForClass,
           bookUnits, safe, filterByKeyword, 
-          bookById 
+          bookById, standardSubjectForBook, standardUnitNames, fmtDate
         })
       : renderTeachersAdminView(state, { safe, teacherNameById });
 
@@ -1452,7 +1587,8 @@ export async function mountLegacyApp(appRoot) {
     if (loginPin) {
       loginPin.value = state.pin || '';
       loginPin.oninput = (e) => {
-        state.pin = e.target.value.replace(/\D/g, '');
+        state.pin = e.target.value.replace(/\D/g, '').slice(0, STAFF_PIN_LENGTH);
+        e.target.value = state.pin;
         if (state.loginError) {
           state.loginError = '';
           document.getElementById('loginErrorMessage')?.remove();
@@ -1786,6 +1922,12 @@ export async function mountLegacyApp(appRoot) {
           } catch (err) {
             state.studentLoginForm = value;
           }
+        } else if (target === 'bookSubject') {
+          state.formBook.subject = value;
+          state.formUnit.standardUnitIds = [];
+          state.formUnit.name = '';
+        } else if (target === 'bookGrade') {
+          state.formBook.grade = value;
         } else {
           state[target] = value;
         }
@@ -1813,6 +1955,8 @@ export async function mountLegacyApp(appRoot) {
           state.assigningClassId = value;
         } else if (target === 'inspectionHistoryFilterClass') {
           state.inspectionHistoryFilterStudent = '';
+        } else if (target === 'selectedBookManageId') {
+          state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
         }
 
         render();
@@ -1941,8 +2085,13 @@ export async function mountLegacyApp(appRoot) {
     document.getElementById('unitName')?.addEventListener('input', e => state.formUnit.name = e.target.value);
     document.getElementById('unitStart')?.addEventListener('input', e => state.formUnit.start = e.target.value);
     document.getElementById('unitEnd')?.addEventListener('input', e => state.formUnit.end = e.target.value);
+    document.getElementById('standardUnitNewName')?.addEventListener('input', e => state.standardUnitNewName = e.target.value);
+    document.getElementById('standardUnitInsertOrder')?.addEventListener('input', e => state.standardUnitInsertOrder = e.target.value.replace(/\D/g, ''));
     document.getElementById('adminTeacherName')?.addEventListener('input', e => state.adminTeacherForm.name = e.target.value);
-    document.getElementById('adminTeacherPin')?.addEventListener('input', e => state.adminTeacherForm.pin = e.target.value.replace(/\D/g, '').slice(0, 4));
+    document.getElementById('adminTeacherPin')?.addEventListener('input', e => {
+      state.adminTeacherForm.pin = e.target.value.replace(/\D/g, '').slice(0, STAFF_PIN_LENGTH);
+      e.target.value = state.adminTeacherForm.pin;
+    });
     document.getElementById('adminTeacherRole')?.addEventListener('change', e => state.adminTeacherForm.role = e.target.value);
     document.getElementById('setupSearchClass')?.addEventListener('input', e => { state.setupSearchClass = e.target.value; render(); });
     document.getElementById('setupSearchStudent')?.addEventListener('input', e => { state.setupSearchStudent = e.target.value; render(); });
@@ -1966,11 +2115,25 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="toggle-unit-student-visible"]').forEach(el => {
       el.onclick = () => toggleUnitStudentVisible(el.dataset.book, el.dataset.unit);
     });
+    appRoot.querySelectorAll('[data-action="toggle-unit-standard"]').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.id;
+        const selected = new Set(state.formUnit.standardUnitIds || []);
+        if (selected.has(id)) selected.delete(id);
+        else selected.add(id);
+        state.formUnit.standardUnitIds = [...selected];
+        const names = standardUnitNames(state.formUnit.standardUnitIds);
+        state.formUnit.name = names.join(', ');
+        render();
+      };
+    });
     appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false }; state.editingBookId = b.id; state.selectedBookManageId = b.id; render(); });
     appRoot.querySelectorAll('[data-action="clone-book"]').forEach(el => el.onclick = () => cloneBook(el.dataset.id));
     appRoot.querySelectorAll('[data-action="toggle-book-archive"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (b) toggleArchiveBook(b.id, !!b.archived); });
     appRoot.querySelectorAll('[data-action="select-book-manage"]').forEach(el => el.onclick = () => { state.selectedBookManageId = el.dataset.id; render(); });
     appRoot.querySelectorAll('[data-action="assign-book"]').forEach(el => el.onclick = () => assignBook(el.dataset.class, el.dataset.book));
+    appRoot.querySelectorAll('[data-action="complete-assign"]').forEach(el => el.onclick = () => completeAssign(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="reactivate-assign"]').forEach(el => el.onclick = () => reactivateAssign(el.dataset.id));
     appRoot.querySelectorAll('[data-action="remove-assign"]').forEach(el => el.onclick = () => removeAssign(el.dataset.id));
     appRoot.querySelectorAll('[data-action="move-assign"]').forEach(el => el.onclick = () => moveAssign(el.dataset.id, el.dataset.dir));
     appRoot.querySelector('[data-action="save-inspection"]')?.addEventListener('click', saveInspection);
@@ -2020,7 +2183,7 @@ export async function mountLegacyApp(appRoot) {
         studentById, classById, inspectionsForStudent, groupInspectionsByBook, 
         bookById, averageCompletionRate, fmtDate, safe, progressTone,
         classRubricAverage, studentRubricAverage, students: state.students,
-        inspections: state.inspections
+        inspections: state.inspections, assignedBooksForClass
       }); 
       render(); 
       setTimeout(() => {
@@ -2078,6 +2241,18 @@ export async function mountLegacyApp(appRoot) {
     });
     appRoot.querySelector('[data-action="admin-run-promotion-clone"]')?.addEventListener('click', runPromotionClone);
     appRoot.querySelector('[data-action="admin-purge-due-withdrawn-students"]')?.addEventListener('click', purgeDueWithdrawnStudents);
+    appRoot.querySelectorAll('[data-action="admin-select-standard-subject"]').forEach(el => {
+      el.onclick = () => {
+        state.selectedStandardSubjectCode = el.dataset.code;
+        state.standardUnitNewName = '';
+        state.standardUnitInsertOrder = '';
+        render();
+      };
+    });
+    appRoot.querySelectorAll('[data-action="admin-save-standard-unit-name"]').forEach(el => {
+      el.onclick = () => saveStandardUnitName(el.dataset.id);
+    });
+    appRoot.querySelector('[data-action="admin-add-standard-unit"]')?.addEventListener('click', addStandardUnit);
 
     appRoot.querySelector('[data-action="save-login-config"]')?.addEventListener('click', saveLoginConfig);
     document.getElementById('configSplashTitleLine1')?.addEventListener('input', e => state.adminLoginConfigForm.splashTitleLine1 = e.target.value);

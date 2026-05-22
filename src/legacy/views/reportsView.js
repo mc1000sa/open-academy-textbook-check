@@ -128,6 +128,7 @@ export function reportForStudent(studentId, state, deps) {
     progressTone,
     classRubricAverage,
     studentRubricAverage,
+    assignedBooksForClass,
     students,
     inspections
   } = deps;
@@ -144,11 +145,16 @@ export function reportForStudent(studentId, state, deps) {
   const classVector = typeof classRubricAverage === 'function'
     ? classRubricAverage(student.classId, allStudents, allInspections)
     : {};
+  const visibleBookIds = typeof assignedBooksForClass === 'function'
+    ? new Set(assignedBooksForClass(student.classId).map(item => item.book.id))
+    : null;
   
   // 전체 평균 완료율
   const totalAvg = Math.round(averageCompletionRate(rows));
 
-  const cards = Object.entries(grouped).map(([bookId, items]) => {
+  const cards = Object.entries(grouped)
+    .filter(([bookId]) => !visibleBookIds || visibleBookIds.has(bookId))
+    .map(([bookId, items]) => {
     const book = bookById(bookId);
     const avg = Math.round(averageCompletionRate(items));
     const latest = items[0];

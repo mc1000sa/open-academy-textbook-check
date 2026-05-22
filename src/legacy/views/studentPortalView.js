@@ -48,7 +48,8 @@ export function renderStudentPortalView(state, utils) {
     fmtDate,
     safe,
     progressTone,
-    unitsForRange
+    unitsForRange,
+    assignedBooksForClass
   } = utils;
 
   const student = state.studentSession;
@@ -57,6 +58,16 @@ export function renderStudentPortalView(state, utils) {
   const myInspections = inspectionsForStudent(student.id);
   const myClass = state.classes.find(c => c.id === student.classId);
   const teacherName = state.teachers.find(t => t.id === myClass?.teacherId)?.name || '담당 교사 없음';
+  const visibleBookIds = (() => {
+    if (typeof assignedBooksForClass !== 'function') return null;
+    const profileId = student.studentProfileId || student.id;
+    const relatedStudents = (state.allStudents || state.students || [])
+      .filter(s => (s.studentProfileId || s.id) === profileId);
+    if (!relatedStudents.some(s => s.id === student.id)) relatedStudents.push(student);
+    return new Set(
+      relatedStudents.flatMap(s => assignedBooksForClass(s.classId).map(item => item.book.id))
+    );
+  })();
 
   // 교재별로 점검 데이터 그룹화
   const grouped = groupInspectionsByBook(myInspections);
@@ -90,7 +101,7 @@ export function renderStudentPortalView(state, utils) {
       missedPages: missedSorted,
       dateRangeText
     };
-  }).filter(item => item.book);
+  }).filter(item => item.book && (!visibleBookIds || visibleBookIds.has(item.book.id)));
 
   // 사용한 교재순(최근 활성 순) 정렬
   bookList.sort((a, b) => {

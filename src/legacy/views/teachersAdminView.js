@@ -20,6 +20,8 @@ export function renderTeachersAdminView(state, deps) {
   const promotionGrades = Array.from(new Set([...state.classes.map(c => c.grade).filter(Boolean), '고1', '고2', '고3']));
   const selectedPromotionGrade = state.adminPromotionGrade || '';
   const selectedPromotionClassId = state.adminPromotionClassId || '';
+  const selectedStandardSubject = (state.standardUnitSubjects || []).find(subject => subject.code === state.selectedStandardSubjectCode)
+    || (state.standardUnitSubjects || [])[0];
 
   // 아코디언 카드 헬퍼 (React AccordionCard의 외양과 구조 완전 일치)
   function renderAdminAccordion({ id, title, subtitle, pipeColor = purpleTheme, open = false, childrenHtml, alert = false, badgeText = '' }) {
@@ -63,8 +65,8 @@ export function renderTeachersAdminView(state, deps) {
         <label class="block text-xs font-bold text-slate-400">강사 이름
           <input id="adminTeacherName" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="이름 입력" value="${safe(state.adminTeacherForm.name)}" />
         </label>
-        <label class="block text-xs font-bold text-slate-400">PIN 4자리
-          <input id="adminTeacherPin" maxlength="4" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="비밀번호(4자리)" value="${safe(state.adminTeacherForm.pin)}" />
+        <label class="block text-xs font-bold text-slate-400">PIN 6자리
+          <input id="adminTeacherPin" maxlength="6" inputmode="numeric" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="비밀번호(6자리)" value="${safe(state.adminTeacherForm.pin)}" />
         </label>
         <label class="block text-xs font-bold text-slate-400">권한 선택
           <select id="adminTeacherRole" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-slate-300 mt-1.5 focus:outline-none">
@@ -158,7 +160,7 @@ export function renderTeachersAdminView(state, deps) {
           <input id="configLoginTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="빠른 PIN 로그인" value="${safe(state.adminLoginConfigForm.loginTitle || state.loginConfig.loginTitle)}" />
         </label>
         <label class="block text-xs font-bold text-slate-400">로그인 카드 안내문구
-          <input id="configLoginDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="선생님을 선택하고 4자리 PIN을 입력하세요." value="${safe(state.adminLoginConfigForm.loginDescription || state.loginConfig.loginDescription)}" />
+          <input id="configLoginDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" placeholder="선생님을 선택하고 6자리 PIN을 입력하세요." value="${safe(state.adminLoginConfigForm.loginDescription || state.loginConfig.loginDescription)}" />
         </label>
       </div>
       
@@ -233,6 +235,51 @@ export function renderTeachersAdminView(state, deps) {
         `).join('') || '<div class="text-xs text-slate-500 py-4 text-center">삭제 가능한 활성 교재가 없습니다.</div>'}
       </div>
       <p class="text-[10px] text-slate-500 mt-1">학원 자산으로서 영구 삭제를 실행합니다. 교재를 임시로 숨기고 보존하시려면 "반 세팅 &gt; 교재 관리"에서 <b>보관</b> 기능을 활용하세요.</p>
+    </div>
+  `;
+
+  const standardUnitsHtml = `
+    <div class="space-y-4">
+      <div class="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-3">
+        <div class="text-xs font-extrabold text-cyan-200">교과목별 표준 소단원 ID 관리</div>
+        <div class="text-[10px] text-slate-500 mt-1">표준단원명을 수정하면 해당 ID에 연결된 교재 단원 표시명도 함께 바뀝니다.</div>
+      </div>
+
+      <div class="flex flex-wrap gap-1.5">
+        ${(state.standardUnitSubjects || []).map(subject => `
+          <button type="button" data-action="admin-select-standard-subject" data-code="${safe(subject.code)}" class="rounded-full border px-3 py-1.5 text-[10px] font-black transition-all ${selectedStandardSubject?.code === subject.code ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-200'}">
+            ${safe(subject.label)}
+          </button>
+        `).join('')}
+      </div>
+
+      ${selectedStandardSubject ? `
+        <div class="space-y-2 max-h-80 overflow-y-auto mini-scroll pr-1">
+          ${selectedStandardSubject.units.filter(unit => unit.active !== false).map((unit, index) => `
+            <div class="rounded-xl border border-slate-800 bg-slate-900/20 px-3 py-2.5 text-xs">
+              <div class="flex flex-col md:flex-row md:items-center gap-2">
+                <span class="w-7 shrink-0 text-[10px] font-black text-slate-500">${index + 1}</span>
+                <input id="standardUnitName-${safe(unit.id)}" class="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100" value="${safe(unit.label)}" />
+                <button type="button" data-action="admin-save-standard-unit-name" data-id="${safe(unit.id)}" class="rounded-lg bg-cyan-500/10 border border-cyan-500/25 px-3 py-2 text-[10px] font-black text-cyan-200 hover:bg-cyan-500 hover:text-slate-950 transition-all">수정 저장</button>
+              </div>
+              <div class="mt-1.5 pl-0 md:pl-9 text-[9px] font-mono text-slate-600">${safe(unit.id)}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+          <div class="grid md:grid-cols-[120px_1fr] gap-3">
+            <label class="block text-xs font-bold text-slate-400">삽입 번호
+              <input id="standardUnitInsertOrder" type="number" min="1" max="${selectedStandardSubject.units.filter(unit => unit.active !== false).length + 1}" class="w-full mt-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-slate-100" placeholder="예: 7" value="${safe(state.standardUnitInsertOrder || '')}" />
+            </label>
+            <label class="block text-xs font-bold text-slate-400">새 표준단원 추가 (${safe(selectedStandardSubject.label)})
+              <input id="standardUnitNewName" class="w-full mt-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-slate-100" placeholder="예: 멋진단원" value="${safe(state.standardUnitNewName || '')}" />
+            </label>
+          </div>
+          <div class="mt-2 text-[10px] text-slate-500">번호를 비우면 마지막에 추가됩니다. 예: 7번에 넣으면 기존 7번부터 자동으로 한 칸씩 밀립니다.</div>
+          <button type="button" data-action="admin-add-standard-unit" class="${btnClass} mt-3 rounded-xl px-4 py-2.5 text-xs font-extrabold">표준단원 추가</button>
+        </div>
+      ` : '<div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/20 px-4 py-8 text-center text-xs text-slate-500">표준단원 과목 정보가 없습니다.</div>'}
     </div>
   `;
 
@@ -408,6 +455,14 @@ export function renderTeachersAdminView(state, deps) {
             subtitle: '3개월 후 삭제 배치 구조',
             open: !!exp.studentRetention,
             childrenHtml: retentionHtml
+          })}
+
+          ${renderAdminAccordion({
+            id: 'standardUnits',
+            title: '교과목별 표준 소단원 관리',
+            subtitle: '단원 ID 수정/추가',
+            open: !!exp.standardUnits,
+            childrenHtml: standardUnitsHtml
           })}
 
           ${renderAdminAccordion({

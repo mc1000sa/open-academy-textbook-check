@@ -163,7 +163,7 @@ export function renderInspectionsView(state, deps) {
   };
 
   const rubricButtons = `
-    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/20 p-4">
+    <div class="rubric-score-panel mt-4 rounded-2xl border border-slate-800 bg-slate-950/20 p-4">
       <div class="flex items-center justify-between mb-4">
         <div class="text-xs font-extrabold text-slate-300">6요소 평가 (0~10점)</div>
         <button type="button" data-action="reset-rubric-scores" class="ghost-button px-2.5 py-1.5 rounded-lg text-[10px] font-black">점수 초기화</button>
@@ -174,17 +174,17 @@ export function renderInspectionsView(state, deps) {
           const c = colorMap[rubricColorByKey[item.key]] || colorMap.blue;
           const filled = cur !== null && cur !== undefined;
           return `
-            <div class="flex items-center gap-3">
-              <div class="w-[130px] shrink-0">
+            <div class="rubric-score-row flex items-center gap-3">
+              <div class="rubric-score-label w-[130px] shrink-0">
                 <div class="text-[10px] font-bold text-slate-400 leading-tight">${safe(item.label)}</div>
                 <div class="text-[11px] font-black mt-0.5 ${filled ? 'text-white' : 'text-slate-600'}">${filled ? cur + '점' : '미입력'}</div>
               </div>
-              <div class="flex flex-wrap gap-1">
+              <div class="rubric-score-controls flex flex-wrap gap-1">
                 <button type="button"
                   data-action="adjust-rubric-score"
                   data-key="${item.key}"
                   data-delta="-0.5"
-                  class="w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
+                  class="rubric-score-button w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
                   -
                 </button>
                 ${[0,1,2,3,4,5,6,7,8,9,10].map(n => `
@@ -192,7 +192,7 @@ export function renderInspectionsView(state, deps) {
                     data-action="set-rubric-score"
                     data-key="${item.key}"
                     data-val="${n}"
-                    class="w-7 h-7 rounded-lg border text-[11px] font-black transition-all ${cur === n ? c.sel : c.unsel}">
+                    class="rubric-score-button w-7 h-7 rounded-lg border text-[11px] font-black transition-all ${cur === n ? c.sel : c.unsel}">
                     ${n}
                   </button>
                 `).join('')}
@@ -200,7 +200,7 @@ export function renderInspectionsView(state, deps) {
                   data-action="adjust-rubric-score"
                   data-key="${item.key}"
                   data-delta="0.5"
-                  class="w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
+                  class="rubric-score-button w-7 h-7 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 text-[11px] font-black hover:border-blue-500 hover:text-white transition-all">
                   +
                 </button>
               </div>

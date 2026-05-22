@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { mountLegacyApp } from '../legacy/legacyApp.js';
+import AuroraBackground from './effects/AuroraBackground.jsx';
 
 export default function LegacyAppHost() {
   const appRef = useRef(null);
@@ -20,5 +21,10 @@ export default function LegacyAppHost() {
     };
   }, []);
 
-  return <div ref={appRef} className="app-shell" />;
+  return (
+    <>
+      <AuroraBackground />
+      <div ref={appRef} className="app-shell" />
+    </>
+  );
 }

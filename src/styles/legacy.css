@@ -11,6 +11,10 @@
   --oatis-border: rgba(255, 255, 255, 0.08);
   --oatis-text: #f9f7ff;
   --oatis-muted: #94a3b8;
+  --oatis-surface: rgba(14, 16, 28, 0.64);
+  --oatis-surface-strong: rgba(18, 21, 34, 0.82);
+  --oatis-ring: rgba(255, 255, 255, 0.12);
+  --oatis-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -28,6 +32,9 @@ body {
   color: #f9f7ff;
   font-family: Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  letter-spacing: 0;
   text-rendering: optimizeLegibility;
 }
 
@@ -46,6 +53,171 @@ button {
 .app-shell {
   min-height: 100vh;
   background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+/* ReactBits 감각을 가볍게 가져온 로그인 스플래시 */
+.oatis-splash-screen,
+.oatis-auth-screen {
+  isolation: isolate;
+}
+
+.oatis-splash-screen::before,
+.oatis-auth-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 30% 22%, rgba(0, 214, 205, 0.16), transparent 22rem),
+    radial-gradient(circle at 78% 26%, rgba(132, 54, 255, 0.18), transparent 24rem);
+  background-size: 160% 160%;
+  opacity: 0.72;
+}
+
+.oatis-splash-screen::before {
+  animation: splashGlowShift 6.5s ease-in-out infinite alternate;
+}
+
+.oatis-splash-screen::after {
+  content: "";
+  position: absolute;
+  inset: -28%;
+  z-index: 0;
+  background:
+    linear-gradient(112deg,
+      transparent 5%,
+      rgba(0, 214, 205, 0.26) 18%,
+      transparent 31%,
+      rgba(65, 105, 225, 0.24) 47%,
+      transparent 61%,
+      rgba(132, 54, 255, 0.28) 76%,
+      transparent 92%),
+    conic-gradient(from 170deg at 50% 50%,
+      transparent 0deg,
+      rgba(0, 214, 205, 0.3) 46deg,
+      rgba(65, 105, 225, 0.28) 96deg,
+      rgba(132, 54, 255, 0.32) 154deg,
+      transparent 232deg,
+      rgba(0, 214, 205, 0.24) 296deg,
+      transparent 360deg);
+  background-size: 180% 180%, 100% 100%;
+  filter: blur(38px);
+  opacity: 1;
+  mix-blend-mode: screen;
+  animation: splashAuroraDrift 18s linear infinite;
+}
+
+@keyframes splashGlowShift {
+  from {
+    background-position: 0% 45%;
+  }
+  to {
+    background-position: 100% 55%;
+  }
+}
+
+@keyframes splashAuroraDrift {
+  from {
+    transform: rotate(0deg) scale(1.16);
+  }
+  to {
+    transform: rotate(360deg) scale(1.16);
+  }
+}
+
+.splash-brand-panel,
+.splash-portal-panel {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.045)),
+    rgba(7, 9, 19, 0.82) !important;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  box-shadow:
+    0 34px 96px rgba(0, 0, 0, 0.58),
+    0 0 56px rgba(0, 214, 205, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(1.12);
+}
+
+.splash-portal-panel {
+  border-radius: 34px;
+  padding: 2.35rem !important;
+}
+
+.splash-brand-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.splash-brand-panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -24% -38% 24%;
+  height: 340px;
+  background: radial-gradient(circle, rgba(0, 214, 205, 0.22), transparent 64%);
+  filter: blur(34px);
+}
+
+.splash-kicker {
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+}
+
+.splash-kicker-pill {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.portal-entry-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  padding: 1.45rem !important;
+  border-radius: 24px !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+    rgba(8, 11, 22, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.portal-entry-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.1), transparent 42%);
+  transition: opacity 0.24s var(--oatis-ease);
+}
+
+.portal-entry-card:hover::before {
+  opacity: 1;
+}
+
+.portal-entry-card:hover {
+  transform: translateY(-4px) scale(1.012);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.055)),
+    rgba(12, 16, 31, 0.86) !important;
+  box-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.36),
+    0 0 34px rgba(0, 214, 205, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.portal-entry-card strong {
+  font-size: 1.18rem;
+  letter-spacing: 0;
+}
+
+.portal-entry-card span:last-child {
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 /* 글래스모피즘 및 카드 스타일 오버라이딩 */
@@ -75,6 +247,20 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
   backdrop-filter: blur(16px);
   color: #f9f7ff !important;
+  transition:
+    transform 0.22s var(--oatis-ease),
+    box-shadow 0.22s var(--oatis-ease),
+    border-color 0.22s var(--oatis-ease),
+    background-color 0.22s var(--oatis-ease);
+}
+
+.card-3d:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 214, 205, 0.18) !important;
+  box-shadow:
+    0 24px 52px rgba(0, 0, 0, 0.44),
+    0 0 28px rgba(0, 214, 205, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
 }
 
 /* Tailwind white 백그라운드 강제 오버라이딩 */
@@ -228,11 +414,12 @@ input:focus, select:focus, textarea:focus {
   font-weight: 800;
   border: none;
   box-shadow: 0 8px 20px rgba(0, 214, 205, 0.25);
-  transition: all 0.25s ease;
+  transition: transform 0.2s var(--oatis-ease), box-shadow 0.2s var(--oatis-ease), filter 0.2s var(--oatis-ease);
 }
 .btn-student:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(0, 214, 205, 0.4);
+  filter: saturate(1.08) brightness(1.04);
 }
 
 .btn-teacher {
@@ -241,11 +428,12 @@ input:focus, select:focus, textarea:focus {
   font-weight: 800;
   border: none;
   box-shadow: 0 8px 20px rgba(65, 105, 225, 0.25);
-  transition: all 0.25s ease;
+  transition: transform 0.2s var(--oatis-ease), box-shadow 0.2s var(--oatis-ease), filter 0.2s var(--oatis-ease);
 }
 .btn-teacher:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(65, 105, 225, 0.4);
+  filter: saturate(1.08) brightness(1.04);
 }
 
 .btn-admin {
@@ -254,11 +442,28 @@ input:focus, select:focus, textarea:focus {
   font-weight: 800;
   border: none;
   box-shadow: 0 8px 20px rgba(132, 54, 255, 0.25);
-  transition: all 0.25s ease;
+  transition: transform 0.2s var(--oatis-ease), box-shadow 0.2s var(--oatis-ease), filter 0.2s var(--oatis-ease);
 }
 .btn-admin:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(132, 54, 255, 0.4);
+  filter: saturate(1.08) brightness(1.04);
+}
+
+.btn-student:active,
+.btn-teacher:active,
+.btn-admin:active,
+.primary-button:active,
+.ghost-button:active,
+.choice-button:active {
+  transform: translateY(0) scale(0.985);
+}
+
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+  filter: grayscale(0.35) brightness(0.8);
+  opacity: 0.58;
 }
 
 /* 네온 파이프라인 & 아코디언 카드 스타일 */
@@ -269,6 +474,12 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin-bottom: 1.5rem;
+}
+.admin-section-card:hover,
+.metric-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(132, 54, 255, 0.2);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36), 0 0 24px rgba(132, 54, 255, 0.08);
 }
 .admin-section-card.open {
   border-color: rgba(132, 54, 255, 0.3);
@@ -390,6 +601,7 @@ input:focus, select:focus, textarea:focus {
   background: rgba(255, 255, 255, 0.08) !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
   transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
 }
 .choice-button.selected {
   background: linear-gradient(135deg, #4169e1, #2f46ff) !important;
@@ -404,6 +616,15 @@ input:focus, select:focus, textarea:focus {
   border-color: transparent !important;
   color: #050507 !important;
   box-shadow: 0 4px 15px rgba(0, 214, 205, 0.3);
+}
+
+.btn-choice-student {
+  min-height: 3rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  line-height: 1.25;
 }
 
 /* 교사용 로얄블루 선택 상태 */
@@ -455,6 +676,7 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  transition: transform 0.22s var(--oatis-ease), box-shadow 0.22s var(--oatis-ease), border-color 0.22s var(--oatis-ease);
 }
 .metric-card span {
   font-size: 0.8rem;
@@ -479,9 +701,11 @@ input:focus, select:focus, textarea:focus {
   padding: 1rem;
 }
 .modal-content {
-  background: rgba(13, 13, 18, 0.7);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035)),
+    rgba(13, 13, 18, 0.82);
   backdrop-filter: blur(24px);
-  border-radius: 32px;
+  border-radius: 28px;
   animation: modalScaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes modalScaleUp {
@@ -605,6 +829,122 @@ details.group[open] summary span {
 .class-rubric-table {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+/* 모바일에서도 표와 6요소 입력이 줄바꿈으로 자연스럽게 정리되도록 보정 */
+.rubric-score-row {
+  padding: 0.65rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.rubric-score-button {
+  flex: 0 0 1.75rem;
+}
+
+.rubric-score-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.unit-chip {
+  border-radius: 999px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+@media (max-width: 720px) {
+  .oatis-splash-grid {
+    max-width: 34rem;
+  }
+
+  .splash-portal-panel {
+    min-height: auto;
+    border-radius: 28px;
+  }
+
+  .portal-entry-card {
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+
+  .portal-entry-card strong {
+    font-size: 1rem;
+  }
+
+  .rubric-score-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .rubric-score-label {
+    width: 100% !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .rubric-score-controls {
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.35rem;
+    width: 100%;
+  }
+
+  .rubric-score-button {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  .choice-grid {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  }
+
+  .btn-choice-student {
+    min-height: 3.25rem;
+    padding-inline: 0.65rem;
+  }
+
+  th,
+  td {
+    padding: 0.72rem 0.65rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .class-rubric-table,
+  .submissions-table-scroll,
+  .mini-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* 사용자가 요청한 로그인 첫 화면 오로라는 OS 모션 감소 설정과 무관하게 보이도록 별도 복구한다. */
+.oatis-splash-screen::before {
+  animation: splashGlowShift 6.5s ease-in-out infinite alternate !important;
+}
+
+.oatis-splash-screen::after {
+  animation: splashAuroraDrift 18s linear infinite !important;
+}
+
+.aurora-background .aurora-layer {
+  animation-name: auroraFloat !important;
+  animation-iteration-count: infinite !important;
 }
 
 @media print {

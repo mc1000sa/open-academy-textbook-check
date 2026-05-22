@@ -50,6 +50,7 @@ describe('renderLoginView', () => {
 
     expect(html).toContain('id="loginPin"');
     expect(html).toContain('data-autofocus="true"');
+    expect(html).toContain('maxlength="6"');
   });
 
   it('marks the admin PIN input for focus immediately', () => {
@@ -62,6 +63,28 @@ describe('renderLoginView', () => {
 
     expect(html).toContain('id="loginPin"');
     expect(html).toContain('data-autofocus="true"');
+    expect(html).toContain('maxlength="6"');
+    expect(html).toContain('999999');
+  });
+
+  it('keeps student PIN inputs at four digits', () => {
+    const html = renderLoginView({
+      portal: 'student',
+      loginStep: 'login',
+      teachers: [{ id: 't1', name: '김선생', role: 'teacher' }],
+      classes: [{ id: 'c1', name: '고1 서울대반', grade: '고1', teacherId: 't1' }],
+      students: [{ id: 's1', name: '홍길동', classId: 'c1', active: true }],
+      allStudents: [{ id: 's1', name: '홍길동', classId: 'c1', active: true }],
+      studentLoginForm: {
+        teacherId: 't1',
+        grade: '고1',
+        classId: 'c1',
+        studentId: 's1'
+      }
+    }, escapeHtml);
+
+    expect(html).toContain('5단계: 4자리 PIN 비밀번호');
+    expect(html).toContain('maxlength="4"');
   });
 
   it('renders student portal cascading steps and filters', () => {
