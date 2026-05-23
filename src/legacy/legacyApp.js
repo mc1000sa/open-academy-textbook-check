@@ -1,3 +1,6 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import InspectionsContainer from '../components/InspectionsContainer.jsx';
 import {
   addDoc,
   COLLECTION_NAMES,
@@ -52,7 +55,7 @@ import { renderCustomModalMarkup, renderLayoutView } from './views/layoutView.js
 import { renderLoginView } from './views/loginView.js';
 import { renderSetupView } from './views/setupView.js';
 import { renderBookSetupView } from './views/bookSetupView.js';
-import { renderInspectionsView } from './views/inspectionsView.js';
+import { renderInspectionsView, unitChipTextColor } from './views/inspectionsView.js';
 import { renderReportsView, reportForStudent, reportForClass } from './views/reportsView.js';
 import { renderTeachersAdminView } from './views/teachersAdminView.js';
 import { renderStudentPortalView } from './views/studentPortalView.js'; // [NEW]
@@ -61,11 +64,38 @@ export async function mountLegacyApp(appRoot) {
   if (!appRoot) throw new Error('Legacy app root is required.');
 
   const { db, refs } = await getFirebaseService();
+  let inspectionsReactRoot = null;
+  let lastModalOpenState = false;
 
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
   const GRADE_OPTIONS = ['고1','고2','고3'];
   const STAFF_PIN_LENGTH = 6;
   const STUDENT_LOGIN_MEMORY_KEY = 'oatis.studentLoginForm.v1';
+  const TEACHER_SESSION_KEY = 'oatis.teacherSession.v1';
+  const ADMIN_SESSION_KEY = 'oatis.adminSession.v1';
+  const LAST_TEACHER_ID_KEY = 'oatis.lastTeacherId.v1';
+
+  function readRememberedTeacherSession() {
+    try {
+      const raw = window.localStorage?.getItem(TEACHER_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function readRememberedAdminSession() {
+    try {
+      const raw = window.localStorage?.getItem(ADMIN_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function readLastTeacherId() {
+    return window.localStorage?.getItem(LAST_TEACHER_ID_KEY) || '';
+  }
 
   const state = {
     loading: true,
@@ -76,6 +106,7 @@ export async function mountLegacyApp(appRoot) {
     pin: '',
     loginError: '',
     view: 'inspections', // inspections | reports | setup | teachersAdmin
+    tempBookUnits: null,
     teachers: [],
     classes: [],
     students: [],
@@ -785,6 +816,7 @@ export async function mountLegacyApp(appRoot) {
     notify('학생 PIN 잠금이 해제되었습니다.');
   }
 
+  let sessionChecked = false;
   function subscribe() {
     onSnapshot(refs.teachers, snap => { state.teachers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
     onSnapshot(refs.classes, snap => { state.classes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); if (!state.selectedSetupClassId && state.classes.length) state.selectedSetupClassId = state.classes[0].id; if (!state.assigningClassId && state.classes.length) state.assigningClassId = state.classes[0].id; render(); });
@@ -799,7 +831,15 @@ export async function mountLegacyApp(appRoot) {
     });
     onSnapshot(refs.books, snap => { state.books = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
     onSnapshot(refs.classBooks, snap => { state.classBooks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
-    onSnapshot(refs.inspections, snap => { state.inspections = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true); state.loading = false; render(); });
+    onSnapshot(refs.inspections, snap => { 
+      state.inspections = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true); 
+      state.loading = false; 
+      if (!sessionChecked) {
+        sessionChecked = true;
+        restoreSessionOnLoad();
+      }
+      render(); 
+    });
     onSnapshot(refs.configs, snap => {
       const docLoginSplash = snap.docs.find(d => d.id === 'login_splash');
       if (docLoginSplash) {
@@ -883,6 +923,53 @@ export async function mountLegacyApp(appRoot) {
     await saveStandardUnitSubjects('표준단원 추가 완료');
   }
 
+  async function deleteStandardUnit(unitId) {
+    const confirmed = await showModalConfirm('해당 표준단원을 삭제하시겠습니까?\n(이미 등록된 교재 단원에 영향이 갈 수 있으므로 화면에서만 비활성화됩니다.)');
+    if (!confirmed) return;
+    
+    state.standardUnitSubjects = normalizeStandardUnitSubjects(state.standardUnitSubjects).map(subject => ({
+      ...subject,
+      units: subject.units.map(unit => unit.id === unitId ? { ...unit, active: false } : unit)
+    }));
+    await saveStandardUnitSubjects('표준단원 삭제 완료');
+  }
+
+  function restoreSessionOnLoad() {
+    if (state.teachers.length === 0) return;
+    
+    const savedAdminSession = readRememberedAdminSession();
+    if (savedAdminSession && state.teachers.some(t => t.id === savedAdminSession.id && t.pin === savedAdminSession.pin && t.role === 'admin' && t.active !== false)) {
+      const matched = state.teachers.find(t => t.id === savedAdminSession.id);
+      state.currentTeacher = matched;
+      state.portal = 'admin';
+      state.view = 'teachersAdmin';
+      
+      const firstClass = state.classes[0];
+      state.selectedSetupClassId = firstClass?.id || '';
+      state.assigningClassId = firstClass?.id || '';
+      state.selectedInspectionClassId = firstClass?.id || '';
+      state.quickClassId = firstClass?.id || '';
+      state.reportClassId = firstClass?.id || '';
+      return;
+    }
+    
+    const savedTeacherSession = readRememberedTeacherSession();
+    if (savedTeacherSession && state.teachers.some(t => t.id === savedTeacherSession.id && t.pin === savedTeacherSession.pin && t.role === 'teacher' && t.active !== false)) {
+      const matched = state.teachers.find(t => t.id === savedTeacherSession.id);
+      state.currentTeacher = matched;
+      state.portal = 'teacher';
+      state.view = 'inspections';
+      
+      const firstClass = teacherClasses(matched.id)[0];
+      state.selectedSetupClassId = firstClass?.id || '';
+      state.assigningClassId = firstClass?.id || '';
+      state.selectedInspectionClassId = firstClass?.id || '';
+      state.quickClassId = firstClass?.id || '';
+      state.reportClassId = firstClass?.id || '';
+      return;
+    }
+  }
+
   async function saveLoginConfig() {
     const form = state.adminLoginConfigForm;
     await setDoc(doc(db, COLLECTION_NAMES.configs, 'login_splash'), {
@@ -961,9 +1048,12 @@ export async function mountLegacyApp(appRoot) {
     state.reportClassId = firstClass?.id || '';
     
     if (teacher.role === 'admin') {
+      window.localStorage?.setItem(ADMIN_SESSION_KEY, JSON.stringify(teacher));
       state.portal = 'admin';
       state.view = 'teachersAdmin';
     } else {
+      window.localStorage?.setItem(TEACHER_SESSION_KEY, JSON.stringify(teacher));
+      window.localStorage?.setItem(LAST_TEACHER_ID_KEY, teacher.id);
       state.portal = 'teacher';
       state.view = 'inspections';
     }
@@ -1395,6 +1485,7 @@ export async function mountLegacyApp(appRoot) {
         }
 
         await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
+        state.tempBookUnits = null;
         notify('시험대비 챕터표 저장 완료');
         return;
       }
@@ -1469,6 +1560,7 @@ export async function mountLegacyApp(appRoot) {
 
       await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
       state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
+      state.tempBookUnits = null;
       notify('단원 표 저장 완료');
     } catch (error) {
       console.error(error);
@@ -1580,7 +1672,13 @@ export async function mountLegacyApp(appRoot) {
     const set = new Set(parseMissedPages(state.missedPages));
     if (set.has(page)) set.delete(page); else set.add(page);
     state.missedPages = [...set].sort((a, b) => a - b).join(',');
-    render();
+    
+    // 포커스를 보존하기 위해 전체 render() 대신 부분 미세 갱신을 실행한다.
+    const missedPagesEl = document.getElementById('missedPages');
+    if (missedPagesEl) {
+      missedPagesEl.value = state.missedPages;
+    }
+    updateMissedPagesFromText();
   }
   function appendRemark(text) {
     const current = String(state.memo || '').trim();
@@ -1602,14 +1700,160 @@ export async function mountLegacyApp(appRoot) {
   function resetRubricScores() {
     state.rubricScores = normalizeRubricScores({});
   }
-  function buildPageChecks() {
-    const startEl = document.getElementById('selectedRangeStart');
-    const endEl = document.getElementById('selectedRangeEnd');
-    if (startEl) state.selectedRangeStart = startEl.value;
-    if (endEl) state.selectedRangeEnd = endEl.value;
-    const start = Number(state.selectedRangeStart), end = Number(state.selectedRangeEnd);
-    if (isNaN(start) || isNaN(end) || end < start) return showModalAlert('시작 페이지와 끝 페이지를 먼저 올바르게 입력해주세요.');
-    render();
+  function updatePageChecksDOM() {
+    const startVal = document.getElementById('selectedRangeStart')?.value || '';
+    const endVal = document.getElementById('selectedRangeEnd')?.value || '';
+    state.selectedRangeStart = startVal;
+    state.selectedRangeEnd = endVal;
+
+    const start = Number(startVal);
+    const end = Number(endVal);
+
+    const wrapper = document.getElementById('pageChecksWrapper');
+    const unitsContainer = document.getElementById('analysisUnitsContainer');
+    const completionContainer = document.getElementById('analysisCompletionContainer');
+
+    const isValid = !isNaN(start) && !isNaN(end) && startVal.trim() !== '' && endVal.trim() !== '' && start <= end && (end - start + 1 <= 1000);
+
+    if (!isValid) {
+      if (wrapper) {
+        wrapper.innerHTML = `
+          <div class="mt-4 rounded-2xl border border-dashed border-slate-800 bg-slate-950/20 p-5 text-xs text-slate-500 text-center">
+            시작 페이지와 끝 페이지를 입력하면 체크박스처럼 선택할 수 있습니다.
+          </div>
+        `;
+      }
+      if (unitsContainer) {
+        unitsContainer.innerHTML = '<span class="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>';
+      }
+      if (completionContainer) {
+        completionContainer.innerHTML = `
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-xs font-bold text-slate-300">이번 회차 완료율</div>
+            <div class="text-xs font-black text-blue-400">0%</div>
+          </div>
+          <div class="book-track mt-3 w-full h-2 rounded-full overflow-hidden">
+            <div class="completed-seg h-full bg-blue-500" style="width:0%"></div>
+          </div>
+          <div class="book-track mt-2 w-full h-2 rounded-full overflow-hidden">
+            <div class="incomplete-seg h-full bg-rose-500/30" style="width:100%"></div>
+          </div>
+          <div class="mt-3 text-[10px] text-slate-500 leading-normal">
+            이번 범위 0쪽 중 미완료 0쪽 &middot; 나머지는 자동 완료 처리됩니다.
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const total = pagesInRange(start, end);
+    const missed = missedPagesArrayInCurrentRange();
+    const missedSet = new Set(missed);
+    const donePct = total.length ? Math.round(((total.length - missed.length) / total.length) * 100) : 0;
+
+    if (wrapper) {
+      wrapper.innerHTML = `
+        <div class="mt-4 rounded-2xl border border-blue-500/20 bg-slate-900/40 p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div class="text-xs font-extrabold text-slate-200">이번 회차 미완료 페이지 체크</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">이번 범위에서 아직 완료하지 못한 페이지만 선택합니다. 다시 누르면 해제됩니다.</div>
+            </div>
+            <button type="button" data-action="clear-missed-pages" class="ghost-button px-2.5 py-1.5 rounded-lg text-[10px] font-black">체크 초기화</button>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            ${total.map(p=>`<button type="button" data-action="toggle-missed-page" data-page="${p}" class="min-w-8 h-8 rounded-lg border text-xs font-black transition ${missedSet.has(p) ? 'bg-rose-500/80 border-rose-500 text-white shadow-sm' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-blue-500 hover:text-white'}">${p}</button>`).join('')}
+          </div>
+        </div>
+      `;
+
+      wrapper.querySelector('[data-action="clear-missed-pages"]')?.addEventListener('click', () => {
+        state.missedPages = '';
+        const missedPagesEl = document.getElementById('missedPages');
+        if (missedPagesEl) {
+          missedPagesEl.value = '';
+        }
+        updateMissedPagesFromText();
+      });
+
+      wrapper.querySelectorAll('[data-action="toggle-missed-page"]').forEach(el => {
+        el.onclick = () => toggleMissedPage(Number(el.dataset.page));
+      });
+    }
+
+    if (unitsContainer) {
+      const selectedBook = bookById(state.selectedInspectionBookId);
+      const units = selectedBook ? unitsForRange(selectedBook, start, end) : [];
+      unitsContainer.innerHTML = units.length ? units.map((u)=>`<span class="unit-chip text-[10px] py-1 px-2.5 font-bold" style="background:${safe(u.color)}; color:${unitChipTextColor(u.color)}; border:1px solid rgba(255,255,255,0.18);">${safe(u.name)} (${u.start}~${u.end})</span>`).join('') : '<span class="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>';
+    }
+
+    if (completionContainer) {
+      completionContainer.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <div class="text-xs font-bold text-slate-300">이번 회차 완료율</div>
+          <div class="text-xs font-black text-blue-400">${donePct}%</div>
+        </div>
+        
+        <div class="book-track mt-3 w-full h-2 rounded-full overflow-hidden">
+          <div class="completed-seg h-full bg-blue-500" style="width:${donePct}%"></div>
+        </div>
+        
+        <div class="book-track mt-2 w-full h-2 rounded-full overflow-hidden">
+          <div class="incomplete-seg h-full bg-rose-500/30" style="width:${100-donePct}%"></div>
+        </div>
+        
+        <div class="mt-3 text-[10px] text-slate-500 leading-normal">
+          이번 범위 ${total.length}쪽 중 미완료 ${missed.length}쪽 &middot; 나머지는 자동 완료 처리됩니다.
+        </div>
+      `;
+    }
+  }
+  function updateMissedPagesFromText() {
+    const startVal = document.getElementById('selectedRangeStart')?.value || '';
+    const endVal = document.getElementById('selectedRangeEnd')?.value || '';
+    const start = Number(startVal);
+    const end = Number(endVal);
+
+    const isValid = !isNaN(start) && !isNaN(end) && startVal.trim() !== '' && endVal.trim() !== '' && start <= end && (end - start + 1 <= 1000);
+    if (!isValid) return;
+
+    const currentRangeMissed = filterMissedPagesToRange(state.missedPages, start, end);
+    const currentRangeMissedSet = new Set(currentRangeMissed);
+
+    const buttons = document.querySelectorAll('#pageChecksWrapper button[data-action="toggle-missed-page"]');
+    buttons.forEach(btn => {
+      const p = Number(btn.dataset.page);
+      if (currentRangeMissedSet.has(p)) {
+        btn.className = "min-w-8 h-8 rounded-lg border text-xs font-black transition bg-rose-500/80 border-rose-500 text-white shadow-sm";
+      } else {
+        btn.className = "min-w-8 h-8 rounded-lg border text-xs font-black transition bg-slate-950 border-slate-800 text-slate-400 hover:border-blue-500 hover:text-white";
+      }
+    });
+
+    const total = pagesInRange(start, end);
+    const donePct = total.length ? Math.round(((total.length - currentRangeMissed.length) / total.length) * 100) : 0;
+
+    const completionContainer = document.getElementById('analysisCompletionContainer');
+    if (completionContainer) {
+      completionContainer.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <div class="text-xs font-bold text-slate-300">이번 회차 완료율</div>
+          <div class="text-xs font-black text-blue-400">${donePct}%</div>
+        </div>
+        
+        <div class="book-track mt-3 w-full h-2 rounded-full overflow-hidden">
+          <div class="completed-seg h-full bg-blue-500" style="width:${donePct}%"></div>
+        </div>
+        
+        <div class="book-track mt-2 w-full h-2 rounded-full overflow-hidden">
+          <div class="incomplete-seg h-full bg-rose-500/30" style="width:${100-donePct}%"></div>
+        </div>
+        
+        <div class="mt-3 text-[10px] text-slate-500 leading-normal">
+          이번 범위 ${total.length}쪽 중 미완료 ${currentRangeMissed.length}쪽 &middot; 나머지는 자동 완료 처리됩니다.
+        </div>
+      `;
+    }
   }
   function resetInspectionForm() {
     state.missedPages = '';
@@ -1823,15 +2067,80 @@ export async function mountLegacyApp(appRoot) {
       return;
     }
 
-    const content = state.view === 'inspections'
-      ? renderInspectionsView(state, { 
-          teacherClasses, studentsForClass, assignedBooksForClass, bookById, 
-          unitsForRange: unitsForRangeWithStandardNames, pagesInRange, missedPagesArrayInCurrentRange, 
-          inspectionsForStudent, fmtDate, classById, studentById, safe, bookUnits,
-          buildCarryoverRows, calculateCarryoverRecoveryRate, pageResolutionKey, RUBRIC_ITEMS,
-          remarkTemplates: state.remarkTemplates
-        })
-      : state.view === 'reports'
+    if (state.view === 'inspections') {
+      let container = document.getElementById('react-inspections-root');
+      const modalStateChanged = lastModalOpenState !== !!state.customModal?.open;
+      lastModalOpenState = !!state.customModal?.open;
+
+      if (!container || modalStateChanged) {
+        if (inspectionsReactRoot) {
+          try {
+            inspectionsReactRoot.unmount();
+          } catch (e) {}
+          inspectionsReactRoot = null;
+        }
+        appRoot.innerHTML = layout('<div id="react-inspections-root"></div>');
+        bind();
+        container = document.getElementById('react-inspections-root');
+      }
+      
+      if (container) {
+        if (!inspectionsReactRoot) {
+          inspectionsReactRoot = createRoot(container);
+        }
+        
+        const props = {
+          state,
+          db,
+          refs,
+          teacherClasses,
+          studentsForClass,
+          assignedBooksForClass,
+          bookById,
+          unitsForRange: unitsForRangeWithStandardNames,
+          pagesInRange,
+          missedPagesArrayInCurrentRange,
+          inspectionsForStudent,
+          fmtDate,
+          classById,
+          studentById,
+          safe,
+          bookUnits,
+          buildCarryoverRows,
+          calculateCarryoverRecoveryRate,
+          pageResolutionKey,
+          RUBRIC_ITEMS,
+          remarkTemplates: state.remarkTemplates,
+          updateLegacyState: (updates) => {
+            Object.assign(state, updates);
+            render();
+          },
+          showModalAlert,
+          showModalConfirm,
+          showModalPrompt
+        };
+        
+        inspectionsReactRoot.render(
+          React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(InspectionsContainer, props)
+          )
+        );
+      }
+      return;
+    }
+
+    if (inspectionsReactRoot) {
+      try {
+        inspectionsReactRoot.unmount();
+      } catch (e) {
+        // 이미 unmount 되었거나 마운트되지 않은 경우의 에러 방지
+      }
+      inspectionsReactRoot = null;
+    }
+
+    const content = state.view === 'reports'
       ? renderReportsView(state, { teacherClasses, classById, safe })
       : state.view === 'setup'
       ? renderSetupView(state, { 
@@ -1851,6 +2160,21 @@ export async function mountLegacyApp(appRoot) {
     bind();
   }
 
+  function syncStickyBarPosition() {
+    const stickyBar = document.getElementById('inspectionStickyBar');
+    if (!stickyBar) return;
+    // main > header 나 sticky top-0 헤더의 실제 높이를 읽어 시작 페이지 입력 리스트 위에 배치
+    const headerEl = appRoot.querySelector('main > header') || appRoot.querySelector('header');
+    if (headerEl) {
+      const h = headerEl.getBoundingClientRect().height;
+      // 8px gap 효 업
+      stickyBar.style.top = (h + 8) + 'px';
+    }
+    // 너비: 부모 콘테이너 너비 100% 확보
+    stickyBar.style.width = '100%';
+    stickyBar.style.boxSizing = 'border-box';
+  }
+
   function bind() {
     // 공통 메뉴 및 뷰 전환 바인딩
     appRoot.querySelectorAll('[data-action="view"]').forEach(el => el.onclick = () => { 
@@ -1860,16 +2184,47 @@ export async function mountLegacyApp(appRoot) {
 
     // 게이트웨이 전환 버튼 바인딩
     appRoot.querySelectorAll('[data-action="switch-portal"]').forEach(el => el.onclick = () => {
-      state.portal = el.dataset.portal;
+      const portal = el.dataset.portal;
+      state.portal = portal;
       state.loginStep = 'login';
       state.pin = '';
       state.loginError = '';
       state.selectedTeacherName = '';
       state.studentLoginForm = readRememberedStudentLoginForm();
       
-      if (el.dataset.portal === 'admin') {
+      if (portal === 'teacher') {
+        state.selectedTeacherName = readLastTeacherId();
+        
+        const savedTeacherSession = readRememberedTeacherSession();
+        if (savedTeacherSession && state.teachers.some(t => t.id === savedTeacherSession.id && t.pin === savedTeacherSession.pin && t.role === 'teacher' && t.active !== false)) {
+          const matched = state.teachers.find(t => t.id === savedTeacherSession.id);
+          state.currentTeacher = matched;
+          state.view = 'inspections';
+          
+          const firstClass = teacherClasses(matched.id)[0];
+          state.selectedSetupClassId = firstClass?.id || '';
+          state.assigningClassId = firstClass?.id || '';
+          state.selectedInspectionClassId = firstClass?.id || '';
+          state.quickClassId = firstClass?.id || '';
+          state.reportClassId = firstClass?.id || '';
+        }
+      } else if (portal === 'admin') {
         const adminTeacher = state.teachers.find(t => t.role === 'admin') || { id: 't_admin' };
         state.selectedTeacherName = adminTeacher.id;
+
+        const savedAdminSession = readRememberedAdminSession();
+        if (savedAdminSession && state.teachers.some(t => t.id === savedAdminSession.id && t.pin === savedAdminSession.pin && t.role === 'admin' && t.active !== false)) {
+          const matched = state.teachers.find(t => t.id === savedAdminSession.id);
+          state.currentTeacher = matched;
+          state.view = 'teachersAdmin';
+          
+          const firstClass = state.classes[0];
+          state.selectedSetupClassId = firstClass?.id || '';
+          state.assigningClassId = firstClass?.id || '';
+          state.selectedInspectionClassId = firstClass?.id || '';
+          state.quickClassId = firstClass?.id || '';
+          state.reportClassId = firstClass?.id || '';
+        }
       }
       render();
     });
@@ -1932,6 +2287,13 @@ export async function mountLegacyApp(appRoot) {
 
     appRoot.querySelector('[data-action="login"]')?.addEventListener('click', handleLogin);
     appRoot.querySelectorAll('[data-action="logout"]').forEach(el => el.addEventListener('click', () => { 
+      if (state.currentTeacher) {
+        if (state.currentTeacher.role === 'admin') {
+          window.localStorage?.removeItem(ADMIN_SESSION_KEY);
+        } else {
+          window.localStorage?.removeItem(TEACHER_SESSION_KEY);
+        }
+      }
       state.currentTeacher = null; 
       state.studentSession = null;
       state.portal = 'gateway';
@@ -2354,8 +2716,8 @@ export async function mountLegacyApp(appRoot) {
 
     [
       'selectedSetupClassId', 'selectedBookManageId', 'assigningClassId', 'selectedInspectionClassId',
-      'selectedInspectionStudentId', 'selectedInspectionBookId', 'selectedDate', 'selectedRangeStart',
-      'selectedRangeEnd', 'quickClassId', 'reportStudentId', 'reportClassId', 'inspectionHistoryFilterClass',
+      'selectedInspectionStudentId', 'selectedInspectionBookId', 'selectedDate',
+      'quickClassId', 'reportStudentId', 'reportClassId', 'inspectionHistoryFilterClass',
       'inspectionHistoryFilterStudent', 'selectedExistingStudentId', 'bookSubject', 'bookGrade'
     ].forEach(id => {
       const el = document.getElementById(id);
@@ -2382,26 +2744,32 @@ export async function mountLegacyApp(appRoot) {
         } else if (id === 'selectedInspectionBookId') {
           resetRubricScores();
           state.selectedCarryoverResolutionKeys = [];
+        } else if (id === 'selectedBookManageId') {
+          state.tempBookUnits = null;
         }
         render();
       };
     });
-    ['missedPages', 'memo', 'bulkUnitText'].forEach(id => {
+    ['memo', 'bulkUnitText'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.oninput = (e) => { state[id] = e.target.value; };
     });
+
+    const missedPagesEl = document.getElementById('missedPages');
+    if (missedPagesEl) {
+      missedPagesEl.oninput = (e) => {
+        state.missedPages = e.target.value;
+        updateMissedPagesFromText();
+      };
+    }
+
     ['selectedRangeStart', 'selectedRangeEnd'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.oninput = (e) => {
         state[id] = e.target.value;
-        window.clearTimeout(state.rangeRenderTimer);
-        state.rangeRenderTimer = window.setTimeout(() => {
-          if (String(state.selectedRangeStart || '').trim() && String(state.selectedRangeEnd || '').trim()) {
-            render();
-          }
-        }, 180);
+        updatePageChecksDOM();
       };
     });
     document.getElementById('setupClassName')?.addEventListener('input', e => state.setupFormClass.name = e.target.value);
@@ -2475,19 +2843,25 @@ export async function mountLegacyApp(appRoot) {
         render();
       };
     });
-    appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false, bookType: b.bookType || 'standard', chapterCount: b.chapterCount || '10' }; state.editingBookId = b.id; state.selectedBookManageId = b.id; render(); });
+    appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false, bookType: b.bookType || 'standard', chapterCount: b.chapterCount || '10' }; state.editingBookId = b.id; state.selectedBookManageId = b.id; state.tempBookUnits = null; render(); });
     appRoot.querySelectorAll('[data-action="clone-book"]').forEach(el => el.onclick = () => cloneBook(el.dataset.id));
     appRoot.querySelectorAll('[data-action="toggle-book-archive"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (b) toggleArchiveBook(b.id, !!b.archived); });
-    appRoot.querySelectorAll('[data-action="select-book-manage"]').forEach(el => el.onclick = () => { state.selectedBookManageId = el.dataset.id; render(); });
+    appRoot.querySelectorAll('[data-action="select-book-manage"]').forEach(el => el.onclick = () => { state.selectedBookManageId = el.dataset.id; state.tempBookUnits = null; render(); });
     appRoot.querySelectorAll('[data-action="assign-book"]').forEach(el => el.onclick = () => assignBook(el.dataset.class, el.dataset.book));
     appRoot.querySelectorAll('[data-action="complete-assign"]').forEach(el => el.onclick = () => completeAssign(el.dataset.id));
     appRoot.querySelectorAll('[data-action="reactivate-assign"]').forEach(el => el.onclick = () => reactivateAssign(el.dataset.id));
     appRoot.querySelectorAll('[data-action="remove-assign"]').forEach(el => el.onclick = () => removeAssign(el.dataset.id));
     appRoot.querySelectorAll('[data-action="move-assign"]').forEach(el => el.onclick = () => moveAssign(el.dataset.id, el.dataset.dir));
     appRoot.querySelector('[data-action="save-inspection"]')?.addEventListener('click', saveInspection);
-    appRoot.querySelector('[data-action="build-page-checks"]')?.addEventListener('click', buildPageChecks);
     appRoot.querySelector('[data-action="reset-inspection-form"]')?.addEventListener('click', () => { resetInspectionForm(); render(); });
-    appRoot.querySelector('[data-action="clear-missed-pages"]')?.addEventListener('click', () => { state.missedPages = ''; render(); });
+    appRoot.querySelector('[data-action="clear-missed-pages"]')?.addEventListener('click', () => {
+      state.missedPages = '';
+      const missedPagesEl = document.getElementById('missedPages');
+      if (missedPagesEl) {
+        missedPagesEl.value = '';
+      }
+      updateMissedPagesFromText();
+    });
     appRoot.querySelectorAll('[data-action="toggle-missed-page"]').forEach(el => el.onclick = () => toggleMissedPage(Number(el.dataset.page)));
     appRoot.querySelectorAll('[data-action="toggle-carryover-resolution"]').forEach(el => {
       el.onclick = () => {
@@ -2606,6 +2980,9 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="admin-save-standard-unit-name"]').forEach(el => {
       el.onclick = () => saveStandardUnitName(el.dataset.id);
     });
+    appRoot.querySelectorAll('[data-action="admin-delete-standard-unit"]').forEach(el => {
+      el.onclick = () => deleteStandardUnit(el.dataset.id);
+    });
     appRoot.querySelector('[data-action="admin-add-standard-unit"]')?.addEventListener('click', addStandardUnit);
     appRoot.querySelector('[data-action="admin-save-remark-templates"]')?.addEventListener('click', saveRemarkTemplates);
 
@@ -2657,6 +3034,104 @@ export async function mountLegacyApp(appRoot) {
         render();
       };
     });
+
+    // 일반 교재 단원 입력 동기화
+    appRoot.querySelectorAll('[data-standard-unit-row]').forEach(row => {
+      const standardUnitId = row.dataset.standardUnitId;
+      const unitNameInput = row.querySelector('[data-field="unitName"]');
+      const startInput = row.querySelector('[data-field="start"]');
+      const endInput = row.querySelector('[data-field="end"]');
+
+      const updateTemp = () => {
+        if (!state.tempBookUnits || state.tempBookUnits.bookId !== state.selectedBookManageId) {
+          state.tempBookUnits = {
+            bookId: state.selectedBookManageId,
+            bookType: 'standard',
+            rows: {}
+          };
+        }
+        state.tempBookUnits.rows[standardUnitId] = {
+          unitName: unitNameInput?.value || '',
+          start: startInput?.value || '',
+          end: endInput?.value || ''
+        };
+      };
+
+      if (unitNameInput) unitNameInput.oninput = updateTemp;
+      if (startInput) startInput.oninput = updateTemp;
+      if (endInput) endInput.oninput = updateTemp;
+    });
+
+    // 시험대비 교재 챕터 입력 동기화
+    appRoot.querySelectorAll('[data-exam-chapter-row]').forEach((row, index) => {
+      const chapterNameInput = row.querySelector('[data-field="chapterName"]');
+      const startInput = row.querySelector('[data-field="start"]');
+      const endInput = row.querySelector('[data-field="end"]');
+      
+      const updateTemp = () => {
+        if (!state.tempBookUnits || state.tempBookUnits.bookId !== state.selectedBookManageId) {
+          state.tempBookUnits = {
+            bookId: state.selectedBookManageId,
+            bookType: 'exam_chapter',
+            rows: []
+          };
+        }
+        while (state.tempBookUnits.rows.length <= index) {
+          state.tempBookUnits.rows.push({ chapterName: '', start: '', end: '', standardUnitIds: [] });
+        }
+        state.tempBookUnits.rows[index] = {
+          chapterName: chapterNameInput?.value || '',
+          start: startInput?.value || '',
+          end: endInput?.value || '',
+          standardUnitIds: [...row.querySelectorAll('[data-field="chapterStandardUnit"]:checked')].map(input => input.value).filter(Boolean)
+        };
+      };
+
+      if (chapterNameInput) chapterNameInput.oninput = updateTemp;
+      if (startInput) startInput.oninput = updateTemp;
+      if (endInput) endInput.oninput = updateTemp;
+      
+      row.querySelectorAll('[data-field="chapterStandardUnit"]').forEach(cb => {
+        cb.onchange = updateTemp;
+      });
+    });
+
+    // 전 챕터 표준소단원 일괄 선택 동기화
+    appRoot.querySelectorAll('[data-field="allChapterStandardUnit"]').forEach(cb => {
+      cb.onchange = () => {
+        const checkedIds = [...appRoot.querySelectorAll('[data-field="allChapterStandardUnit"]:checked')].map(i => i.value);
+        appRoot.querySelectorAll('[data-exam-chapter-row]').forEach(row => {
+          row.querySelectorAll('[data-field="chapterStandardUnit"]').forEach(childCb => {
+            childCb.checked = checkedIds.includes(childCb.value);
+          });
+        });
+        
+        if (!state.tempBookUnits || state.tempBookUnits.bookId !== state.selectedBookManageId) {
+          state.tempBookUnits = {
+            bookId: state.selectedBookManageId,
+            bookType: 'exam_chapter',
+            rows: []
+          };
+        }
+        
+        appRoot.querySelectorAll('[data-exam-chapter-row]').forEach((row, index) => {
+          const chapterNameInput = row.querySelector('[data-field="chapterName"]');
+          const startInput = row.querySelector('[data-field="start"]');
+          const endInput = row.querySelector('[data-field="end"]');
+          
+          while (state.tempBookUnits.rows.length <= index) {
+            state.tempBookUnits.rows.push({ chapterName: '', start: '', end: '', standardUnitIds: [] });
+          }
+          state.tempBookUnits.rows[index] = {
+            chapterName: chapterNameInput?.value || '',
+            start: startInput?.value || '',
+            end: endInput?.value || '',
+            standardUnitIds: [...row.querySelectorAll('[data-field="chapterStandardUnit"]:checked')].map(input => input.value).filter(Boolean)
+          };
+        });
+        render();
+      };
+    });
   }
 
   await ensureSeedData();
@@ -2664,4 +3139,7 @@ export async function mountLegacyApp(appRoot) {
   subscribe();
   applyThemeColor(state.loginConfig.primaryColor, state.loginConfig.fontFamily, state.loginConfig.fontScale);
   render();
+
+  // 화면 크기 변경 시 sticky 바 위치 재계산
+  window.addEventListener('resize', () => syncStickyBarPosition());
 }

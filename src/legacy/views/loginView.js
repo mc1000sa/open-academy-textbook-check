@@ -1,3 +1,31 @@
+function renderHeader(state, safe) {
+  return `
+    <header class="fixed top-0 left-0 right-0 h-11 bg-[#050507]/60 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between px-4 md:px-8 select-none">
+      <!-- Left: Logo -->
+      <div class="flex items-center gap-2 cursor-pointer" data-action="goto-gateway">
+        <span class="text-xs font-black tracking-widest text-[#00d6cd] hover:opacity-80 transition-opacity">OPEN</span>
+        <div class="nav-divider"></div>
+        <span class="text-xs font-bold text-white tracking-tight">교재점검</span>
+      </div>
+
+      <!-- Right: Portal Links -->
+      <div class="flex items-center gap-2 md:gap-3">
+        <button type="button" data-action="switch-portal" data-portal="student" class="text-[11px] md:text-xs font-black transition-all hover:scale-105 duration-200 ${state.portal === 'student' ? 'text-[#00d6cd] drop-shadow-[0_0_8px_rgba(0,214,205,0.4)]' : 'text-[#00d6cd]/60 hover:text-[#00d6cd]'}">
+          학생/학부모
+        </button>
+        <div class="nav-divider"></div>
+        <button type="button" data-action="switch-portal" data-portal="teacher" class="text-[11px] md:text-xs font-black transition-all hover:scale-105 duration-200 ${state.portal === 'teacher' ? 'text-[#4169e1] drop-shadow-[0_0_8px_rgba(65,105,225,0.4)]' : 'text-[#4169e1]/60 hover:text-[#4169e1]'}">
+          담당 강사
+        </button>
+        <div class="nav-divider"></div>
+        <button type="button" data-action="switch-portal" data-portal="admin" class="text-[11px] md:text-xs font-black transition-all hover:scale-105 duration-200 ${state.portal === 'admin' ? 'text-[#8436ff] drop-shadow-[0_0_8px_rgba(132,54,255,0.4)]' : 'text-[#8436ff]/60 hover:text-[#8436ff]'}">
+          Admin
+        </button>
+      </div>
+    </header>
+  `;
+}
+
 export function renderLoginView(state, safe) {
   const config = state.loginConfig || {
     splashTitleLine1: "열린학원 교재분석",
@@ -9,7 +37,8 @@ export function renderLoginView(state, safe) {
   // 1. 관문 게이트웨이 화면
   if (state.portal === 'gateway') {
     return `
-      <div class="oatis-splash-screen min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+      ${renderHeader(state, safe)}
+      <div class="oatis-splash-screen min-h-screen flex items-center justify-center p-4 sm:p-6 pt-14 lg:pt-16 relative overflow-hidden">
         <div class="oatis-splash-grid w-full max-w-6xl grid lg:grid-cols-[1.05fr_0.95fr] gap-5 md:gap-8 relative z-10 items-stretch">
           
           <!-- 좌측 인트로 카드 -->
@@ -117,7 +146,8 @@ export function renderLoginView(state, safe) {
     const studentsInClass = activeClassId ? state.students.filter(s => s.classId === activeClassId && s.active !== false) : [];
 
     return `
-      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      ${renderHeader(state, safe)}
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 pt-14 lg:pt-16 relative overflow-hidden">
         <div class="w-full max-w-lg glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
@@ -336,7 +366,8 @@ export function renderLoginView(state, safe) {
   if (state.portal === 'teacher') {
     const hasLoginError = !!state.loginError;
     return `
-      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      ${renderHeader(state, safe)}
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 pt-14 lg:pt-16 relative overflow-hidden">
         <div class="w-full max-w-lg glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
@@ -388,7 +419,8 @@ export function renderLoginView(state, safe) {
     const adminAccount = state.teachers.find(t => t.role === 'admin') || { id: 't_admin', name: '관리자' };
 
     return `
-      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      ${renderHeader(state, safe)}
+      <div class="oatis-auth-screen min-h-screen flex items-center justify-center p-4 pt-14 lg:pt-16 relative overflow-hidden">
         <div class="w-full max-w-md glass rounded-3xl soft-border p-6 md:p-8 relative z-10">
           <div class="flex justify-between items-center mb-6">
             <button type="button" data-action="goto-gateway" class="ghost-button px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
@@ -432,7 +464,6 @@ export function renderLoginView(state, safe) {
             <button type="button" data-action="login" class="btn-admin w-full h-12 rounded-xl text-sm font-extrabold">
               관리자 모드 시작
             </button>
-            <p class="text-[10px] text-slate-500 mt-1.5 text-center">원장용 기본 PIN 번호는 <strong>999999</strong> 입니다.</p>
           </div>
         </div>
       </div>

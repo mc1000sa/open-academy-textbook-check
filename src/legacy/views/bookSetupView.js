@@ -124,6 +124,20 @@ export function renderBookSetupView(state, deps) {
   const selectedBookIsExamChapter = selectedBookForUnits?.bookType === 'exam_chapter';
   const standardUnitTableRows = (() => {
     if (!selectedBookForUnits || !standardSubject) return [];
+    
+    const hasTemp = state.tempBookUnits && state.tempBookUnits.bookId === selectedBookForUnits.id && state.tempBookUnits.bookType === 'standard';
+    if (hasTemp && state.tempBookUnits.rows) {
+      return standardSubject.units.filter(unit => unit.active !== false).map(unit => {
+        const tempRow = state.tempBookUnits.rows[unit.id] || {};
+        return {
+          ...unit,
+          unitName: tempRow.unitName || '',
+          start: tempRow.start || '',
+          end: tempRow.end || ''
+        };
+      });
+    }
+
     const rawUnits = [...(selectedBookForUnits.units || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
     return standardSubject.units.filter(unit => unit.active !== false).map(unit => {
       const linkedUnit = rawUnits.find(bookUnit => (bookUnit.standardUnitIds || []).includes(unit.id));
@@ -141,6 +155,17 @@ export function renderBookSetupView(state, deps) {
   const activeStandardUnits = standardSubject?.units?.filter(unit => unit.active !== false) || [];
   const examChapterRows = (() => {
     if (!selectedBookForUnits) return [];
+
+    const hasTemp = state.tempBookUnits && state.tempBookUnits.bookId === selectedBookForUnits.id && state.tempBookUnits.bookType === 'exam_chapter';
+    if (hasTemp && Array.isArray(state.tempBookUnits.rows)) {
+      return state.tempBookUnits.rows.map((row, index) => ({
+        chapterName: row.chapterName || `챕터 ${index + 1}`,
+        start: row.start || '',
+        end: row.end || '',
+        standardUnitIds: row.standardUnitIds || []
+      }));
+    }
+
     const existingUnits = [...(selectedBookForUnits.units || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
     const chapterCount = Math.max(1, Math.min(40, Number(selectedBookForUnits.chapterCount || existingUnits.length || 10) || 10));
     return Array.from({ length: Math.max(chapterCount, existingUnits.length) }, (_, index) => {

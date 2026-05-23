@@ -225,6 +225,21 @@ export function renderTeachersAdminView(state, deps) {
             </label>
           `).join('')}
         </div>
+        
+        <span class="text-xs font-bold text-slate-400 block mb-2">오로라 배경 색상</span>
+        <div class="grid md:grid-cols-3 gap-3 mb-4">
+          ${[
+            ['configAuroraColor1', '오로라 1', state.adminLoginConfigForm.auroraColor1 || state.loginConfig.auroraColor1 || '#00d6cd'],
+            ['configAuroraColor2', '오로라 2', state.adminLoginConfigForm.auroraColor2 || state.loginConfig.auroraColor2 || '#4169e1'],
+            ['configAuroraColor3', '오로라 3', state.adminLoginConfigForm.auroraColor3 || state.loginConfig.auroraColor3 || '#8436ff']
+          ].map(([id, label, value]) => `
+            <label class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-[10px] font-bold text-slate-400">
+              ${label}
+              <input type="color" id="${id}" class="mt-2 block h-8 w-full cursor-pointer rounded-lg border-0 bg-transparent" value="${value}" />
+            </label>
+          `).join('')}
+        </div>
+
         <span class="text-xs font-bold text-slate-400 block mb-2">전역 대표 색상</span>
         <div class="flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2 border border-slate-800 rounded-xl p-2 bg-slate-900">
@@ -300,22 +315,6 @@ export function renderTeachersAdminView(state, deps) {
         <div class="text-[10px] text-slate-500 mt-1">표준단원명을 수정하면 해당 ID에 연결된 교재 단원 표시명도 함께 바뀝니다.</div>
       </div>
 
-      <div class="border-t border-slate-800/80 pt-4">
-        <span class="text-xs font-bold text-slate-400 block mb-2">오로라 색상</span>
-        <div class="grid md:grid-cols-3 gap-3">
-          ${[
-            ['configAuroraColor1', '오로라 1', state.adminLoginConfigForm.auroraColor1 || state.loginConfig.auroraColor1 || '#00d6cd'],
-            ['configAuroraColor2', '오로라 2', state.adminLoginConfigForm.auroraColor2 || state.loginConfig.auroraColor2 || '#4169e1'],
-            ['configAuroraColor3', '오로라 3', state.adminLoginConfigForm.auroraColor3 || state.loginConfig.auroraColor3 || '#8436ff']
-          ].map(([id, label, value]) => `
-            <label class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-[10px] font-bold text-slate-400">
-              ${label}
-              <input type="color" id="${id}" class="mt-2 block h-8 w-full cursor-pointer rounded-lg border-0 bg-transparent" value="${value}" />
-            </label>
-          `).join('')}
-        </div>
-      </div>
-
       <div class="flex flex-wrap gap-1.5">
         ${(state.standardUnitSubjects || []).map(subject => `
           <button type="button" data-action="admin-select-standard-subject" data-code="${safe(subject.code)}" class="rounded-full border px-3 py-1.5 text-[10px] font-black transition-all ${selectedStandardSubject?.code === subject.code ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-200'}">
@@ -332,6 +331,7 @@ export function renderTeachersAdminView(state, deps) {
                 <span class="w-7 shrink-0 text-[10px] font-black text-slate-500">${index + 1}</span>
                 <input id="standardUnitName-${safe(unit.id)}" class="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100" value="${safe(unit.label)}" />
                 <button type="button" data-action="admin-save-standard-unit-name" data-id="${safe(unit.id)}" class="rounded-lg bg-cyan-500/10 border border-cyan-500/25 px-3 py-2 text-[10px] font-black text-cyan-200 hover:bg-cyan-500 hover:text-slate-950 transition-all">수정 저장</button>
+                <button type="button" data-action="admin-delete-standard-unit" data-id="${safe(unit.id)}" class="rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-[10px] font-black text-rose-400 hover:bg-rose-500 hover:text-white transition-all">삭제</button>
               </div>
               <div class="mt-1.5 pl-0 md:pl-9 text-[9px] font-mono text-slate-600">${safe(unit.id)}</div>
             </div>

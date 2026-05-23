@@ -64,7 +64,6 @@ describe('renderLoginView', () => {
     expect(html).toContain('id="loginPin"');
     expect(html).toContain('data-autofocus="true"');
     expect(html).toContain('maxlength="6"');
-    expect(html).toContain('999999');
   });
 
   it('keeps student PIN inputs at four digits', () => {

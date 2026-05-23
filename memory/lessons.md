@@ -47,3 +47,15 @@
 - 전체 디자인 고급화는 화려하고 무거운 애니메이션보다 Apple 스타일처럼 여백, 타이포그래피, 미세한 hover/active 반응, 부드러운 Aurora 배경을 활용한 깔끔한 프로페셔널 톤을 선호한다.
 - 교재 단원 통계는 교재 목차명과 표준 소단원 ID를 분리해서 관리한다. 표준단원은 너무 세부 개념으로 쪼개지 말고 시중교재 목차 수준에 가깝게 두며, 교재 단원 하나가 여러 표준단원 ID를 연결할 수 있어야 한다.
 - 교재 `보관`은 교재 자산 자체를 숨겨두는 개념이고, 반별 `진행 종료`는 특정 반에서만 해당 교재 점검을 끝내는 개념이다. 같은 교재는 다른 반에서 계속 진행할 수 있어야 하므로 반-교재 연결(`classBooks`)의 상태로 관리한다.
+
+## 5. 프로젝트 현재 구현 및 분석 상태 (2026-05-23 기준)
+
+- **아키텍처 및 구조**: Vite/React 구조로 변환 완료. 레거시 메인 코드는 `src/legacy/legacyApp.js`(3,077줄)와 `src/styles/legacy.css`에 분리 보관 중이며, React 컴포넌트가 직접 이를 마운트해 구동 중임.
+- **핵심 뷰 구현 현황 (src/legacy/views/)**:
+  - `loginView.js` (로그인 및 스플래시 화면)
+  - `layoutView.js` (공통 레이아웃 구조)
+  - `dashboardView.js` (대시보드 메인)
+  - `inspectionsView.js` (점검 입력 화면)
+  - 기능 구현 자체는 대부분 완료되었으나, 순수 React 컴포넌트(`src/components`, `src/lib`, `src/styles`)로의 완전한 이관은 아직 진행 중/미완성 상태임.
+- **문서 불일치 항목**: `docs/architecture.md` 문서와 현재 파일 구조 간에 불일치가 있음. `adminStudentMaintenance.js`, `remarkTemplates.js`, `standardUnits.js` 등이 실제 코드로 구현되었으나 아키텍처 문서에는 미반영됨.
+- **테스트 누락**: 대부분의 주요 뷰에 `.test.js` 테스트 파일이 마련되어 있으나, `studentPortalView` 및 `remarkTemplates` 관련 테스트가 현재 누락되어 있음.

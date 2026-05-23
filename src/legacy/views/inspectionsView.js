@@ -2,7 +2,7 @@ import { bookMap } from './bookSetupView.js';
 import { renderBtnSelect } from './layoutView.js';
 import { DEFAULT_REMARK_TEMPLATES, REMARK_TONES, normalizeRemarkTemplates } from '../../lib/remarkTemplates.js';
 
-function unitChipTextColor(hex) {
+export function unitChipTextColor(hex) {
   const clean = String(hex || '').replace('#', '').trim();
   if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#0f172a';
   const r = parseInt(clean.slice(0, 2), 16);
@@ -52,6 +52,10 @@ export function renderInspectionsView(state, deps) {
   const students = studentsForClass(state.selectedInspectionClassId);
   const assigned = assignedBooksForClass(state.selectedInspectionClassId);
   const selectedBook = bookById(state.selectedInspectionBookId);
+  const selectedClass = classById(state.selectedInspectionClassId);
+  const selectedStudent = studentById(state.selectedInspectionStudentId);
+  const selectedBookObj = bookById(state.selectedInspectionBookId);
+  const isBookSelected = state.selectedInspectionClassId && state.selectedInspectionStudentId && state.selectedInspectionBookId;
   const units = selectedBook && state.selectedRangeStart && state.selectedRangeEnd ? unitsForRange(selectedBook, state.selectedRangeStart, state.selectedRangeEnd) : [];
   const total = pagesInRange(state.selectedRangeStart, state.selectedRangeEnd);
   const missed = missedPagesArrayInCurrentRange();
@@ -281,6 +285,22 @@ export function renderInspectionsView(state, deps) {
 
   return `
     <div class="space-y-6">
+
+      <!-- ★ 고정 타이틀 바: card-3d 바깥(main 직계 자식)에 배치해야 sticky가 정상 작동 -->
+      ${isBookSelected ? `
+        <div style="position: sticky; top: 0px; z-index: 50; width: 100%; box-sizing: border-box;" class="rounded-2xl border border-blue-500/30 bg-slate-950 p-3.5 shadow-2xl flex items-center justify-between" id="inspectionStickyBar">
+          <div class="text-sm font-black text-white flex flex-wrap items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" style="animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;"></span>
+            <span class="text-slate-300">${safe(selectedClass?.name || '')}</span>
+            <span class="text-slate-600 font-bold">&middot;</span>
+            <span class="text-blue-400 font-extrabold">${safe(selectedStudent?.name || '')} 학생</span>
+            <span class="text-slate-600 font-bold">&middot;</span>
+            <span class="text-slate-400 font-medium text-xs">${safe(selectedBookObj?.title || '')}</span>
+          </div>
+          <div class="text-[10px] font-black text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full shrink-0">점검 진행 중</div>
+        </div>
+      ` : ''}
+
       <div class="grid xl:grid-cols-[1.1fr_0.9fr] gap-6">
         
         <!-- 좌측 입력 카드 (부드러운 스크롤을 위한 ID 부여) -->
@@ -290,9 +310,9 @@ export function renderInspectionsView(state, deps) {
             <span class="text-[10px] text-slate-400 font-bold">${state.editingInspectionId ? '기존 기록 수정 중' : '강사용 입력 화면'}</span>
           </div>
 
-          <div class="grid md:grid-cols-2 gap-4">
-            <div class="text-xs font-bold text-slate-400">
-              <div class="flex items-center justify-between mb-2">
+          <div class="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-stretch">
+            <div class="text-xs font-bold text-slate-400 flex flex-col justify-start">
+              <div class="flex items-center justify-between mb-2 min-h-[26px]">
                 <span>반 선택</span>
                 <div class="filter-switch">
                   <span class="filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}" data-action="set-class-sort" data-sort="name">이름순</span>
@@ -306,8 +326,17 @@ export function renderInspectionsView(state, deps) {
                 placeholder: '점검할 반을 선택하세요.'
               })}
             </div>
+
+            <!-- 세로 구분선 (그라데이션 및 뒤에 번지는 glow 효과) -->
+            <div class="hidden md:block relative w-[1px] self-stretch mx-2">
+              <div class="absolute inset-0 bg-gradient-to-b from-blue-500/10 via-blue-500/40 to-blue-500/10"></div>
+              <div class="absolute inset-0 bg-blue-500/30 blur-[6px] -translate-x-[2.5px] w-[6px] rounded-full"></div>
+            </div>
             
-            <div class="text-xs font-bold text-slate-400">학생 선택
+            <div class="text-xs font-bold text-slate-400 flex flex-col justify-start">
+              <div class="flex items-center justify-between mb-2 min-h-[26px]">
+                <span>학생 선택</span>
+              </div>
               ${renderBtnSelect({
                 id: 'selectedInspectionStudentId',
                 options: students.map(s=>({ value: s.id, label: s.name })),
@@ -315,7 +344,9 @@ export function renderInspectionsView(state, deps) {
                 placeholder: '반을 선택하면 학생 목록이 나옵니다.'
               })}
             </div>
-            
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4 mt-4">
             <div class="text-xs font-bold text-slate-400">교재 선택
               ${renderBtnSelect({
                 id: 'selectedInspectionBookId',
@@ -326,23 +357,26 @@ export function renderInspectionsView(state, deps) {
             </div>
             
             <label class="text-xs font-bold text-slate-400 block">점검일
-              <input id="selectedDate" type="date" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all" value="${safe(state.selectedDate)}" />
+              <input id="selectedDate" type="date" onclick="try { this.showPicker(); } catch(e) {}" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer" value="${safe(state.selectedDate)}" />
             </label>
           </div>
 
+
+
           ${carryoverSection}
 
-          <div class="mt-4 grid md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
             <label class="text-xs font-bold text-slate-400 block w-full">시작 페이지
               <input id="selectedRangeStart" type="number" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all" value="${safe(state.selectedRangeStart)}" />
             </label>
             <label class="text-xs font-bold text-slate-400 block w-full">끝 페이지
               <input id="selectedRangeEnd" type="number" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all" value="${safe(state.selectedRangeEnd)}" />
             </label>
-            <button type="button" data-action="build-page-checks" class="h-[38px] rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700/50 text-white font-extrabold px-4 text-xs transition-all shadow-sm">페이지 체크 만들기</button>
           </div>
 
-          ${pageButtons}
+          <div id="pageChecksWrapper">
+            ${pageButtons}
+          </div>
 
           <label class="block mt-4 text-xs font-bold text-slate-400">미완료 페이지 구간 입력 <span class="text-[10px] text-slate-500 font-medium">(체크 시 자동 완성)</span>
             <input id="missedPages" type="text" class="mt-2 w-full border border-slate-800 rounded-xl px-4 py-2.5 bg-slate-900 text-xs text-white focus:outline-none focus:border-blue-500 transition-all" placeholder="예: 12,13,16-18" value="${safe(state.missedPages)}" />
@@ -372,12 +406,12 @@ export function renderInspectionsView(state, deps) {
 
           <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
             <div class="text-xs font-bold text-slate-300">해당 대단원</div>
-            <div class="mt-3 flex flex-wrap gap-1.5">
+            <div id="analysisUnitsContainer" class="mt-3 flex flex-wrap gap-1.5">
               ${units.length ? units.map((u)=>`<span class="unit-chip text-[10px] py-1 px-2.5 font-bold" style="background:${safe(u.color)}; color:${unitChipTextColor(u.color)}; border:1px solid rgba(255,255,255,0.18);">${safe(u.name)} (${u.start}~${u.end})</span>`).join('') : '<span class="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>'}
             </div>
           </div>
 
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
+          <div id="analysisCompletionContainer" class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
             <div class="flex items-center justify-between gap-3">
               <div class="text-xs font-bold text-slate-300">이번 회차 완료율</div>
               <div class="text-xs font-black text-blue-400">${donePct}%</div>

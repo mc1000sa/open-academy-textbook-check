@@ -111,20 +111,29 @@ button {
 }
 
 @keyframes splashGlowShift {
-  from {
+  0% {
     background-position: 0% 45%;
+    filter: hue-rotate(0deg);
   }
-  to {
+  50% {
     background-position: 100% 55%;
+    filter: hue-rotate(20deg) saturate(1.15);
+  }
+  100% {
+    background-position: 0% 45%;
+    filter: hue-rotate(0deg);
   }
 }
 
 @keyframes splashAuroraDrift {
-  from {
-    transform: rotate(0deg) scale(1.16);
+  0% {
+    transform: translate(-8%, -8%) rotate(0deg) scale(1.1);
   }
-  to {
-    transform: rotate(360deg) scale(1.16);
+  50% {
+    transform: translate(10%, 10%) rotate(180deg) scale(1.35);
+  }
+  100% {
+    transform: translate(-8%, -8%) rotate(360deg) scale(1.1);
   }
 }
 
@@ -178,8 +187,24 @@ button {
   border-radius: 0 !important;
   background: transparent !important;
   border-color: transparent !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.13) !important;
   box-shadow: none !important;
+}
+
+.portal-entry-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.45), transparent);
+  filter: blur(0.5px);
+  transition: all 0.3s var(--oatis-ease);
+}
+
+.portal-entry-card:hover::after {
+  background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.85), transparent);
+  filter: blur(1px);
 }
 
 .portal-entry-card::before {
@@ -206,6 +231,13 @@ button {
   transform: translateX(6px);
   background: transparent !important;
   box-shadow: none !important;
+}
+
+/* 상단 고정 메뉴 세로 구분선 */
+.nav-divider {
+  width: 2px;
+  height: 10px;
+  background: linear-gradient(180deg, transparent, rgba(103, 232, 249, 0.8), transparent);
 }
 
 .portal-entry-card strong {
