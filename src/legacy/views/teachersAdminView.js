@@ -1,3 +1,5 @@
+import { REMARK_TONES, normalizeRemarkTemplates } from '../../lib/remarkTemplates.js';
+
 export function renderTeachersAdminView(state, deps) {
   const { safe, teacherNameById } = deps;
 
@@ -22,6 +24,7 @@ export function renderTeachersAdminView(state, deps) {
   const selectedPromotionClassId = state.adminPromotionClassId || '';
   const selectedStandardSubject = (state.standardUnitSubjects || []).find(subject => subject.code === state.selectedStandardSubjectCode)
     || (state.standardUnitSubjects || [])[0];
+  const remarkTemplateRows = normalizeRemarkTemplates(state.remarkTemplates);
 
   // 아코디언 카드 헬퍼 (React AccordionCard의 외양과 구조 완전 일치)
   function renderAdminAccordion({ id, title, subtitle, pipeColor = purpleTheme, open = false, childrenHtml, alert = false, badgeText = '' }) {
@@ -30,7 +33,7 @@ export function renderTeachersAdminView(state, deps) {
         <button type="button" data-action="toggle-admin-card" data-card-id="${id}" class="admin-section-head w-full flex items-center justify-between text-left focus:outline-none">
           <div class="flex items-center">
             <div class="pipe-bar" style="width: 4.5px; height: 1.1rem; background: ${pipeColor}; margin-right: 0.75rem; border-radius: 2px; box-shadow: 0 0 10px ${pipeColor}44;"></div>
-            <span class="text-sm font-extrabold text-white">${safe(title)}</span>
+            <span class="text-[17px] leading-snug font-extrabold text-white">${safe(title)}</span>
           </div>
           <div class="flex items-center gap-2">
             ${badgeText ? `<span class="rounded-full border border-rose-400/40 bg-rose-500/15 px-2 py-1 text-[10px] font-black text-rose-200">${safe(badgeText)}</span>` : ''}
@@ -92,7 +95,7 @@ export function renderTeachersAdminView(state, deps) {
             <div class="rounded-xl border border-slate-800 bg-slate-900/10 p-3.5 flex justify-between items-start gap-2">
               <div>
                 <div class="font-extrabold text-xs text-slate-200">${safe(t.name)}</div>
-                <div class="text-[10px] text-slate-550 mt-1">PIN: **** &middot; 권한: ${safe(t.role)}</div>
+                <div class="text-[10px] text-slate-550 mt-1">PIN: ${safe(t.pin || '-')} &middot; 권한: ${safe(t.role)}</div>
               </div>
               <button type="button" data-action="admin-edit-teacher" data-id="${t.id}" class="rounded bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 text-[10px] font-bold">수정</button>
             </div>
@@ -154,6 +157,44 @@ export function renderTeachersAdminView(state, deps) {
       <label class="block text-xs font-bold text-slate-400">시스템 상세 소개글 <span class="text-[10px] text-slate-500 font-medium">(HTML 사용 가능)</span>
         <textarea id="configSplashDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white h-20 mt-1.5 leading-relaxed focus:outline-none" placeholder="설명 문구">${safe(state.adminLoginConfigForm.splashDescription || state.loginConfig.splashDescription)}</textarea>
       </label>
+
+      <div class="border-t border-slate-800/80 pt-4 space-y-3">
+        <div class="text-xs font-black text-cyan-200">현재 첫 화면 문구</div>
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="block text-xs font-bold text-slate-400">상단 작은 문구
+            <input id="configSplashKicker" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.splashKicker || state.loginConfig.splashKicker || 'OPEN ACADEMY')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">포털 배지 문구
+            <input id="configGatewayBadge" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.gatewayBadge || state.loginConfig.gatewayBadge || 'GATEWAY')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">포털 선택 제목
+            <input id="configGatewayTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.gatewayTitle || state.loginConfig.gatewayTitle || '열린학원 수학교재점검')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">포털 선택 설명
+            <input id="configGatewayDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.gatewayDescription || state.loginConfig.gatewayDescription || '필요한 포털만 고르면 바로 시작합니다.')}" />
+          </label>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <label class="block text-xs font-bold text-slate-400">학생 포털 제목
+            <input id="configStudentPortalTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.studentPortalTitle || state.loginConfig.studentPortalTitle || '학생 / 학부모 포털')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">강사 포털 제목
+            <input id="configTeacherPortalTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.teacherPortalTitle || state.loginConfig.teacherPortalTitle || '담당 강사 포털')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">관리자 포털 제목
+            <input id="configAdminPortalTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.adminPortalTitle || state.loginConfig.adminPortalTitle || '원장 / 관리자 포털')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">학생 포털 설명
+            <input id="configStudentPortalDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.studentPortalDescription || state.loginConfig.studentPortalDescription || '교재 점검 완료율 및 피드백을 확인합니다.')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">강사 포털 설명
+            <input id="configTeacherPortalDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.teacherPortalDescription || state.loginConfig.teacherPortalDescription || '학생들의 교재 검사를 기록하고 설정합니다.')}" />
+          </label>
+          <label class="block text-xs font-bold text-slate-400">관리자 포털 설명
+            <input id="configAdminPortalDescription" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900 text-xs text-white mt-1.5 focus:outline-none" value="${safe(state.adminLoginConfigForm.adminPortalDescription || state.loginConfig.adminPortalDescription || '전체 교재 목록 및 강사, 통합 설정을 관리합니다.')}" />
+          </label>
+        </div>
+      </div>
       
       <div class="grid md:grid-cols-2 gap-4">
         <label class="block text-xs font-bold text-slate-400">로그인 카드 제목
@@ -170,7 +211,21 @@ export function renderTeachersAdminView(state, deps) {
       
       <!-- 테마 칼라 설정 -->
       <div class="border-t border-slate-800/80 pt-4 mt-2">
-        <span class="text-xs font-bold text-slate-400 block mb-2">중앙 브랜드 대표 색상</span>
+        <span class="text-xs font-bold text-slate-400 block mb-2">첫 화면 색상</span>
+        <div class="grid md:grid-cols-4 gap-3 mb-4">
+          ${[
+            ['configSplashTitleColor', '큰 제목 색상', state.adminLoginConfigForm.splashTitleColor || state.loginConfig.splashTitleColor || '#ffffff'],
+            ['configSplashTextColor', '본문 글자 색상', state.adminLoginConfigForm.splashTextColor || state.loginConfig.splashTextColor || '#e5e7eb'],
+            ['configSplashMutedColor', '보조 글자 색상', state.adminLoginConfigForm.splashMutedColor || state.loginConfig.splashMutedColor || '#94a3b8'],
+            ['configPortalHoverGlowColor', '포털 hover 빛 색상', state.adminLoginConfigForm.portalHoverGlowColor || state.loginConfig.portalHoverGlowColor || '#00d6cd']
+          ].map(([id, label, value]) => `
+            <label class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-[10px] font-bold text-slate-400">
+              ${label}
+              <input type="color" id="${id}" class="mt-2 block h-8 w-full cursor-pointer rounded-lg border-0 bg-transparent" value="${value}" />
+            </label>
+          `).join('')}
+        </div>
+        <span class="text-xs font-bold text-slate-400 block mb-2">전역 대표 색상</span>
         <div class="flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2 border border-slate-800 rounded-xl p-2 bg-slate-900">
             <input type="color" id="configPrimaryColor" class="w-8 h-8 rounded-lg border-0 cursor-pointer bg-transparent" value="${state.adminLoginConfigForm.primaryColor || state.loginConfig.primaryColor || '#8436ff'}" />
@@ -243,6 +298,22 @@ export function renderTeachersAdminView(state, deps) {
       <div class="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-3">
         <div class="text-xs font-extrabold text-cyan-200">교과목별 표준 소단원 ID 관리</div>
         <div class="text-[10px] text-slate-500 mt-1">표준단원명을 수정하면 해당 ID에 연결된 교재 단원 표시명도 함께 바뀝니다.</div>
+      </div>
+
+      <div class="border-t border-slate-800/80 pt-4">
+        <span class="text-xs font-bold text-slate-400 block mb-2">오로라 색상</span>
+        <div class="grid md:grid-cols-3 gap-3">
+          ${[
+            ['configAuroraColor1', '오로라 1', state.adminLoginConfigForm.auroraColor1 || state.loginConfig.auroraColor1 || '#00d6cd'],
+            ['configAuroraColor2', '오로라 2', state.adminLoginConfigForm.auroraColor2 || state.loginConfig.auroraColor2 || '#4169e1'],
+            ['configAuroraColor3', '오로라 3', state.adminLoginConfigForm.auroraColor3 || state.loginConfig.auroraColor3 || '#8436ff']
+          ].map(([id, label, value]) => `
+            <label class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-[10px] font-bold text-slate-400">
+              ${label}
+              <input type="color" id="${id}" class="mt-2 block h-8 w-full cursor-pointer rounded-lg border-0 bg-transparent" value="${value}" />
+            </label>
+          `).join('')}
+        </div>
       </div>
 
       <div class="flex flex-wrap gap-1.5">
@@ -388,6 +459,34 @@ export function renderTeachersAdminView(state, deps) {
     </div>
   `;
 
+  const remarkTemplatesHtml = `
+    <div class="space-y-4">
+      <div class="rounded-xl border border-cyan-500/20 bg-cyan-950/10 px-4 py-3">
+        <div class="text-xs font-extrabold text-cyan-200">대표 특이사항 문구 관리</div>
+        <div class="text-[10px] text-slate-500 mt-1">각 칸에 한 줄에 한 문장씩 입력하세요. 줄을 지우면 삭제, 새 줄을 추가하면 문구가 추가됩니다.</div>
+      </div>
+      <div class="overflow-x-auto mini-scroll">
+        <div class="min-w-[760px] space-y-2">
+          <div class="grid grid-cols-[0.28fr_1fr_1fr_1fr] gap-2 px-2 text-[10px] font-black text-slate-500">
+            <div>6요소</div>
+            ${REMARK_TONES.map(tone => `<div>${safe(tone.label)}</div>`).join('')}
+          </div>
+          ${remarkTemplateRows.map(row => `
+            <div class="grid grid-cols-[0.28fr_1fr_1fr_1fr] gap-2 rounded-xl border border-slate-800 bg-slate-950/20 p-2">
+              <div class="flex items-center rounded-lg bg-slate-900/70 px-2.5 py-2 text-[10px] font-black text-slate-200">${safe(row.label)}</div>
+              ${REMARK_TONES.map(tone => `
+                <textarea id="remarkTemplate-${safe(row.key)}-${safe(tone.key)}" class="min-h-[84px] rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-2 text-[10px] leading-5 text-slate-200 outline-none focus:border-cyan-500">${safe((row[tone.key] || []).join('\n'))}</textarea>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <button type="button" data-action="admin-save-remark-templates" class="${btnClass} rounded-xl px-5 py-2.5 text-xs font-extrabold shadow-md">대표 특이사항 문구 저장</button>
+      </div>
+    </div>
+  `;
+
   return `
     <div class="space-y-6">
       
@@ -437,6 +536,13 @@ export function renderTeachersAdminView(state, deps) {
             open: !!exp.studentManagement,
             childrenHtml: studentManagementHtml
           })}
+          ${renderAdminAccordion({
+            id: 'loginSplash',
+            title: '로그인 & 스플래시 화면 설정',
+            subtitle: '모바일 메인 인트로 및 테마 칼라/폰트 설정',
+            open: !!exp.loginSplash,
+            childrenHtml: loginSplashHtml
+          })}
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -466,13 +572,13 @@ export function renderTeachersAdminView(state, deps) {
           })}
 
           ${renderAdminAccordion({
-            id: 'loginSplash',
-            title: '로그인 & 스플래시 화면 설정',
-            subtitle: '모바일 메인 인트로 및 테마 칼라/폰트 설정',
-            open: !!exp.loginSplash,
-            childrenHtml: loginSplashHtml
+            id: 'remarkTemplates',
+            title: '대표 특이사항 문구 관리',
+            subtitle: '6요소별 긍정/평이/부정 문구',
+            open: !!exp.remarkTemplates,
+            childrenHtml: remarkTemplatesHtml
           })}
-          
+
           ${renderAdminAccordion({
             id: 'books',
             title: '교재 영구 삭제 통제',

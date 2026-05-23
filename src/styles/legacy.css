@@ -71,8 +71,8 @@ button {
   z-index: 0;
   background:
     linear-gradient(115deg, rgba(255, 255, 255, 0.08), transparent 28%),
-    radial-gradient(circle at 30% 22%, rgba(0, 214, 205, 0.16), transparent 22rem),
-    radial-gradient(circle at 78% 26%, rgba(132, 54, 255, 0.18), transparent 24rem);
+    radial-gradient(circle at 30% 22%, rgba(var(--aurora-cyan-rgb, 0, 214, 205), 0.16), transparent 22rem),
+    radial-gradient(circle at 78% 26%, rgba(var(--aurora-violet-rgb, 132, 54, 255), 0.18), transparent 24rem);
   background-size: 160% 160%;
   opacity: 0.72;
 }
@@ -89,19 +89,19 @@ button {
   background:
     linear-gradient(112deg,
       transparent 5%,
-      rgba(0, 214, 205, 0.26) 18%,
+      rgba(var(--aurora-cyan-rgb, 0, 214, 205), 0.26) 18%,
       transparent 31%,
-      rgba(65, 105, 225, 0.24) 47%,
+      rgba(var(--aurora-blue-rgb, 65, 105, 225), 0.24) 47%,
       transparent 61%,
-      rgba(132, 54, 255, 0.28) 76%,
+      rgba(var(--aurora-violet-rgb, 132, 54, 255), 0.28) 76%,
       transparent 92%),
     conic-gradient(from 170deg at 50% 50%,
       transparent 0deg,
-      rgba(0, 214, 205, 0.3) 46deg,
-      rgba(65, 105, 225, 0.28) 96deg,
-      rgba(132, 54, 255, 0.32) 154deg,
+      rgba(var(--aurora-cyan-rgb, 0, 214, 205), 0.3) 46deg,
+      rgba(var(--aurora-blue-rgb, 65, 105, 225), 0.28) 96deg,
+      rgba(var(--aurora-violet-rgb, 132, 54, 255), 0.32) 154deg,
       transparent 232deg,
-      rgba(0, 214, 205, 0.24) 296deg,
+      rgba(var(--aurora-cyan-rgb, 0, 214, 205), 0.24) 296deg,
       transparent 360deg);
   background-size: 180% 180%, 100% 100%;
   filter: blur(38px);
@@ -130,15 +130,11 @@ button {
 
 .splash-brand-panel,
 .splash-portal-panel {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.045)),
-    rgba(7, 9, 19, 0.82) !important;
-  border: 1px solid rgba(255, 255, 255, 0.17);
-  box-shadow:
-    0 34px 96px rgba(0, 0, 0, 0.58),
-    0 0 56px rgba(0, 214, 205, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(28px) saturate(1.12);
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  text-shadow: 0 14px 44px rgba(0, 0, 0, 0.62);
 }
 
 .splash-portal-panel {
@@ -154,10 +150,10 @@ button {
 .splash-brand-panel::after {
   content: "";
   position: absolute;
-  inset: auto -24% -38% 24%;
-  height: 340px;
-  background: radial-gradient(circle, rgba(0, 214, 205, 0.22), transparent 64%);
-  filter: blur(34px);
+  inset: auto -10% 4% 18%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.62), transparent);
+  filter: blur(0.5px);
 }
 
 .splash-kicker {
@@ -168,46 +164,48 @@ button {
 }
 
 .splash-kicker-pill {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(6, 9, 18, 0.24) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(8px);
 }
 
 .portal-entry-card {
   position: relative;
   overflow: hidden;
-  min-height: 112px;
-  padding: 1.45rem !important;
-  border-radius: 24px !important;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
-    rgba(8, 11, 22, 0.72) !important;
-  border-color: rgba(255, 255, 255, 0.13) !important;
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  min-height: 100px;
+  padding: 1.25rem 0.25rem !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.13) !important;
+  box-shadow: none !important;
 }
 
 .portal-entry-card::before {
   content: "";
   position: absolute;
-  inset: 0;
+  left: -1rem;
+  top: 50%;
+  width: min(70%, 24rem);
+  height: 76%;
+  border-radius: 999px;
   opacity: 0;
-  background: linear-gradient(120deg, rgba(255, 255, 255, 0.1), transparent 42%);
-  transition: opacity 0.24s var(--oatis-ease);
+  background: radial-gradient(ellipse at 34% 50%, rgba(var(--portal-hover-glow-rgb, 0, 214, 205), 0.22), rgba(var(--portal-hover-glow-rgb, 0, 214, 205), 0.08) 38%, transparent 72%);
+  filter: blur(10px);
+  transform: translateY(-50%) scaleX(0.88);
+  transition: opacity 0.24s var(--oatis-ease), transform 0.24s var(--oatis-ease);
 }
 
 .portal-entry-card:hover::before {
   opacity: 1;
+  transform: translateY(-50%) scaleX(1);
 }
 
 .portal-entry-card:hover {
-  transform: translateY(-4px) scale(1.012);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.055)),
-    rgba(12, 16, 31, 0.86) !important;
-  box-shadow:
-    0 22px 48px rgba(0, 0, 0, 0.36),
-    0 0 34px rgba(0, 214, 205, 0.09),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transform: translateX(6px);
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .portal-entry-card strong {
@@ -218,6 +216,11 @@ button {
 .portal-entry-card span:last-child {
   font-size: 0.78rem;
   line-height: 1.5;
+}
+
+.portal-entry-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* 글래스모피즘 및 카드 스타일 오버라이딩 */
@@ -942,9 +945,24 @@ details.group[open] summary span {
   animation: splashAuroraDrift 18s linear infinite !important;
 }
 
+.aurora-background::before {
+  animation: globalAuroraSweep 18s linear infinite !important;
+}
+
 .aurora-background .aurora-layer {
   animation-name: auroraFloat !important;
+  animation-duration: 10s !important;
+  animation-timing-function: ease-in-out !important;
   animation-iteration-count: infinite !important;
+  animation-direction: alternate !important;
+}
+
+.aurora-background .aurora-layer-blue {
+  animation-duration: 12s !important;
+}
+
+.aurora-background .aurora-layer-violet {
+  animation-duration: 14s !important;
 }
 
 @media print {

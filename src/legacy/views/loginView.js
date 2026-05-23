@@ -15,17 +15,17 @@ export function renderLoginView(state, safe) {
           <!-- 좌측 인트로 카드 -->
           <div class="hidden md:flex rounded-[34px] hero-panel splash-brand-panel p-8 lg:p-10 flex-col justify-between text-white min-h-[520px]">
             <div>
-              <div class="splash-kicker">OPEN ACADEMY</div>
-              <div class="mt-3 text-[34px] font-black tracking-tight text-white">${safe(config.splashTitleLine2)}</div>
-              <div class="mt-2 text-sm font-semibold text-slate-300">${safe(config.splashSubtitle)}</div>
+              <div class="splash-kicker">${safe(config.splashKicker || 'OPEN ACADEMY')}</div>
+              <div class="mt-3 font-black tracking-tight" style="font-size: ${safe(config.splashTitleSizeLine1 || '38px')}; color: var(--splash-title-color);">${safe(config.splashTitleLine2)}</div>
+              <div class="mt-2 text-sm font-semibold" style="color: var(--splash-muted-color);">${safe(config.splashSubtitle)}</div>
             </div>
             
             <div class="relative">
               <h1 class="font-black leading-[1.1]">
-                <span class="block text-2xl lg:text-3xl text-slate-100">${safe(config.splashTitleLine1)}</span>
-                <span class="block mt-3 text-5xl lg:text-6xl text-white font-extrabold">${safe(config.splashTitleLine2)}</span>
+                <span class="block font-black" style="font-size: ${safe(config.splashTitleSizeLine1 || '38px')}; color: var(--splash-text-color);">${safe(config.splashTitleLine1)}</span>
+                <span class="block mt-3 font-extrabold" style="font-size: ${safe(config.splashTitleSizeLine2 || '54px')}; color: var(--splash-title-color);">${safe(config.splashTitleLine2)}</span>
               </h1>
-              <p class="mt-6 max-w-md text-sm leading-7 text-slate-300">${config.splashDescription}</p>
+              <p class="mt-6 max-w-md text-sm leading-7" style="color: var(--splash-muted-color);">${config.splashDescription}</p>
             </div>
 
             <div class="flex items-center justify-between gap-4 pt-6 border-t border-white/10">
@@ -38,10 +38,10 @@ export function renderLoginView(state, safe) {
           <div class="splash-portal-panel p-6 md:p-8 flex flex-col justify-center min-h-[520px]">
             <div class="text-center mb-8">
               <span class="splash-kicker-pill px-3 py-1 rounded-full text-[11px] font-black tracking-wider bg-purple-500/10 text-[#c4b5fd] border border-purple-500/20">
-                GATEWAY
+                ${safe(config.gatewayBadge || 'GATEWAY')}
               </span>
-              <h2 class="text-2xl md:text-3xl font-black text-white mt-4">열린학원 수학교재점검</h2>
-              <p class="text-xs md:text-sm text-slate-400 mt-2">필요한 포털만 고르면 바로 시작합니다.</p>
+              <h2 class="text-2xl md:text-3xl font-black mt-4" style="color: var(--splash-title-color);">${safe(config.gatewayTitle || '열린학원 수학교재점검')}</h2>
+              <p class="text-xs md:text-sm mt-2" style="color: var(--splash-muted-color);">${safe(config.gatewayDescription || '필요한 포털만 고르면 바로 시작합니다.')}</p>
             </div>
 
             <div class="flex flex-col gap-4">
@@ -49,8 +49,8 @@ export function renderLoginView(state, safe) {
               <button type="button" data-action="switch-portal" data-portal="student" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#00d6cd]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#00d6cd] block mb-1">STUDENT PORTAL</span>
-                  <strong class="text-lg font-extrabold text-white">학생 / 학부모 포털</strong>
-                  <span class="text-xs text-slate-400 block mt-1">교재 점검 완료율 및 피드백을 확인합니다.</span>
+                  <strong class="text-lg font-extrabold text-white">${safe(config.studentPortalTitle || '학생 / 학부모 포털')}</strong>
+                  <span class="text-xs text-slate-400 block mt-1">${safe(config.studentPortalDescription || '교재 점검 완료율 및 피드백을 확인합니다.')}</span>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-[#00d6cd]/5 border border-[#00d6cd]/20 flex items-center justify-center text-[#00d6cd] group-hover:scale-110 group-hover:bg-[#00d6cd]/10 transition-all duration-300">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-graduation-cap"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>
@@ -61,8 +61,8 @@ export function renderLoginView(state, safe) {
               <button type="button" data-action="switch-portal" data-portal="teacher" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#4169e1]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#4169e1] block mb-1">TEACHER PORTAL</span>
-                  <strong class="text-lg font-extrabold text-white">담당 강사 포털</strong>
-                  <span class="text-xs text-slate-400 block mt-1">학생들의 교재 검사를 기록하고 설정합니다.</span>
+                  <strong class="text-lg font-extrabold text-white">${safe(config.teacherPortalTitle || '담당 강사 포털')}</strong>
+                  <span class="text-xs text-slate-400 block mt-1">${safe(config.teacherPortalDescription || '학생들의 교재 검사를 기록하고 설정합니다.')}</span>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-[#4169e1]/5 border border-[#4169e1]/20 flex items-center justify-center text-[#4169e1] group-hover:scale-110 group-hover:bg-[#4169e1]/10 transition-all duration-300">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-presentation"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M12 17v4"/><path d="M2 10h20"/></svg>
@@ -73,8 +73,8 @@ export function renderLoginView(state, safe) {
               <button type="button" data-action="switch-portal" data-portal="admin" class="portal-entry-card w-full p-5 rounded-2xl text-left transition-all duration-300 bg-white/[0.02] border border-white/5 hover:bg-white/[0.08] hover:border-[#8436ff]/30 group flex justify-between items-center">
                 <div>
                   <span class="text-xs font-bold text-[#8436ff] block mb-1">ADMINISTRATOR</span>
-                  <strong class="text-lg font-extrabold text-white">원장 / 관리자 포털</strong>
-                  <span class="text-xs text-slate-400 block mt-1">전체 교재 목록 및 강사, 통합 설정을 관리합니다.</span>
+                  <strong class="text-lg font-extrabold text-white">${safe(config.adminPortalTitle || '원장 / 관리자 포털')}</strong>
+                  <span class="text-xs text-slate-400 block mt-1">${safe(config.adminPortalDescription || '전체 교재 목록 및 강사, 통합 설정을 관리합니다.')}</span>
                 </div>
                 <div class="w-10 h-10 rounded-xl bg-[#8436ff]/5 border border-[#8436ff]/20 flex items-center justify-center text-[#8436ff] group-hover:scale-110 group-hover:bg-[#8436ff]/10 transition-all duration-300">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>

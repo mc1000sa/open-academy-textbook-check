@@ -1,5 +1,6 @@
 import { bookMap } from './bookSetupView.js';
 import { renderBtnSelect } from './layoutView.js';
+import { DEFAULT_REMARK_TEMPLATES, REMARK_TONES, normalizeRemarkTemplates } from '../../lib/remarkTemplates.js';
 
 function unitChipTextColor(hex) {
   const clean = String(hex || '').replace('#', '').trim();
@@ -11,12 +12,7 @@ function unitChipTextColor(hex) {
   return brightness > 150 ? '#0f172a' : '#ffffff';
 }
 
-export const REMARK_GROUPS = [
-  { group:'식 관련', items:['글씨를 매우 잘 쓰는 학생입니다.','풀이 과정을 꼼꼼하게 정리하는 편입니다.','수학적 체계가 전혀 안 잡혀 있습니다.','식을 세우는 과정에서 중간 단계가 자주 생략됩니다.','계산 과정은 맞지만 정리 습관이 더 필요합니다.'] },
-  { group:'채점 관련', items:['채점 약속을 잘 지켜서 매우 깔끔하게 했습니다.','오답 표시가 부족해 다시 확인이 필요합니다.','틀린 문제를 다시 고치는 습관이 필요합니다.','채점은 되어 있으나 오답 정리가 부족합니다.'] },
-  { group:'과제 관련', items:['과제를 성실하게 완성해 왔습니다.','미완료 페이지가 있어 다음 시간에 재점검이 필요합니다.','정해진 범위보다 더 많이 진행했습니다.','과제 수행 속도가 조금 느린 편입니다.'] },
-  { group:'이해도 관련', items:['기본 개념 이해는 안정적인 편입니다.','유형이 바뀌면 적용을 어려워합니다.','반복 연습 후 정확도가 올라가는 편입니다.','개념 설명을 다시 듣고 나면 문제 해결이 가능합니다.'] }
-];
+export const REMARK_GROUPS = DEFAULT_REMARK_TEMPLATES;
 
 export function renderInspectionsView(state, deps) {
   const {
@@ -36,7 +32,8 @@ export function renderInspectionsView(state, deps) {
     buildCarryoverRows,
     calculateCarryoverRecoveryRate,
     pageResolutionKey,
-    RUBRIC_ITEMS: rubricItems
+    RUBRIC_ITEMS: rubricItems,
+    remarkTemplates
   } = deps;
 
   const classes = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id);
@@ -123,24 +120,40 @@ export function renderInspectionsView(state, deps) {
     </div>
   `;
 
+  const remarkRows = normalizeRemarkTemplates(remarkTemplates);
+  const toneClassMap = {
+    positive: 'hover:border-emerald-500 hover:bg-emerald-950/20 hover:text-emerald-100',
+    neutral: 'hover:border-cyan-500 hover:bg-cyan-950/20 hover:text-cyan-100',
+    negative: 'hover:border-rose-500 hover:bg-rose-950/20 hover:text-rose-100'
+  };
   const remarkButtons = `
     <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/20 p-4">
-      <div class="text-xs font-extrabold text-slate-300 mb-3">대표 특이사항 선택</div>
-      <div class="space-y-4">
-        ${REMARK_GROUPS.map(group=>`
-          <div>
-            <div class="text-[10px] font-extrabold text-blue-400 mb-2">${safe(group.group)}</div>
-            <div class="flex flex-wrap gap-1.5">
-              ${group.items.map(item=>`
-                <button type="button" data-action="append-remark" data-text="${safe(item)}" class="rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-[10px] font-bold text-slate-400 hover:border-blue-500 hover:bg-blue-950/20 hover:text-white transition-all">
-                  ${safe(item)}
-                </button>
-              `).join('')}
-            </div>
+      <div class="text-xs font-extrabold text-slate-300 mb-3">6요소 대표 특이사항 선택</div>
+      <div class="overflow-x-auto mini-scroll">
+        <div class="min-w-[860px]">
+          <div class="grid grid-cols-[0.72fr_1fr_1fr_1fr] gap-2 px-2 pb-2 text-[10px] font-black text-slate-500">
+            <div>6요소</div>
+            ${REMARK_TONES.map(tone => `<div>${safe(tone.label)}</div>`).join('')}
           </div>
-        `).join('')}
+          <div class="space-y-2">
+            ${remarkRows.map(row => `
+              <div class="grid grid-cols-[0.72fr_1fr_1fr_1fr] gap-2 rounded-xl border border-slate-800 bg-slate-950/30 p-2">
+                <div class="flex items-center rounded-lg bg-slate-900/70 px-3 py-2 text-[11px] font-black text-slate-200">${safe(row.label)}</div>
+                ${REMARK_TONES.map(tone => `
+                  <div class="flex flex-wrap gap-1.5">
+                    ${(row[tone.key] || []).map(item => `
+                      <button type="button" data-action="append-remark" data-text="${safe(item)}" class="rounded-full border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-[10px] font-bold text-slate-400 ${toneClassMap[tone.key]} transition-all">
+                        ${safe(item)}
+                      </button>
+                    `).join('') || '<span class="text-[10px] text-slate-600 px-2 py-1.5">-</span>'}
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </div>
+        </div>
       </div>
-      <div class="mt-3 text-[10px] text-slate-500">버튼을 누르면 괄호 제목 없이 문장만 특이사항에 추가됩니다.</div>
+      <div class="mt-3 text-[10px] text-slate-500">문구 수정/삭제/추가는 관리자 설정의 대표 특이사항 문구 관리에서 할 수 있습니다.</div>
     </div>
   `;
 

@@ -203,7 +203,7 @@ export function renderStudentPortalView(state, utils) {
                       </span>
                       <h3 class="text-lg font-extrabold text-white inline-block">${safe(item.book.title)}</h3>
                       <p class="text-xs text-slate-400 mt-1">
-                        ${safe(item.book.publisher || '열린학원')} | 학년: ${safe(item.book.grade || '전체')}
+                        학년: ${safe(item.book.grade || '전체')}
                         ${item.dateRangeText ? ` | <span class="text-slate-400 font-medium">📅 학습 기간: ${item.dateRangeText}</span>` : ''}
                       </p>
                     </div>

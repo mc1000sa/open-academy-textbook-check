@@ -43,6 +43,7 @@ export function renderSetupView(state, deps) {
 
   const GRADE_OPTIONS = ['고1', '고2', '고3'];
   const availableClasses = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
+  const teacherOptions = state.teachers.filter(t => t.active !== false && t.role !== 'admin');
   const selectedClass = classById(state.selectedSetupClassId);
   const selectedStudents = selectedClass ? studentsForClass(selectedClass.id) : [];
   
@@ -72,16 +73,12 @@ export function renderSetupView(state, deps) {
           <span class="text-xs font-bold text-slate-400">담당 강사</span>
           ${renderBtnSelect({
             id: 'setupClassTeacherId',
-            options: state.teachers.map(t => ({ value: t.id, label: t.name })),
+            options: teacherOptions.map(t => ({ value: t.id, label: t.name })),
             selectedValue: state.setupFormClass.teacherId,
             placeholder: '담당 강사'
           })}
         </div>
       </div>
-
-      <label class="block text-xs font-bold text-slate-400">반 설명 (선택사항)
-        <input id="setupClassNote" class="w-full border border-slate-700 rounded-xl p-3 bg-slate-900/50 text-xs text-white mt-1.5 focus:outline-none focus:border-cyan-500" placeholder="예: 내신집중반" value="${safe(state.setupFormClass.note)}" />
-      </label>
 
       <div class="flex gap-2.5 pt-2">
         <button type="button" data-action="save-class" class="${btnClass} rounded-xl px-5 py-2.5 text-xs font-extrabold text-white">반 생성/수정</button>

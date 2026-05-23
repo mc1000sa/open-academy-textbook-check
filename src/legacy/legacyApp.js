@@ -43,6 +43,10 @@ import {
   standardUnitLabelsForIds,
   standardUnitSubjectByLabel
 } from '../lib/standardUnits.js';
+import {
+  DEFAULT_REMARK_TEMPLATES,
+  normalizeRemarkTemplates
+} from '../lib/remarkTemplates.js';
 import { renderDashboardView } from './views/dashboardView.js';
 import { renderCustomModalMarkup, renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
@@ -60,7 +64,6 @@ export async function mountLegacyApp(appRoot) {
 
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
   const GRADE_OPTIONS = ['고1','고2','고3'];
-  const SUBJECT_OPTIONS = ['수학','영어','국어','과학'];
   const STAFF_PIN_LENGTH = 6;
 
   const state = {
@@ -85,10 +88,11 @@ export async function mountLegacyApp(appRoot) {
     studentBulkText: '',
     studentBulkMode: 'nameSchool',
     selectedBookManageId: '',
-    formBook: { title: '', subject: '수학', grade: '', publisher: '열린학원', active: true },
+    formBook: { title: '', subject: '', grade: '', publisher: '', active: true, bookType: 'standard', chapterCount: '10' },
     formUnit: { name: '', start: '', end: '', standardUnitIds: [] },
     bulkUnitText: '',
     standardUnitSubjects: normalizeStandardUnitSubjects(DEFAULT_STANDARD_UNIT_SUBJECTS),
+    remarkTemplates: normalizeRemarkTemplates(DEFAULT_REMARK_TEMPLATES),
     selectedStandardSubjectCode: 'common_math_1',
     standardUnitNewName: '',
     standardUnitInsertOrder: '',
@@ -161,6 +165,23 @@ export async function mountLegacyApp(appRoot) {
       splashTitleSizeLine2: '54px',
       splashSubtitle: 'Open Academy Textbook Insight System',
       splashDescription: '교재 점검을 기록하는 수준을 넘어,<br/>진행 흐름과 운영 상태를 한눈에 보는 시스템입니다.',
+      splashKicker: 'OPEN ACADEMY',
+      gatewayBadge: 'GATEWAY',
+      gatewayTitle: '열린학원 수학교재점검',
+      gatewayDescription: '필요한 포털만 고르면 바로 시작합니다.',
+      studentPortalTitle: '학생 / 학부모 포털',
+      studentPortalDescription: '교재 점검 완료율 및 피드백을 확인합니다.',
+      teacherPortalTitle: '담당 강사 포털',
+      teacherPortalDescription: '학생들의 교재 검사를 기록하고 설정합니다.',
+      adminPortalTitle: '원장 / 관리자 포털',
+      adminPortalDescription: '전체 교재 목록 및 강사, 통합 설정을 관리합니다.',
+      splashTitleColor: '#ffffff',
+      splashTextColor: '#e5e7eb',
+      splashMutedColor: '#94a3b8',
+      auroraColor1: '#00d6cd',
+      auroraColor2: '#4169e1',
+      auroraColor3: '#8436ff',
+      portalHoverGlowColor: '#00d6cd',
       loginTitle: '빠른 PIN 로그인',
       loginDescription: '선생님을 선택하고 6자리 PIN을 입력하세요.',
       loginInfoText: '초기 로그인 계정은 관리자 설정에서 관리됩니다.',
@@ -175,6 +196,23 @@ export async function mountLegacyApp(appRoot) {
       splashTitleSizeLine2: '',
       splashSubtitle: '',
       splashDescription: '',
+      splashKicker: '',
+      gatewayBadge: '',
+      gatewayTitle: '',
+      gatewayDescription: '',
+      studentPortalTitle: '',
+      studentPortalDescription: '',
+      teacherPortalTitle: '',
+      teacherPortalDescription: '',
+      adminPortalTitle: '',
+      adminPortalDescription: '',
+      splashTitleColor: '',
+      splashTextColor: '',
+      splashMutedColor: '',
+      auroraColor1: '',
+      auroraColor2: '',
+      auroraColor3: '',
+      portalHoverGlowColor: '',
       loginTitle: '',
       loginDescription: '',
       loginInfoText: '',
@@ -245,9 +283,16 @@ export async function mountLegacyApp(appRoot) {
     B = B < 0 ? 0 : B > 255 ? 255 : B;
     return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
   }
+  function hexToRgbParts(hex, fallback = '0, 214, 205') {
+    const clean = String(hex || '').replace('#', '').trim();
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return fallback;
+    const num = parseInt(clean, 16);
+    return `${(num >> 16) & 255}, ${(num >> 8) & 255}, ${num & 255}`;
+  }
 
   function applyThemeColor(color, fontFamily, fontScale) {
-    const primary = color || '#384bff';
+    const cfg = state.loginConfig || {};
+    const primary = color || cfg.primaryColor || '#384bff';
     const light = adjustColor(primary, 20);
     const dark = adjustColor(primary, -20);
     const soft = primary + '1A';
@@ -261,6 +306,13 @@ export async function mountLegacyApp(appRoot) {
     rootStyle.setProperty('--theme-primary-soft', soft);
     rootStyle.setProperty('--theme-font-family', ff);
     rootStyle.setProperty('--theme-font-scale', fs);
+    rootStyle.setProperty('--splash-title-color', cfg.splashTitleColor || '#ffffff');
+    rootStyle.setProperty('--splash-text-color', cfg.splashTextColor || '#e5e7eb');
+    rootStyle.setProperty('--splash-muted-color', cfg.splashMutedColor || '#94a3b8');
+    rootStyle.setProperty('--portal-hover-glow-rgb', hexToRgbParts(cfg.portalHoverGlowColor || '#00d6cd'));
+    rootStyle.setProperty('--aurora-cyan-rgb', hexToRgbParts(cfg.auroraColor1 || '#00d6cd'));
+    rootStyle.setProperty('--aurora-blue-rgb', hexToRgbParts(cfg.auroraColor2 || '#4169e1'));
+    rootStyle.setProperty('--aurora-violet-rgb', hexToRgbParts(cfg.auroraColor3 || '#8436ff'));
 
     const fontsImport = `
       @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
@@ -311,14 +363,15 @@ export async function mountLegacyApp(appRoot) {
   function standardUnitNames(ids = []) {
     return standardUnitLabelsForIds(state.standardUnitSubjects, ids);
   }
-  function displayUnitName(unit) {
+  function displayUnitName(unit, book = null) {
+    if (book?.bookType === 'exam_chapter') return unit?.name || '';
     const linkedNames = standardUnitNames(unit?.standardUnitIds || []);
     return linkedNames.length ? linkedNames.join(', ') : (unit?.name || '');
   }
   function bookUnits(book) {
     return sortBookUnits(book).map(unit => ({
       ...unit,
-      name: displayUnitName(unit)
+      name: displayUnitName(unit, book)
     }));
   }
   function rawBookUnits(book) {
@@ -327,10 +380,23 @@ export async function mountLegacyApp(appRoot) {
   function standardSubjectForBook(book) {
     return standardUnitSubjectByLabel(state.standardUnitSubjects, book?.subject || '');
   }
+  function stripBookSubjectFromTitle(subject, title) {
+    const cleanSubject = String(subject || '').trim();
+    const cleanTitle = String(title || '').trim();
+    if (!cleanSubject) return cleanTitle;
+    if (cleanTitle === cleanSubject) return '';
+    const prefixPattern = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s_-]+`);
+    return cleanTitle.replace(prefixPattern, '').trim();
+  }
+  function composeBookTitle(subject, titleBase) {
+    const cleanSubject = String(subject || '').trim();
+    const cleanBase = String(titleBase || '').trim();
+    return [cleanSubject, cleanBase].filter(Boolean).join(' ');
+  }
   function unitsForRangeWithStandardNames(book, start, end) {
     return unitsForRange(book, start, end).map(unit => ({
       ...unit,
-      name: displayUnitName(unit)
+      name: displayUnitName(unit, book)
     }));
   }
   function studentsForClass(classId) {
@@ -465,6 +531,23 @@ export async function mountLegacyApp(appRoot) {
         splashTitleSizeLine2: '54px',
         splashSubtitle: 'Open Academy Textbook Insight System',
         splashDescription: '교재 점검을 기록하는 수준을 넘어,<br/>진행 흐름과 운영 상태를 한눈에 보는 시스템입니다.',
+        splashKicker: 'OPEN ACADEMY',
+        gatewayBadge: 'GATEWAY',
+        gatewayTitle: '열린학원 수학교재점검',
+        gatewayDescription: '필요한 포털만 고르면 바로 시작합니다.',
+        studentPortalTitle: '학생 / 학부모 포털',
+        studentPortalDescription: '교재 점검 완료율 및 피드백을 확인합니다.',
+        teacherPortalTitle: '담당 강사 포털',
+        teacherPortalDescription: '학생들의 교재 검사를 기록하고 설정합니다.',
+        adminPortalTitle: '원장 / 관리자 포털',
+        adminPortalDescription: '전체 교재 목록 및 강사, 통합 설정을 관리합니다.',
+        splashTitleColor: '#ffffff',
+        splashTextColor: '#e5e7eb',
+        splashMutedColor: '#94a3b8',
+        auroraColor1: '#00d6cd',
+        auroraColor2: '#4169e1',
+        auroraColor3: '#8436ff',
+        portalHoverGlowColor: '#00d6cd',
         loginTitle: '빠른 PIN 로그인',
         loginDescription: '선생님을 선택하고 6자리 PIN을 입력하세요.',
         loginInfoText: '초기 로그인 계정은 관리자 설정에서 관리됩니다.',
@@ -506,15 +589,27 @@ export async function mountLegacyApp(appRoot) {
       t_kim: { name: '수최', pin: '123456', role: 'teacher', active: true },
       t_admin: { name: '관리자', pin: '999999', role: 'admin', active: true }
     };
+    const legacyPinMap = {
+      t_kim: new Set(['', '1234']),
+      t_admin: new Set(['', '9999'])
+    };
     const batch = writeBatch(db);
     let changed = 0;
     teacherSnap.docs.forEach(snap => {
       const next = renameMap[snap.id];
       if (!next) return;
       const data = snap.data() || {};
-      const needsUpdate = data.name !== next.name || String(data.pin || '') !== String(next.pin) || data.role !== next.role || data.active === false;
+      const currentPin = String(data.pin || '');
+      const shouldUpdatePin = legacyPinMap[snap.id]?.has(currentPin);
+      const payload = {
+        name: data.name || next.name,
+        role: data.role || next.role,
+        active: data.active === false ? true : data.active !== undefined ? data.active : true
+      };
+      if (shouldUpdatePin) payload.pin = next.pin;
+      const needsUpdate = shouldUpdatePin || !data.name || !data.role || data.active === false;
       if (!needsUpdate) return;
-      batch.update(doc(db, COLLECTION_NAMES.teachers, snap.id), { ...next, updatedAt: serverTimestamp() });
+      batch.update(doc(db, COLLECTION_NAMES.teachers, snap.id), { ...payload, updatedAt: serverTimestamp() });
       changed++;
     });
     if (changed) await batch.commit();
@@ -665,6 +760,8 @@ export async function mountLegacyApp(appRoot) {
       if (!state.standardUnitSubjects.some(subject => subject.code === state.selectedStandardSubjectCode)) {
         state.selectedStandardSubjectCode = state.standardUnitSubjects[0]?.code || 'common_math_1';
       }
+      const docRemarkTemplates = snap.docs.find(d => d.id === 'remark_templates');
+      state.remarkTemplates = normalizeRemarkTemplates(docRemarkTemplates?.data()?.templates);
       render();
     });
   }
@@ -676,6 +773,21 @@ export async function mountLegacyApp(appRoot) {
       updatedAt: serverTimestamp()
     }, { merge: true });
     notify(message);
+  }
+
+  async function saveRemarkTemplates() {
+    const templates = normalizeRemarkTemplates(state.remarkTemplates).map(row => ({
+      ...row,
+      positive: String(document.getElementById(`remarkTemplate-${row.key}-positive`)?.value || '').split('\n').map(v => v.trim()).filter(Boolean),
+      neutral: String(document.getElementById(`remarkTemplate-${row.key}-neutral`)?.value || '').split('\n').map(v => v.trim()).filter(Boolean),
+      negative: String(document.getElementById(`remarkTemplate-${row.key}-negative`)?.value || '').split('\n').map(v => v.trim()).filter(Boolean)
+    }));
+    state.remarkTemplates = normalizeRemarkTemplates(templates);
+    await setDoc(doc(db, COLLECTION_NAMES.configs, 'remark_templates'), {
+      templates: state.remarkTemplates,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    notify('대표 특이사항 문구 저장 완료');
   }
 
   async function saveStandardUnitName(unitId) {
@@ -728,6 +840,23 @@ export async function mountLegacyApp(appRoot) {
       splashTitleSizeLine2: (form.splashTitleSizeLine2 || '54px').trim(),
       splashSubtitle: (form.splashSubtitle || '').trim(),
       splashDescription: (form.splashDescription || '').trim(),
+      splashKicker: (form.splashKicker || 'OPEN ACADEMY').trim(),
+      gatewayBadge: (form.gatewayBadge || 'GATEWAY').trim(),
+      gatewayTitle: (form.gatewayTitle || '').trim(),
+      gatewayDescription: (form.gatewayDescription || '').trim(),
+      studentPortalTitle: (form.studentPortalTitle || '').trim(),
+      studentPortalDescription: (form.studentPortalDescription || '').trim(),
+      teacherPortalTitle: (form.teacherPortalTitle || '').trim(),
+      teacherPortalDescription: (form.teacherPortalDescription || '').trim(),
+      adminPortalTitle: (form.adminPortalTitle || '').trim(),
+      adminPortalDescription: (form.adminPortalDescription || '').trim(),
+      splashTitleColor: (form.splashTitleColor || '#ffffff').trim(),
+      splashTextColor: (form.splashTextColor || '#e5e7eb').trim(),
+      splashMutedColor: (form.splashMutedColor || '#94a3b8').trim(),
+      auroraColor1: (form.auroraColor1 || '#00d6cd').trim(),
+      auroraColor2: (form.auroraColor2 || '#4169e1').trim(),
+      auroraColor3: (form.auroraColor3 || '#8436ff').trim(),
+      portalHoverGlowColor: (form.portalHoverGlowColor || '#00d6cd').trim(),
       loginTitle: (form.loginTitle || '').trim(),
       loginDescription: (form.loginDescription || '').trim(),
       loginInfoText: (form.loginInfoText || '').trim(),
@@ -885,11 +1014,11 @@ export async function mountLegacyApp(appRoot) {
     if (!f.name || !f.teacherId || !f.grade) return showModalAlert('반 이름, 학년, 담당 강사를 입력해주세요.');
     
     if (f.id) {
-      await updateDoc(doc(refs.classes, f.id), { name: f.name, teacherId: f.teacherId, grade: f.grade, note: f.note });
+      await updateDoc(doc(refs.classes, f.id), { name: f.name, teacherId: f.teacherId, grade: f.grade, note: '' });
       state.selectedSetupClassId = f.id;
       notify('반 수정 완료');
     } else {
-      const ref = await addDoc(refs.classes, { name: f.name, teacherId: f.teacherId, grade: f.grade, note: f.note, active: true, createdAt: serverTimestamp() });
+      const ref = await addDoc(refs.classes, { name: f.name, teacherId: f.teacherId, grade: f.grade, note: '', active: true, createdAt: serverTimestamp() });
       state.selectedSetupClassId = ref.id;
       state.assigningClassId = ref.id;
       state.selectedInspectionClassId = ref.id;
@@ -1129,47 +1258,157 @@ export async function mountLegacyApp(appRoot) {
 
   async function saveBook() {
     const f = state.formBook;
-    if (!f.title) return showModalAlert('교재명을 입력해주세요.');
+    if (!f.subject) return showModalAlert('수학 교과목을 선택해주세요.');
+    const titleBase = stripBookSubjectFromTitle(f.subject, f.title);
+    if (!titleBase) return showModalAlert('교재명을 입력해주세요.');
+    const payload = {
+      ...f,
+      title: composeBookTitle(f.subject, titleBase),
+      publisher: '',
+      bookType: f.bookType || 'standard',
+      chapterCount: f.bookType === 'exam_chapter'
+        ? Math.max(1, Math.min(40, Number(f.chapterCount || 10) || 10))
+        : ''
+    };
     if (state.editingBookId) {
-      await updateDoc(doc(db, COLLECTION_NAMES.books, state.editingBookId), { ...f, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, COLLECTION_NAMES.books, state.editingBookId), { ...payload, updatedAt: serverTimestamp() });
       state.editingBookId = '';
     } else {
-      await addDoc(refs.books, { ...f, units: [], archived: false, createdAt: serverTimestamp() });
+      await addDoc(refs.books, { ...payload, units: [], archived: false, createdAt: serverTimestamp() });
     }
-    state.formBook = { title: '', subject: '수학', grade: '', publisher: '열린학원', active: true };
+    state.formBook = { title: '', subject: '', grade: '', publisher: '', active: true, bookType: 'standard', chapterCount: '10' };
     notify('교재 저장 완료');
   }
 
   async function cloneBook(bookId) {
     const source = bookById(bookId);
     if (!source) return;
-    await addDoc(refs.books, { title: source.title + ' 복제본', subject: source.subject, grade: source.grade, publisher: source.publisher, active: true, archived: false, units: (source.units || []).map(u => ({ ...u, id: uid() })), createdAt: serverTimestamp() });
+    await addDoc(refs.books, { title: source.title + ' 복제본', subject: source.subject, grade: source.grade, publisher: '', active: true, archived: false, units: (source.units || []).map(u => ({ ...u, id: uid() })), createdAt: serverTimestamp() });
     notify('교재 복제 완료');
   }
 
   async function saveUnit() {
     const book = bookById(state.selectedBookManageId);
     if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
-    const start = Number(state.formUnit.start), end = Number(state.formUnit.end);
-    const selectedStandardUnitIds = [...new Set(state.formUnit.standardUnitIds || [])];
-    const linkedNames = standardUnitNames(selectedStandardUnitIds);
-    const unitName = String(state.formUnit.name || linkedNames.join(', ')).trim();
-    if (!unitName || !start || !end) return showModalAlert('표준단원 또는 단원명과 페이지를 입력해주세요.');
-    if (end < start) return showModalAlert('끝 페이지는 시작 페이지보다 크거나 같아야 합니다.');
-    const overlap = rawBookUnits(book).some(u => !(Number(u.end) < start || Number(u.start) > end));
-    if (overlap) return showModalAlert('기존 단원과 페이지가 겹칩니다.');
     const currentUnits = rawBookUnits(book);
-    const units = [...currentUnits, {
-      id: uid(),
-      name: unitName,
-      standardUnitIds: selectedStandardUnitIds,
-      start,
-      end,
-      color: pastel(currentUnits.length)
-    }];
+    if (book.bookType === 'exam_chapter') {
+      const rows = [...appRoot.querySelectorAll('[data-exam-chapter-row]')].map(row => ({
+        chapterName: row.querySelector('[data-field="chapterName"]')?.value.trim() || '',
+        startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
+        endText: row.querySelector('[data-field="end"]')?.value.trim() || '',
+        standardUnitIds: [...row.querySelectorAll('[data-field="chapterStandardUnit"]:checked')].map(input => input.value).filter(Boolean)
+      }));
+      const units = [];
+
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        const hasInput = row.chapterName || row.startText || row.endText || row.standardUnitIds.length;
+        if (!hasInput) continue;
+        const name = row.chapterName || `챕터 ${index + 1}`;
+        const start = Number(row.startText);
+        const end = Number(row.endText);
+        if (!row.startText || !row.endText || Number.isNaN(start) || Number.isNaN(end) || start < 1 || end < start) {
+          return showModalAlert(`"${name}"의 시작쪽과 끝쪽을 올바르게 입력해주세요.`);
+        }
+        if (!row.standardUnitIds.length) {
+          return showModalAlert(`"${name}"에 연결할 시험범위 표준소단원을 하나 이상 선택해주세요.`);
+        }
+        const existing = currentUnits.find(unit => String(unit.name || '') === name);
+        units.push({
+          id: existing?.id || uid(),
+          name,
+          standardUnitIds: row.standardUnitIds,
+          start,
+          end,
+          color: existing?.color || pastel(index),
+          visibleToStudent: existing?.visibleToStudent
+        });
+      }
+
+      if (!units.length) return showModalAlert('저장할 챕터 정보를 입력해주세요.');
+      const sortedUnits = [...units].sort((a, b) => Number(a.start) - Number(b.start));
+      for (let i = 1; i < sortedUnits.length; i++) {
+        if (Number(sortedUnits[i - 1].end) >= Number(sortedUnits[i].start)) {
+          return showModalAlert(`"${sortedUnits[i - 1].name}" 챕터와 "${sortedUnits[i].name}" 챕터의 페이지가 겹칩니다.`);
+        }
+      }
+
+      await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
+      notify('시험대비 챕터표 저장 완료');
+      return;
+    }
+    const rows = [...appRoot.querySelectorAll('[data-standard-unit-row]')].map(row => ({
+      standardUnitId: row.dataset.standardUnitId,
+      standardLabel: row.dataset.standardLabel || '',
+      unitName: row.querySelector('[data-field="unitName"]')?.value.trim() || '',
+      startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
+      endText: row.querySelector('[data-field="end"]')?.value.trim() || ''
+    }));
+    const groups = [];
+    let currentGroup = null;
+
+    const flushGroup = () => {
+      if (!currentGroup) return;
+      groups.push(currentGroup);
+      currentGroup = null;
+    };
+
+    for (const row of rows) {
+      const hasInput = row.unitName || row.startText || row.endText;
+      if (!hasInput) {
+        flushGroup();
+        continue;
+      }
+      if (!row.unitName) return showModalAlert('입력한 행에는 소단원명을 모두 적어주세요.');
+      if (!currentGroup || currentGroup.name !== row.unitName) {
+        flushGroup();
+        currentGroup = { name: row.unitName, rows: [] };
+      }
+      currentGroup.rows.push(row);
+    }
+    flushGroup();
+
+    if (!groups.length) return showModalAlert('저장할 단원 정보를 입력해주세요.');
+
+    const units = [];
+    for (let index = 0; index < groups.length; index++) {
+      const group = groups[index];
+      const startText = group.rows.find(row => row.startText)?.startText || '';
+      const endText = [...group.rows].reverse().find(row => row.endText)?.endText || '';
+      const start = Number(startText);
+      const end = Number(endText);
+      if (!startText || !endText || Number.isNaN(start) || Number.isNaN(end)) {
+        return showModalAlert(`"${group.name}" 단원의 시작쪽과 끝쪽을 입력해주세요.`);
+      }
+      if (start < 1 || end < start) {
+        return showModalAlert(`"${group.name}" 단원의 페이지 범위를 확인해주세요.`);
+      }
+      const standardUnitIds = group.rows.map(row => row.standardUnitId).filter(Boolean);
+      const existing = currentUnits.find(unit => {
+        const prevIds = unit.standardUnitIds || [];
+        return prevIds.length === standardUnitIds.length && prevIds.every((id, idx) => id === standardUnitIds[idx]);
+      });
+      units.push({
+        id: existing?.id || uid(),
+        name: group.name,
+        standardUnitIds,
+        start,
+        end,
+        color: existing?.color || pastel(index),
+        visibleToStudent: existing?.visibleToStudent
+      });
+    }
+
+    const sortedUnits = [...units].sort((a, b) => Number(a.start) - Number(b.start));
+    for (let i = 1; i < sortedUnits.length; i++) {
+      if (Number(sortedUnits[i - 1].end) >= Number(sortedUnits[i].start)) {
+        return showModalAlert(`"${sortedUnits[i - 1].name}" 단원과 "${sortedUnits[i].name}" 단원의 페이지가 겹칩니다.`);
+      }
+    }
+
     await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
     state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
-    notify('단원 추가 완료');
+    notify('단원 표 저장 완료');
   }
 
   async function toggleUnitStudentVisible(bookId, unitId) {
@@ -1519,7 +1758,8 @@ export async function mountLegacyApp(appRoot) {
           teacherClasses, studentsForClass, assignedBooksForClass, bookById, 
           unitsForRange: unitsForRangeWithStandardNames, pagesInRange, missedPagesArrayInCurrentRange, 
           inspectionsForStudent, fmtDate, classById, studentById, safe, bookUnits,
-          buildCarryoverRows, calculateCarryoverRecoveryRate, pageResolutionKey, RUBRIC_ITEMS
+          buildCarryoverRows, calculateCarryoverRecoveryRate, pageResolutionKey, RUBRIC_ITEMS,
+          remarkTemplates: state.remarkTemplates
         })
       : state.view === 'reports'
       ? renderReportsView(state, { teacherClasses, classById, safe })
@@ -1621,7 +1861,7 @@ export async function mountLegacyApp(appRoot) {
     }
 
     appRoot.querySelector('[data-action="login"]')?.addEventListener('click', handleLogin);
-    appRoot.querySelector('[data-action="logout"]')?.addEventListener('click', () => { 
+    appRoot.querySelectorAll('[data-action="logout"]').forEach(el => el.addEventListener('click', () => { 
       state.currentTeacher = null; 
       state.studentSession = null;
       state.portal = 'gateway';
@@ -1629,7 +1869,7 @@ export async function mountLegacyApp(appRoot) {
       state.loginError = '';
       state.selectedTeacherName = ''; 
       render(); 
-    });
+    }));
 
     // 학생 로그인 및 가입 폼 관련 이벤트 바인딩
     const studentLoginClass = document.getElementById('studentLoginClass');
@@ -1922,12 +2162,21 @@ export async function mountLegacyApp(appRoot) {
           } catch (err) {
             state.studentLoginForm = value;
           }
+        } else if (target === 'bookType') {
+          state.formBook.bookType = value;
+          if (value === 'exam_chapter' && !state.formBook.chapterCount) state.formBook.chapterCount = '10';
         } else if (target === 'bookSubject') {
+          const titleBase = stripBookSubjectFromTitle(state.formBook.subject, state.formBook.title);
           state.formBook.subject = value;
+          state.formBook.title = composeBookTitle(value, titleBase);
           state.formUnit.standardUnitIds = [];
           state.formUnit.name = '';
         } else if (target === 'bookGrade') {
           state.formBook.grade = value;
+        } else if (target === 'setupClassGrade') {
+          state.setupFormClass.grade = value;
+        } else if (target === 'setupClassTeacherId') {
+          state.setupFormClass.teacherId = value;
         } else {
           state[target] = value;
         }
@@ -2078,10 +2327,23 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('#wizardStudentBulkText').forEach(el => el.addEventListener('input', e => state.studentBulkText = e.target.value));
     document.getElementById('setupClassTeacherId')?.addEventListener('change', e => state.setupFormClass.teacherId = e.target.value);
     document.getElementById('setupClassNote')?.addEventListener('input', e => state.setupFormClass.note = e.target.value);
-    document.getElementById('bookTitle')?.addEventListener('input', e => state.formBook.title = e.target.value);
+    document.getElementById('bookTitleBase')?.addEventListener('input', e => {
+      state.formBook.title = composeBookTitle(state.formBook.subject, e.target.value);
+    });
+    document.getElementById('bookChapterCount')?.addEventListener('input', e => {
+      state.formBook.chapterCount = e.target.value.replace(/\D/g, '').slice(0, 2);
+      e.target.value = state.formBook.chapterCount;
+    });
+    appRoot.querySelectorAll('[data-field="allChapterStandardUnit"]').forEach(el => {
+      el.addEventListener('change', e => {
+        const unitId = e.target.value;
+        appRoot.querySelectorAll(`[data-exam-chapter-row] [data-field="chapterStandardUnit"][value="${CSS.escape(unitId)}"]`).forEach(input => {
+          input.checked = e.target.checked;
+        });
+      });
+    });
     document.getElementById('bookSubject')?.addEventListener('change', e => state.formBook.subject = e.target.value);
     document.getElementById('bookGrade')?.addEventListener('change', e => state.formBook.grade = e.target.value);
-    document.getElementById('bookPublisher')?.addEventListener('input', e => state.formBook.publisher = e.target.value);
     document.getElementById('unitName')?.addEventListener('input', e => state.formUnit.name = e.target.value);
     document.getElementById('unitStart')?.addEventListener('input', e => state.formUnit.start = e.target.value);
     document.getElementById('unitEnd')?.addEventListener('input', e => state.formUnit.end = e.target.value);
@@ -2108,7 +2370,7 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="clear-student-bulk"]').forEach(el => el.addEventListener('click', () => { state.studentBulkText = ''; render(); }));
     appRoot.querySelectorAll('[data-action="remove-student"]').forEach(el => el.onclick = () => removeStudent(el.dataset.id));
     appRoot.querySelector('[data-action="save-book"]')?.addEventListener('click', saveBook);
-    appRoot.querySelector('[data-action="reset-book-form"]')?.addEventListener('click', () => { state.formBook = { title: '', subject: '수학', grade: '', publisher: '열린학원', active: true }; state.editingBookId = ''; render(); });
+    appRoot.querySelector('[data-action="reset-book-form"]')?.addEventListener('click', () => { state.formBook = { title: '', subject: '', grade: '', publisher: '', active: true, bookType: 'standard', chapterCount: '10' }; state.editingBookId = ''; render(); });
     appRoot.querySelector('[data-action="save-unit"]')?.addEventListener('click', saveUnit);
     appRoot.querySelector('[data-action="save-unit-bulk"]')?.addEventListener('click', saveUnitBulk);
     appRoot.querySelector('[data-action="clear-unit-bulk"]')?.addEventListener('click', () => { state.bulkUnitText = ''; render(); });
@@ -2127,7 +2389,7 @@ export async function mountLegacyApp(appRoot) {
         render();
       };
     });
-    appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false }; state.editingBookId = b.id; state.selectedBookManageId = b.id; render(); });
+    appRoot.querySelectorAll('[data-action="edit-book"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (!b) return; state.formBook = { title: b.title || '', subject: b.subject || '', grade: b.grade || '', publisher: b.publisher || '', active: b.active !== false, bookType: b.bookType || 'standard', chapterCount: b.chapterCount || '10' }; state.editingBookId = b.id; state.selectedBookManageId = b.id; render(); });
     appRoot.querySelectorAll('[data-action="clone-book"]').forEach(el => el.onclick = () => cloneBook(el.dataset.id));
     appRoot.querySelectorAll('[data-action="toggle-book-archive"]').forEach(el => el.onclick = () => { const b = bookById(el.dataset.id); if (b) toggleArchiveBook(b.id, !!b.archived); });
     appRoot.querySelectorAll('[data-action="select-book-manage"]').forEach(el => el.onclick = () => { state.selectedBookManageId = el.dataset.id; render(); });
@@ -2253,6 +2515,7 @@ export async function mountLegacyApp(appRoot) {
       el.onclick = () => saveStandardUnitName(el.dataset.id);
     });
     appRoot.querySelector('[data-action="admin-add-standard-unit"]')?.addEventListener('click', addStandardUnit);
+    appRoot.querySelector('[data-action="admin-save-remark-templates"]')?.addEventListener('click', saveRemarkTemplates);
 
     appRoot.querySelector('[data-action="save-login-config"]')?.addEventListener('click', saveLoginConfig);
     document.getElementById('configSplashTitleLine1')?.addEventListener('input', e => state.adminLoginConfigForm.splashTitleLine1 = e.target.value);
@@ -2261,10 +2524,27 @@ export async function mountLegacyApp(appRoot) {
     document.getElementById('configSplashTitleSizeLine2')?.addEventListener('change', e => { state.adminLoginConfigForm.splashTitleSizeLine2 = e.target.value; render(); });
     document.getElementById('configSplashSubtitle')?.addEventListener('input', e => state.adminLoginConfigForm.splashSubtitle = e.target.value);
     document.getElementById('configSplashDescription')?.addEventListener('input', e => state.adminLoginConfigForm.splashDescription = e.target.value);
+    document.getElementById('configSplashKicker')?.addEventListener('input', e => state.adminLoginConfigForm.splashKicker = e.target.value);
+    document.getElementById('configGatewayBadge')?.addEventListener('input', e => state.adminLoginConfigForm.gatewayBadge = e.target.value);
+    document.getElementById('configGatewayTitle')?.addEventListener('input', e => state.adminLoginConfigForm.gatewayTitle = e.target.value);
+    document.getElementById('configGatewayDescription')?.addEventListener('input', e => state.adminLoginConfigForm.gatewayDescription = e.target.value);
+    document.getElementById('configStudentPortalTitle')?.addEventListener('input', e => state.adminLoginConfigForm.studentPortalTitle = e.target.value);
+    document.getElementById('configStudentPortalDescription')?.addEventListener('input', e => state.adminLoginConfigForm.studentPortalDescription = e.target.value);
+    document.getElementById('configTeacherPortalTitle')?.addEventListener('input', e => state.adminLoginConfigForm.teacherPortalTitle = e.target.value);
+    document.getElementById('configTeacherPortalDescription')?.addEventListener('input', e => state.adminLoginConfigForm.teacherPortalDescription = e.target.value);
+    document.getElementById('configAdminPortalTitle')?.addEventListener('input', e => state.adminLoginConfigForm.adminPortalTitle = e.target.value);
+    document.getElementById('configAdminPortalDescription')?.addEventListener('input', e => state.adminLoginConfigForm.adminPortalDescription = e.target.value);
     document.getElementById('configLoginTitle')?.addEventListener('input', e => state.adminLoginConfigForm.loginTitle = e.target.value);
     document.getElementById('configLoginDescription')?.addEventListener('input', e => state.adminLoginConfigForm.loginDescription = e.target.value);
     document.getElementById('configLoginInfoText')?.addEventListener('input', e => state.adminLoginConfigForm.loginInfoText = e.target.value);
     document.getElementById('configPrimaryColor')?.addEventListener('input', e => state.adminLoginConfigForm.primaryColor = e.target.value);
+    document.getElementById('configSplashTitleColor')?.addEventListener('input', e => state.adminLoginConfigForm.splashTitleColor = e.target.value);
+    document.getElementById('configSplashTextColor')?.addEventListener('input', e => state.adminLoginConfigForm.splashTextColor = e.target.value);
+    document.getElementById('configSplashMutedColor')?.addEventListener('input', e => state.adminLoginConfigForm.splashMutedColor = e.target.value);
+    document.getElementById('configPortalHoverGlowColor')?.addEventListener('input', e => state.adminLoginConfigForm.portalHoverGlowColor = e.target.value);
+    document.getElementById('configAuroraColor1')?.addEventListener('input', e => state.adminLoginConfigForm.auroraColor1 = e.target.value);
+    document.getElementById('configAuroraColor2')?.addEventListener('input', e => state.adminLoginConfigForm.auroraColor2 = e.target.value);
+    document.getElementById('configAuroraColor3')?.addEventListener('input', e => state.adminLoginConfigForm.auroraColor3 = e.target.value);
 
     document.getElementById('configFontFamily')?.addEventListener('change', e => { state.adminLoginConfigForm.fontFamily = e.target.value; render(); });
     document.getElementById('configFontScale')?.addEventListener('change', e => { state.adminLoginConfigForm.fontScale = e.target.value; render(); });

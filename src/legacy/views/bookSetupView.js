@@ -82,7 +82,11 @@ export function renderBookSetupView(state, deps) {
 
   const GRADE_OPTIONS = ['고1', '고2', '고3'];
   const STANDARD_SUBJECT_OPTIONS = (state.standardUnitSubjects || []).map(subject => subject.label);
-  const SUBJECT_OPTIONS = [...new Set([...STANDARD_SUBJECT_OPTIONS, '수학', '영어', '국어', '과학'])];
+  const SUBJECT_OPTIONS = [...new Set(STANDARD_SUBJECT_OPTIONS)];
+  const BOOK_TYPE_OPTIONS = [
+    { value: 'standard', label: '일반 교재' },
+    { value: 'exam_chapter', label: '시험대비 챕터 교재' }
+  ];
 
   const isAdmin = state.currentTeacher?.role === 'admin';
   const btnClass = isAdmin ? 'btn-admin' : 'btn-teacher';
@@ -107,22 +111,75 @@ export function renderBookSetupView(state, deps) {
     const formatted = typeof fmtDate === 'function' ? fmtDate(raw) : '';
     return formatted === '-' ? '' : formatted;
   };
+  const stripBookSubjectFromTitle = (subject, title) => {
+    const cleanSubject = String(subject || '').trim();
+    const cleanTitle = String(title || '').trim();
+    if (!cleanSubject) return cleanTitle;
+    if (cleanTitle === cleanSubject) return '';
+    const prefixPattern = new RegExp(`^${cleanSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s_-]+`);
+    return cleanTitle.replace(prefixPattern, '').trim();
+  };
+  const bookTitleBase = stripBookSubjectFromTitle(state.formBook.subject, state.formBook.title);
+  const formBookType = state.formBook.bookType || 'standard';
+  const selectedBookIsExamChapter = selectedBookForUnits?.bookType === 'exam_chapter';
+  const standardUnitTableRows = (() => {
+    if (!selectedBookForUnits || !standardSubject) return [];
+    const rawUnits = [...(selectedBookForUnits.units || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+    return standardSubject.units.filter(unit => unit.active !== false).map(unit => {
+      const linkedUnit = rawUnits.find(bookUnit => (bookUnit.standardUnitIds || []).includes(unit.id));
+      const linkedIds = linkedUnit?.standardUnitIds || [];
+      const firstLinkedId = linkedIds[0];
+      const lastLinkedId = linkedIds[linkedIds.length - 1];
+      return {
+        ...unit,
+        unitName: linkedUnit?.name || '',
+        start: firstLinkedId === unit.id ? linkedUnit?.start || '' : '',
+        end: lastLinkedId === unit.id ? linkedUnit?.end || '' : ''
+      };
+    });
+  })();
+  const activeStandardUnits = standardSubject?.units?.filter(unit => unit.active !== false) || [];
+  const examChapterRows = (() => {
+    if (!selectedBookForUnits) return [];
+    const existingUnits = [...(selectedBookForUnits.units || [])].sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+    const chapterCount = Math.max(1, Math.min(40, Number(selectedBookForUnits.chapterCount || existingUnits.length || 10) || 10));
+    return Array.from({ length: Math.max(chapterCount, existingUnits.length) }, (_, index) => {
+      const unit = existingUnits[index] || {};
+      return {
+        chapterName: unit.name || `챕터 ${index + 1}`,
+        start: unit.start || '',
+        end: unit.end || '',
+        standardUnitIds: unit.standardUnitIds || []
+      };
+    });
+  })();
+  const examCommonStandardIds = new Set(
+    activeStandardUnits
+      .filter(unit => examChapterRows.length && examChapterRows.every(row => (row.standardUnitIds || []).includes(unit.id)))
+      .map(unit => unit.id)
+  );
 
   // 1. 교재 자산 관리 콘텐츠
   const manageContent = `
     <div class="space-y-4 text-slate-200">
-      <label class="block text-xs font-bold text-slate-400">교재 이름
-        <input id="bookTitle" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 mt-1.5 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="교재명 입력" value="${safe(state.formBook.title)}" />
-      </label>
+      <div class="flex flex-col gap-2">
+        <span class="text-xs font-bold text-slate-400">교재 유형</span>
+        ${renderBtnSelect({
+          id: 'bookType',
+          options: BOOK_TYPE_OPTIONS,
+          selectedValue: formBookType,
+          placeholder: '교재 유형 선택'
+        })}
+      </div>
 
       <div class="grid md:grid-cols-2 gap-4">
         <div class="flex flex-col gap-2">
-          <span class="text-xs font-bold text-slate-400">과목 선택</span>
+          <span class="text-xs font-bold text-slate-400">수학 교과목 선택</span>
           ${renderBtnSelect({
             id: 'bookSubject',
             options: SUBJECT_OPTIONS.map(s => ({ value: s, label: s })),
             selectedValue: state.formBook.subject,
-            placeholder: '과목 선택'
+            placeholder: '수학 교과목 선택'
           })}
         </div>
         <div class="flex flex-col gap-2">
@@ -136,9 +193,21 @@ export function renderBookSetupView(state, deps) {
         </div>
       </div>
 
-      <label class="block text-xs font-bold text-slate-400">출판사
-        <input id="bookPublisher" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 mt-1.5 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="출판사명 입력" value="${safe(state.formBook.publisher)}" />
-      </label>
+      <div class="block text-xs font-bold text-slate-400">
+        <span>교재 이름</span>
+        <div class="mt-1.5 grid grid-cols-[minmax(120px,0.42fr)_1fr] gap-2">
+          <input class="w-full border border-slate-800 rounded-xl p-3 bg-slate-950/60 text-xs text-cyan-200 font-black focus:outline-none" value="${safe(state.formBook.subject || '교과목 먼저 선택')}" readonly />
+          <input id="bookTitleBase" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="예: 블랙라벨, RPM, 쎈" value="${safe(bookTitleBase)}" />
+        </div>
+      </div>
+
+      ${formBookType === 'exam_chapter' ? `
+        <label class="block text-xs font-bold text-slate-400">
+          챕터 수
+          <input id="bookChapterCount" type="number" min="1" max="40" class="mt-1.5 w-32 border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 focus:outline-none focus:ring-2 ring-violet-500/20" value="${safe(state.formBook.chapterCount || 10)}" />
+          <span class="ml-2 text-[10px] font-medium text-slate-500">챕터별 난이도 상승형 시험대비 교재에 사용합니다.</span>
+        </label>
+      ` : ''}
 
       <div class="flex gap-2">
         <button type="button" data-action="save-book" class="${btnClass} rounded-xl px-4 py-2.5 text-xs font-extrabold text-white">${state.editingBookId ? '교재 수정 반영' : '신규 교재 생성'}</button>
@@ -153,7 +222,7 @@ export function renderBookSetupView(state, deps) {
               <div class="flex justify-between items-start gap-2 text-xs">
                 <div>
                   <div class="font-black text-slate-200">${safe(b.title)}</div>
-                  <div class="text-[10px] text-slate-500 mt-1 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')} &middot; ${safe(b.publisher || '-')}</div>
+                  <div class="text-[10px] text-slate-500 mt-1 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')}</div>
                 </div>
                 <span class="text-[9px] font-black text-emerald-600 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">활성</span>
               </div>
@@ -209,57 +278,97 @@ export function renderBookSetupView(state, deps) {
         })}
       </div>
 
-      <div class="grid md:grid-cols-3 gap-3">
-        <label class="block text-xs font-bold text-slate-400">단원명
-          <input id="unitName" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 mt-1.5 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="예: 1. 다항식의 연산" value="${safe(state.formUnit.name)}" />
-        </label>
-        <label class="block text-xs font-bold text-slate-400">시작 페이지
-          <input id="unitStart" type="number" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 mt-1.5 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="쪽 번호" value="${safe(state.formUnit.start)}" />
-        </label>
-        <label class="block text-xs font-bold text-slate-400">끝 페이지
-          <input id="unitEnd" type="number" class="w-full border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 mt-1.5 focus:outline-none focus:ring-2 ring-violet-500/200/20" placeholder="쪽 번호" value="${safe(state.formUnit.end)}" />
-        </label>
-      </div>
-
-      <div class="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4">
-        <div class="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div class="text-xs font-extrabold text-cyan-200">표준 소단원 연결</div>
-            <div class="text-[10px] text-slate-500 mt-1">교재 목차명과 달라도 같은 표준단원 ID로 묶어 나중에 단원별 통계를 볼 수 있습니다.</div>
-          </div>
-          ${selectedStandardNames.length ? `<span class="shrink-0 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-black text-cyan-200">${selectedStandardNames.length}개 선택</span>` : ''}
-        </div>
-        ${standardSubject ? `
-          <div class="text-[10px] font-bold text-slate-400 mb-2">교과목: ${safe(standardSubject.label)}</div>
-          <div class="flex flex-wrap gap-1.5">
-            ${standardSubject.units.filter(unit => unit.active !== false).map(unit => `
-              <button type="button" data-action="toggle-unit-standard" data-id="${safe(unit.id)}" class="rounded-full border px-3 py-1.5 text-[10px] font-extrabold transition-all ${selectedStandardUnitIds.has(unit.id) ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-200'}">
-                ${safe(unit.label)}
-              </button>
-            `).join('')}
-          </div>
-          ${selectedStandardNames.length ? `
-            <div class="mt-3 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-[10px] text-slate-400">
-              연결됨: <span class="font-black text-cyan-200">${safe(selectedStandardNames.join(' + '))}</span>
+      ${selectedBookForUnits && standardSubject && selectedBookIsExamChapter ? `
+        <div class="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-xs font-extrabold text-amber-200">시험대비 챕터 기준 페이지 맵</div>
+              <div class="text-[10px] text-slate-500 mt-1">챕터별로 난이도가 올라가는 자체 제작 교재용입니다. 각 챕터에 시험범위 표준소단원을 여러 개 연결할 수 있습니다.</div>
             </div>
-          ` : ''}
-        ` : `
-          <div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-5 text-center text-xs text-slate-500">
-            선택한 교재의 과목이 표준단원 과목과 연결되어 있지 않습니다. 교재 과목을 공통수학1, 대수처럼 선택하면 버튼이 표시됩니다.
+            <span class="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-black text-amber-200">${safe(standardSubject.label)}</span>
           </div>
-        `}
-      </div>
-
-      <button type="button" data-action="save-unit" class="rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold px-4 py-2.5 text-xs transition-colors shadow-sm">단원 개별 추가</button>
-
-      <label class="block text-xs font-bold text-slate-400 mt-4">엑셀/텍스트 일괄 붙여넣기 반영 <span class="text-[10px] text-slate-400 font-medium">(구분자: 슬래시 '/')</span>
-        <textarea id="bulkUnitText" class="w-full min-h-[140px] border border-slate-800 rounded-xl p-3 bg-slate-900/40 text-xs text-slate-200 leading-relaxed focus:outline-none mt-1.5 focus:ring-2 ring-violet-500/200/20" placeholder="예: 단원명 / 시작쪽 / 끝쪽&#10;다항식의 덧셈 / 1 / 15&#10;나머지정리 / 16 / 32">${safe(state.bulkUnitText)}</textarea>
-      </label>
-      
-      <div class="flex gap-2">
-        <button type="button" data-action="save-unit-bulk" class="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold px-4 py-2.5 text-xs transition-colors shadow-sm">일괄 등록 실행</button>
-        <button type="button" data-action="clear-unit-bulk" class="ghost-button border border-slate-800 text-slate-400 bg-slate-900/40 hover:bg-slate-900/20 rounded-xl px-4 py-2.5 text-xs">지우기</button>
-      </div>
+          <div class="overflow-x-auto mini-scroll">
+            <div class="min-w-[920px]">
+              <div class="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
+                <div class="mb-2 text-[10px] font-black text-amber-200">전 챕터 표준소단원 선택</div>
+                <div class="flex flex-wrap gap-1.5">
+                  ${activeStandardUnits.map(unit => `
+                    <label class="cursor-pointer rounded-full border px-2 py-1 text-[10px] font-bold transition-colors ${examCommonStandardIds.has(unit.id) ? 'border-amber-300 bg-amber-300/20 text-amber-100' : 'border-slate-700 bg-slate-950/60 text-slate-400 hover:border-amber-500/60 hover:text-amber-200'}">
+                      <input type="checkbox" data-field="allChapterStandardUnit" value="${safe(unit.id)}" class="mr-1 align-middle accent-amber-400" ${examCommonStandardIds.has(unit.id) ? 'checked' : ''} />
+                      ${safe(unit.label)}
+                    </label>
+                  `).join('')}
+                </div>
+                <div class="mt-2 text-[10px] font-medium text-slate-500">여기서 선택하면 모든 챕터에 반영됩니다. 각 챕터 안에서 필요한 항목만 다시 체크/해제할 수 있습니다.</div>
+              </div>
+              <div class="grid grid-cols-[0.75fr_1.8fr_0.45fr_0.45fr] gap-2 px-2 pb-2 text-[10px] font-black text-slate-500">
+                <div>챕터명</div>
+                <div>시험범위 표준소단원</div>
+                <div>시작쪽</div>
+                <div>끝쪽</div>
+              </div>
+              <div class="space-y-2">
+                ${examChapterRows.map((row, index) => {
+                  const selectedIds = new Set(row.standardUnitIds || []);
+                  return `
+                    <div data-exam-chapter-row class="grid grid-cols-[0.75fr_1.8fr_0.45fr_0.45fr] gap-2 rounded-xl border border-slate-800 bg-slate-950/30 p-2">
+                      <input data-field="chapterName" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" placeholder="챕터 ${index + 1}" value="${safe(row.chapterName)}" />
+                      <div class="flex flex-wrap gap-1.5 rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-2">
+                        ${activeStandardUnits.map(unit => `
+                          <label class="cursor-pointer rounded-full border px-2 py-1 text-[10px] font-bold transition-colors ${selectedIds.has(unit.id) ? 'border-amber-400 bg-amber-400/15 text-amber-200' : 'border-slate-800 bg-slate-900/70 text-slate-400 hover:border-amber-500/60 hover:text-amber-200'}">
+                            <input type="checkbox" data-field="chapterStandardUnit" value="${safe(unit.id)}" class="mr-1 align-middle accent-amber-400" ${selectedIds.has(unit.id) ? 'checked' : ''} />
+                            ${safe(unit.label)}
+                          </label>
+                        `).join('')}
+                      </div>
+                      <input data-field="start" type="number" min="1" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" placeholder="시작" value="${safe(row.start)}" />
+                      <input data-field="end" type="number" min="1" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" placeholder="끝" value="${safe(row.end)}" />
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+          <button type="button" data-action="save-unit" class="mt-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2.5 text-xs transition-colors shadow-sm">챕터표 저장</button>
+        </div>
+      ` : selectedBookForUnits && standardSubject ? `
+        <div class="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-4">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-xs font-extrabold text-cyan-200">표준소단원 기준 단원표</div>
+              <div class="text-[10px] text-slate-500 mt-1">교재 소단원명이 여러 표준소단원에 걸치면 같은 소단원명을 이어서 입력하고, 첫 행에는 시작쪽, 마지막 행에는 끝쪽을 입력하세요.</div>
+            </div>
+            <span class="shrink-0 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-black text-cyan-200">${safe(standardSubject.label)}</span>
+          </div>
+          <div class="overflow-x-auto mini-scroll">
+            <div class="min-w-[760px]">
+              <div class="grid grid-cols-[1.25fr_1.15fr_0.55fr_0.55fr] gap-2 px-2 pb-2 text-[10px] font-black text-slate-500">
+                <div>소단원명</div>
+                <div>표준소단원</div>
+                <div>시작쪽</div>
+                <div>끝쪽</div>
+              </div>
+              <div class="space-y-2">
+                ${standardUnitTableRows.map(row => `
+                  <div data-standard-unit-row data-standard-unit-id="${safe(row.id)}" data-standard-label="${safe(row.label)}" class="grid grid-cols-[1.25fr_1.15fr_0.55fr_0.55fr] gap-2 rounded-xl border border-slate-800 bg-slate-950/30 p-2">
+                    <input data-field="unitName" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500" placeholder="예: 03 순열과 조합" value="${safe(row.unitName)}" />
+                    <div class="flex items-center rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs font-bold text-cyan-200">
+                      ${safe(row.label)}
+                    </div>
+                    <input data-field="start" type="number" min="1" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500" placeholder="시작" value="${safe(row.start)}" />
+                    <input data-field="end" type="number" min="1" class="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500" placeholder="끝" value="${safe(row.end)}" />
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          <button type="button" data-action="save-unit" class="mt-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold px-4 py-2.5 text-xs transition-colors shadow-sm">단원표 저장</button>
+        </div>
+      ` : `
+        <div class="rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-8 text-center text-xs text-slate-500">
+          교재를 선택하면 해당 수학 교과목의 표준소단원 표가 표시됩니다.
+        </div>
+      `}
 
       ${bookById(state.selectedBookManageId) ? bookMap(bookById(state.selectedBookManageId), deps) : '<div class="rounded-xl border border-dashed border-slate-700 bg-slate-900/20 px-4 py-10 text-center text-xs font-bold text-slate-400 mt-4">교재를 위에서 클릭하여 선택하시면 등록 완료된 단원 페이지 맵이 여기에 나옵니다.</div>'}
     </div>

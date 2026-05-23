@@ -12,12 +12,11 @@ describe('renderBookSetupView', () => {
         title: '공통수학1 RPM',
         subject: '공통수학1',
         grade: '고1',
-        publisher: '테스트',
         archived: false,
         units: []
       }
     ],
-    formBook: { title: '', subject: '공통수학1', grade: '고1', publisher: '열린학원' },
+    formBook: { title: '', subject: '공통수학1', grade: '고1', publisher: '' },
     formUnit: { name: '', start: '', end: '', standardUnitIds: [] },
     selectedBookManageId: 'book1',
     bulkUnitText: '',
@@ -39,12 +38,13 @@ describe('renderBookSetupView', () => {
     fmtDate: vi.fn(() => '2026.05.22')
   };
 
-  it('renders standard unit buttons for the selected textbook subject', () => {
+  it('renders the standard-unit table for the selected textbook subject', () => {
     const html = renderBookSetupView(baseState, deps);
 
-    expect(html).toContain('표준 소단원 연결');
+    expect(html).toContain('표준소단원 기준 단원표');
     expect(html).toContain('다항식의 연산');
-    expect(html).toContain('data-action="toggle-unit-standard"');
+    expect(html).toContain('data-standard-unit-row');
+    expect(html).toContain('data-field="unitName"');
   });
 
   it('renders class textbook progress controls separately from completed history', () => {

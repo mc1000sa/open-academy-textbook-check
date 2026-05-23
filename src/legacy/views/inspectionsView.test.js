@@ -73,7 +73,8 @@ describe('InspectionsView Component', () => {
 
   it('should define REMARK_GROUPS properly', () => {
     expect(REMARK_GROUPS.length).toBeGreaterThan(0);
-    expect(REMARK_GROUPS[0].group).toBe('식 관련');
+    expect(REMARK_GROUPS[0].label).toBe('과제 수행률');
+    expect(REMARK_GROUPS[0].positive.length).toBeGreaterThan(0);
   });
 
   it('should apply editing state description when editingInspectionId is present', () => {
