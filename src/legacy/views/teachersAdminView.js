@@ -400,6 +400,11 @@ export function renderTeachersAdminView(state, deps) {
                 <select id="adminStudentClass-${safe(s.id)}" class="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-[10px] text-slate-200">
                   ${classOptionsHtml(s.classId)}
                 </select>
+                <label class="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-bold text-slate-400">
+                  PIN
+                  <input id="adminStudentPin-${safe(s.id)}" type="text" inputmode="numeric" maxlength="4" class="w-14 bg-transparent text-center text-slate-100 outline-none" value="${safe(s.pin || '1234')}" />
+                </label>
+                <button type="button" data-action="admin-update-student-pin" data-id="${s.id}" class="rounded-lg bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1.5 text-[10px] font-bold text-cyan-300 hover:bg-cyan-500 hover:text-slate-950">PIN 저장</button>
                 <button type="button" data-action="admin-update-student-class" data-id="${s.id}" class="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[10px] font-bold text-slate-200 hover:bg-slate-700">반 수정</button>
                 <button type="button" data-action="admin-withdraw-student" data-id="${s.id}" class="rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-[10px] font-bold text-amber-300 hover:bg-amber-500 hover:text-white">퇴원</button>
                 <button type="button" data-action="admin-delete-student" data-id="${s.id}" class="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 text-[10px] font-bold text-rose-300 hover:bg-rose-500 hover:text-white">삭제</button>

@@ -65,6 +65,7 @@ export async function mountLegacyApp(appRoot) {
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
   const GRADE_OPTIONS = ['고1','고2','고3'];
   const STAFF_PIN_LENGTH = 6;
+  const STUDENT_LOGIN_MEMORY_KEY = 'oatis.studentLoginForm.v1';
 
   const state = {
     loading: true,
@@ -138,7 +139,7 @@ export async function mountLegacyApp(appRoot) {
     bookSetupAccordion: { manage: false, unit: false, assign: false },
     
     // 학생 PIN 관련 폼 상태
-    studentLoginForm: { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false },
+    studentLoginForm: readRememberedStudentLoginForm(),
     studentSession: null, // 학생 포털 로그인 성공 세션
     selectedStudentBookFilter: '',
     selectedStudentRubricBookId: '',
@@ -342,6 +343,55 @@ export async function mountLegacyApp(appRoot) {
   }
   function uid() {
     return Math.random().toString(36).slice(2, 10);
+  }
+  function blankStudentLoginForm(overrides = {}) {
+    return {
+      classId: '',
+      grade: '',
+      studentId: '',
+      name: '',
+      pin: '',
+      school: '',
+      schoolConfirmed: false,
+      teacherId: '',
+      ...overrides,
+      pin: ''
+    };
+  }
+  function readRememberedStudentLoginForm() {
+    try {
+      const raw = window.localStorage?.getItem(STUDENT_LOGIN_MEMORY_KEY);
+      if (!raw) return blankStudentLoginForm();
+      const saved = JSON.parse(raw);
+      return blankStudentLoginForm({
+        teacherId: String(saved.teacherId || ''),
+        grade: String(saved.grade || ''),
+        classId: String(saved.classId || ''),
+        studentId: String(saved.studentId || ''),
+        name: String(saved.name || ''),
+        school: String(saved.school || ''),
+        schoolConfirmed: !!saved.schoolConfirmed
+      });
+    } catch (err) {
+      return blankStudentLoginForm();
+    }
+  }
+  function rememberStudentLoginForm(student, form = state.studentLoginForm) {
+    try {
+      const payload = {
+        teacherId: form.teacherId || student.teacherId || '',
+        grade: student.grade || form.grade || '',
+        classId: student.classId || form.classId || '',
+        studentId: student.id || form.studentId || '',
+        name: student.name || form.name || '',
+        school: student.school || form.school || '',
+        schoolConfirmed: !!(student.school || form.school || form.schoolConfirmed)
+      };
+      window.localStorage?.setItem(STUDENT_LOGIN_MEMORY_KEY, JSON.stringify(payload));
+      return blankStudentLoginForm(payload);
+    } catch (err) {
+      return blankStudentLoginForm(form);
+    }
   }
   function fmtDate(v) {
     const d = new Date(v);
@@ -962,7 +1012,7 @@ export async function mountLegacyApp(appRoot) {
     state.view = 'studentPortal';
     state.selectedStudentBookFilter = '';
     state.selectedStudentRubricBookId = '';
-    state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
+    state.studentLoginForm = rememberStudentLoginForm(student, form);
     notify('학생 대시보드 로그인 성공!');
     render();
   }
@@ -1140,6 +1190,13 @@ export async function mountLegacyApp(appRoot) {
       updatedAt: serverTimestamp()
     });
     notify('학생 소속 반을 수정했습니다.');
+  }
+
+  async function updateAdminStudentPin(studentId) {
+    const input = document.getElementById(`adminStudentPin-${studentId}`);
+    const nextPin = String(input?.value || '').replace(/\D/g, '').slice(0, 4);
+    if (input) input.value = nextPin;
+    await updateStudentPin(studentId, nextPin);
   }
 
   async function withdrawAdminStudent(studentId) {
@@ -1795,7 +1852,7 @@ export async function mountLegacyApp(appRoot) {
       state.pin = '';
       state.loginError = '';
       state.selectedTeacherName = '';
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
+      state.studentLoginForm = readRememberedStudentLoginForm();
       
       if (el.dataset.portal === 'admin') {
         const adminTeacher = state.teachers.find(t => t.role === 'admin') || { id: 't_admin' };
@@ -1812,7 +1869,7 @@ export async function mountLegacyApp(appRoot) {
       state.pin = '';
       state.loginError = '';
       state.selectedTeacherName = '';
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
+      state.studentLoginForm = readRememberedStudentLoginForm();
       render();
     });
 
@@ -1955,7 +2012,7 @@ export async function mountLegacyApp(appRoot) {
     // 학생 회원가입 / 비밀번호 변경 단계 바인딩
     appRoot.querySelectorAll('[data-action="student-step"]').forEach(el => el.onclick = () => {
       state.loginStep = el.dataset.step;
-      state.studentLoginForm = { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false };
+      state.studentLoginForm = readRememberedStudentLoginForm();
       render();
     });
 
@@ -2476,6 +2533,12 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="approve-student-request"]').forEach(el => el.onclick = () => approveStudentRequest(el.dataset.id));
     appRoot.querySelectorAll('[data-action="reject-student-request"]').forEach(el => el.onclick = () => rejectStudentRequest(el.dataset.id));
     appRoot.querySelectorAll('[data-action="admin-update-student-class"]').forEach(el => el.onclick = () => updateAdminStudentClass(el.dataset.id));
+    appRoot.querySelectorAll('[data-action="admin-update-student-pin"]').forEach(el => el.onclick = () => updateAdminStudentPin(el.dataset.id));
+    appRoot.querySelectorAll('[id^="adminStudentPin-"]').forEach(el => {
+      el.oninput = (e) => {
+        e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+      };
+    });
     appRoot.querySelectorAll('[data-action="admin-withdraw-student"]').forEach(el => el.onclick = () => withdrawAdminStudent(el.dataset.id));
     appRoot.querySelectorAll('[data-action="admin-delete-student"]').forEach(el => el.onclick = () => deleteAdminStudent(el.dataset.id));
     appRoot.querySelectorAll('[data-action="toggle-admin-student-select"]').forEach(el => {
