@@ -829,6 +829,36 @@ details.group[open] summary span {
   break-inside: avoid;
   page-break-inside: avoid;
 }
+
+/* OATIS Filter Switch styling */
+.filter-switch {
+  display: inline-flex;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  padding: 2px;
+  gap: 2px;
+}
+.filter-switch-item {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+.filter-switch-item:hover {
+  color: #cbd5e1;
+}
+.filter-switch-item.active {
+  color: #38bdf8; /* 은은한 하늘색 */
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
 .class-rubric-table {
   break-inside: avoid;
   page-break-inside: avoid;

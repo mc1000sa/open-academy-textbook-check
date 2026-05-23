@@ -216,25 +216,25 @@ export function renderBookSetupView(state, deps) {
 
       <div class="border-t border-slate-800 pt-4 mt-2">
         <span class="text-xs font-bold text-slate-500 block mb-3">사용 중인 교재 자산 (${activeBooks.length}권):</span>
-        <div class="space-y-3.5 max-h-56 overflow-y-auto mini-scroll pr-1 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 max-h-[500px] overflow-y-auto mini-scroll pr-1 mb-4">
           ${activeBooks.map(b => `
-            <div class="rounded-xl border border-slate-800 bg-slate-900/20/50 px-3.5 py-3 shadow-sm hover:border-violet-500/40 transition-colors">
-              <div class="flex justify-between items-start gap-2 text-xs">
-                <div>
-                  <div class="font-black text-slate-200">${safe(b.title)}</div>
-                  <div class="text-[10px] text-slate-500 mt-1 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')}</div>
+            <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-3.5 py-3 shadow-sm hover:border-violet-500/40 transition-colors flex flex-col justify-between">
+              <div>
+                <div class="flex justify-between items-start gap-2 text-xs">
+                  <div class="font-black text-slate-200 leading-snug break-all">${safe(b.title)}</div>
+                  <span class="text-[9px] font-black text-emerald-400 bg-emerald-950/40 border border-emerald-900 px-1.5 py-0.5 rounded shrink-0">활성</span>
                 </div>
-                <span class="text-[9px] font-black text-emerald-600 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">활성</span>
+                <div class="text-[10px] text-slate-500 mt-1.5 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')}</div>
               </div>
-              <div class="mt-3.5 flex flex-wrap gap-1.5">
-                <button type="button" data-action="edit-book" data-id="${b.id}" class="rounded bg-slate-900/40 border border-slate-800 hover:bg-slate-800/50 text-slate-400 px-2 py-1 text-[10px] font-bold">수정</button>
-                <button type="button" data-action="clone-book" data-id="${b.id}" class="rounded bg-slate-900/40 border border-slate-800 hover:bg-slate-800/50 text-slate-400 px-2 py-1 text-[10px] font-bold">복제</button>
-                <button type="button" data-action="toggle-book-archive" data-id="${b.id}" class="rounded bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white px-2 py-1 text-[10px] font-bold transition-colors">보관</button>
-                <button type="button" data-action="select-book-manage" data-id="${b.id}" class="rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/100 hover:text-white px-2 py-1 text-[10px] font-bold transition-colors">단원설정</button>
+              <div class="mt-4 flex flex-wrap gap-1.5">
+                <button type="button" data-action="edit-book" data-id="${b.id}" class="rounded bg-slate-950 border border-slate-800 hover:bg-slate-800/50 text-slate-400 px-2 py-1.5 text-[10px] font-bold">수정</button>
+                <button type="button" data-action="clone-book" data-id="${b.id}" class="rounded bg-slate-950 border border-slate-800 hover:bg-slate-800/50 text-slate-400 px-2 py-1.5 text-[10px] font-bold">복제</button>
+                <button type="button" data-action="toggle-book-archive" data-id="${b.id}" class="rounded bg-rose-950/60 border border-rose-900 text-rose-400 hover:bg-rose-900 hover:text-white px-2 py-1.5 text-[10px] font-bold transition-colors">보관</button>
+                <button type="button" data-action="select-book-manage" data-id="${b.id}" class="rounded bg-cyan-950 border border-cyan-800 text-cyan-400 hover:bg-cyan-500 hover:text-white px-2 py-1.5 text-[10px] font-bold transition-colors">단원설정</button>
               </div>
             </div>
           `).join('')}
-          ${activeBooks.length === 0 ? '<div class="text-xs text-slate-400 py-6 text-center">등록된 교재가 존재하지 않습니다.</div>' : ''}
+          ${activeBooks.length === 0 ? '<div class="text-xs text-slate-400 py-6 text-center col-span-full">등록된 교재가 존재하지 않습니다.</div>' : ''}
         </div>
 
         <details class="group border border-slate-800 rounded-xl bg-slate-900/20 p-3 transition-all duration-200">
@@ -242,23 +242,23 @@ export function renderBookSetupView(state, deps) {
             <span>📦 보관함 교재 (${archivedBooks.length}권)</span>
             <span class="transition-transform duration-200 group-open:rotate-180 text-[10px] text-slate-400">▼</span>
           </summary>
-          <div class="mt-3.5 space-y-3.5 max-h-48 overflow-y-auto mini-scroll pr-1">
+          <div class="mt-3.5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 max-h-[350px] overflow-y-auto mini-scroll pr-1">
             ${archivedBooks.map(b => `
-              <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2.5 shadow-sm">
-                <div class="flex justify-between items-start gap-2 text-xs">
-                  <div>
-                    <div class="font-black text-slate-400">${safe(b.title)}</div>
-                    <div class="text-[10px] text-slate-400 mt-1 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')}</div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 px-3.5 py-3 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div class="flex justify-between items-start gap-2 text-xs">
+                    <div class="font-black text-slate-400 leading-snug break-all">${safe(b.title)}</div>
+                    <span class="text-[9px] font-black text-rose-400 bg-rose-950/40 border border-rose-900 px-1.5 py-0.5 rounded shrink-0">보관</span>
                   </div>
-                  <span class="text-[9px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded">보관</span>
+                  <div class="text-[10px] text-slate-500 mt-1.5 font-bold">${safe(b.subject || '-')} &middot; ${safe(b.grade || '-')}</div>
                 </div>
-                <div class="mt-2.5 flex flex-wrap gap-1.5">
-                  <button type="button" data-action="toggle-book-archive" data-id="${b.id}" class="rounded bg-emerald-50 border border-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white px-2 py-1 text-[10px] font-bold transition-all">부활 (복구)</button>
-                  <button type="button" data-action="delete-book" data-id="${b.id}" class="rounded bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-500 hover:text-white px-2 py-1 text-[10px] font-bold transition-all">영구 삭제</button>
+                <div class="mt-4 flex flex-wrap gap-1.5">
+                  <button type="button" data-action="toggle-book-archive" data-id="${b.id}" class="rounded bg-emerald-950 border border-emerald-900 text-emerald-400 hover:bg-emerald-500 hover:text-white px-2 py-1.5 text-[10px] font-bold transition-all">부활 (복구)</button>
+                  <button type="button" data-action="delete-book" data-id="${b.id}" class="rounded bg-rose-950 border border-rose-900 text-rose-400 hover:bg-rose-900 hover:text-white px-2 py-1.5 text-[10px] font-bold transition-all">영구 삭제</button>
                 </div>
               </div>
             `).join('')}
-            ${archivedBooks.length === 0 ? '<div class="text-[10px] text-slate-400 py-3 text-center">보관함이 비어 있습니다.</div>' : ''}
+            ${archivedBooks.length === 0 ? '<div class="text-[10px] text-slate-400 py-3 text-center col-span-full">보관함이 비어 있습니다.</div>' : ''}
           </div>
         </details>
       </div>

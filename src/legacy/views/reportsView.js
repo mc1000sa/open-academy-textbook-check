@@ -360,7 +360,19 @@ export function reportForClass(classId, state, deps) {
 // 3. 메인 보고서 뷰 렌더러
 export function renderReportsView(state, deps) {
   const { teacherClasses, classById } = deps;
-  const teacherClassesList = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
+  let teacherClassesList = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
+  const classSort = state.classSortType || 'name';
+  if (classSort === 'grade') {
+    const GRADE_WEIGHTS = { '고1': 1, '고2': 2, '고3': 3 };
+    teacherClassesList = [...teacherClassesList].sort((a, b) => {
+      const wA = GRADE_WEIGHTS[a.grade] || 99;
+      const wB = GRADE_WEIGHTS[b.grade] || 99;
+      if (wA !== wB) return wA - wB;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+    });
+  } else {
+    teacherClassesList = [...teacherClassesList].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  }
   const studentsList = state.currentTeacher.role === 'admin' ? state.students : state.students.filter(s => teacherClassesList.some(c => c.id === s.classId));
 
   // 포털 테마에 따른 전용 버튼 스타일링: Royal Blue
@@ -379,16 +391,48 @@ export function renderReportsView(state, deps) {
           
           <div class="space-y-4">
             <div class="flex flex-col gap-2">
-              <span class="text-xs font-bold text-slate-400">대상 학생 선택</span>
-              ${renderBtnSelect({
-                id: 'reportStudentId',
-                options: studentsList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>({
-                  value: s.id,
-                  label: `${s.name} (${classById(s.classId)?.name || '-'})`
-                })),
-                selectedValue: state.reportStudentId,
-                placeholder: '배정된 학생이 없습니다.'
-              })}
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-slate-400">대상 학생 선택</span>
+                <div class="filter-switch">
+                  <span class="filter-switch-item ${(!state.studentSortType || state.studentSortType === 'name') ? 'active' : ''}" data-action="set-student-sort" data-sort="name">이름순</span>
+                  <span class="filter-switch-item ${state.studentSortType === 'class' ? 'active' : ''}" data-action="set-student-sort" data-sort="class">반별</span>
+                </div>
+              </div>
+              ${(() => {
+                const studentSort = state.studentSortType || 'name';
+                if (studentSort === 'class') {
+                  const html = teacherClassesList.map(c => {
+                    const classStudents = studentsList.filter(s => s.classId === c.id)
+                      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'));
+                    if (classStudents.length === 0) return '';
+                    return `
+                      <div class="mb-3 p-3 rounded-xl bg-slate-950/20 border border-slate-800/40">
+                        <div class="text-[10px] font-black text-slate-400 mb-2 pb-1 border-b border-slate-900 flex items-center justify-between">
+                          <span>${c.name}</span>
+                          <span class="text-[9px] text-slate-500 font-bold">${classStudents.length}명</span>
+                        </div>
+                        ${renderBtnSelect({
+                          id: 'reportStudentId',
+                          options: classStudents.map(s => ({ value: s.id, label: s.name })),
+                          selectedValue: state.reportStudentId,
+                          placeholder: '이 반에 배정된 학생이 없습니다.'
+                        })}
+                      </div>
+                    `;
+                  }).filter(Boolean).join('');
+                  return html || `<div class="text-xs text-slate-500 p-2 font-bold">배정된 학생이 없습니다.</div>`;
+                } else {
+                  return renderBtnSelect({
+                    id: 'reportStudentId',
+                    options: studentsList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>({
+                      value: s.id,
+                      label: `${s.name} (${classById(s.classId)?.name || '-'})`
+                    })),
+                    selectedValue: state.reportStudentId,
+                    placeholder: '배정된 학생이 없습니다.'
+                  });
+                }
+              })()}
             </div>
             
             <p class="text-xs text-slate-500 leading-normal">
@@ -415,7 +459,13 @@ export function renderReportsView(state, deps) {
           
           <div class="space-y-4">
             <div class="flex flex-col gap-2">
-              <span class="text-xs font-bold text-slate-400">대상 반 선택</span>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-slate-400">대상 반 선택</span>
+                <div class="filter-switch">
+                  <span class="filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}" data-action="set-class-sort" data-sort="name">이름순</span>
+                  <span class="filter-switch-item ${state.classSortType === 'grade' ? 'active' : ''}" data-action="set-class-sort" data-sort="grade">학년별</span>
+                </div>
+              </div>
               ${renderBtnSelect({
                 id: 'reportClassId',
                 options: teacherClassesList.map(c=>({ value: c.id, label: c.name })),

@@ -209,7 +209,7 @@ export function renderLoginView(state, safe) {
               <!-- 5단계: PIN 비밀번호 입력 -->
               <div id="studentLoginPinSection" class="${activeStudentId ? 'opacity-100' : 'opacity-40 pointer-events-none'} transition-opacity duration-300">
                 <label class="block text-xs font-bold text-slate-400 mb-2">5단계: 4자리 PIN 비밀번호</label>
-                <input id="studentLoginPin" type="password" maxlength="4" class="w-full h-14 border border-slate-800 rounded-2xl text-center text-2xl tracking-[1em] font-black bg-slate-900/30 focus:border-[#00d6cd] outline-none text-white" placeholder="••••" value="${safe(state.studentLoginForm.pin || '')}" ${!activeStudentId ? 'disabled' : ''} />
+                <input id="studentLoginPin" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="4" style="-webkit-text-security: disc;" class="w-full h-14 border border-slate-800 rounded-2xl text-center text-2xl tracking-[1em] font-black bg-slate-900/30 focus:border-[#00d6cd] outline-none text-white" placeholder="••••" value="${safe(state.studentLoginForm.pin || '')}" ${!activeStudentId ? 'disabled' : ''} />
                 <p class="text-[10px] text-slate-500 mt-1.5 text-center">초기 비밀번호는 <strong>1234</strong> 입니다.</p>
               </div>
 
@@ -311,7 +311,7 @@ export function renderLoginView(state, safe) {
 
                 <div>
                   <label class="block text-xs font-bold text-slate-400 mb-2">6단계: 사용할 4자리 PIN 비밀번호</label>
-                  <input type="password" id="studentRegPin" maxlength="4" inputmode="numeric" autocomplete="new-password" placeholder="숫자 4자리 설정" class="w-full p-3 text-sm rounded-xl text-center text-lg font-bold bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.pin || '')}" ${!activeClassId ? 'disabled' : ''} />
+                  <input type="text" id="studentRegPin" maxlength="4" inputmode="numeric" autocomplete="one-time-code" style="-webkit-text-security: disc;" placeholder="숫자 4자리 설정" class="w-full p-3 text-sm rounded-xl text-center text-lg font-bold bg-slate-900/30 border border-slate-850 text-white focus:border-[#00d6cd] outline-none" value="${safe(state.studentLoginForm.pin || '')}" ${!activeClassId ? 'disabled' : ''} />
                 </div>
               </div>
 
@@ -369,7 +369,7 @@ export function renderLoginView(state, safe) {
             <!-- PIN 번호 입력 -->
             <div>
               <label class="block text-xs font-bold text-slate-400 mb-2">2단계: 6자리 PIN 번호</label>
-              <input id="loginPin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" name="teacherPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#4169e1]'}" placeholder="••••••" value="${safe(state.pin)}" ${state.selectedTeacherName ? 'data-autofocus="true"' : ''} ${!state.selectedTeacherName ? 'disabled' : ''} />
+              <input id="loginPin" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="-webkit-text-security: disc;" name="teacherPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#4169e1]'}" placeholder="••••••" value="${safe(state.pin)}" ${state.selectedTeacherName ? 'data-autofocus="true"' : ''} ${!state.selectedTeacherName ? 'disabled' : ''} />
               ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 
@@ -424,7 +424,7 @@ export function renderLoginView(state, safe) {
             <div>
               <label class="block text-xs font-bold text-slate-400 mb-2">관리자 6자리 PIN 패스워드</label>
               <!-- input 활성화를 위해 selectedTeacherName 상태가 필요하여 강제 설정하게끔 처리 -->
-              <input id="loginPin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" name="adminPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#8436ff]'}" placeholder="••••••" value="${safe(state.pin)}" data-autofocus="true" />
+              <input id="loginPin" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="-webkit-text-security: disc;" name="adminPinEntry" data-lpignore="true" class="w-full h-14 border rounded-2xl text-center text-2xl tracking-[0.65em] font-black outline-none transition-all ${hasLoginError ? 'border-rose-500 bg-rose-950/30 text-rose-100 focus:border-rose-400 shadow-[0_0_0_3px_rgba(244,63,94,0.18)]' : 'focus:border-[#8436ff]'}" placeholder="••••••" value="${safe(state.pin)}" data-autofocus="true" />
               ${hasLoginError ? `<div id="loginErrorMessage" class="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 text-xs font-bold text-rose-300">${safe(state.loginError)}</div>` : ''}
             </div>
 

@@ -429,12 +429,12 @@ export function renderStudentPortalView(state, utils) {
             <div class="space-y-4">
               <label class="field mb-0 block">
                 <span class="text-xs text-slate-400 block mb-1.5 font-bold">새로운 4자리 PIN번호 입력</span>
-                <input type="password" id="changeNewPin" placeholder="숫자 4자리" maxlength="4" class="w-full p-3 rounded-xl bg-black/40 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-[#00d6cd] transition-all" value="${state.studentLoginForm.newPin || ''}" />
+                <input type="text" inputmode="numeric" autocomplete="one-time-code" style="-webkit-text-security: disc;" id="changeNewPin" placeholder="숫자 4자리" maxlength="4" class="w-full p-3 rounded-xl bg-black/40 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-[#00d6cd] transition-all" value="${state.studentLoginForm.newPin || ''}" />
               </label>
               
               <label class="field mb-0 block">
                 <span class="text-xs text-slate-400 block mb-1.5 font-bold">PIN번호 확인 입력</span>
-                <input type="password" id="changeConfirmPin" placeholder="한번 더 입력" maxlength="4" class="w-full p-3 rounded-xl bg-black/40 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-[#00d6cd] transition-all" value="${state.studentLoginForm.confirmNewPin || ''}" />
+                <input type="text" inputmode="numeric" autocomplete="one-time-code" style="-webkit-text-security: disc;" id="changeConfirmPin" placeholder="한번 더 입력" maxlength="4" class="w-full p-3 rounded-xl bg-black/40 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-[#00d6cd] transition-all" value="${state.studentLoginForm.confirmNewPin || ''}" />
               </label>
               
               <button type="button" data-action="student-pin-change-submit" class="w-full py-3 rounded-xl text-sm font-black mt-4 bg-[#00d6cd] text-slate-950 hover:bg-[#00b5ad] active:scale-95 transition-all shadow-[0_0_15px_rgba(0,214,205,0.2)]">

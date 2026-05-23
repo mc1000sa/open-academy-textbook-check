@@ -139,7 +139,7 @@ export async function mountLegacyApp(appRoot) {
     bookSetupAccordion: { manage: false, unit: false, assign: false },
     
     // 학생 PIN 관련 폼 상태
-    studentLoginForm: readRememberedStudentLoginForm(),
+    studentLoginForm: { classId: '', grade: '', studentId: '', name: '', pin: '', school: '', schoolConfirmed: false, teacherId: '' },
     studentSession: null, // 학생 포털 로그인 성공 세션
     selectedStudentBookFilter: '',
     selectedStudentRubricBookId: '',
@@ -223,6 +223,8 @@ export async function mountLegacyApp(appRoot) {
     },
     adminCardExpanded: {}
   };
+
+  state.studentLoginForm = readRememberedStudentLoginForm();
 
   // 비동기 알림 모달 구현
   function showModalAlert(message, title = '알림') {
@@ -1345,127 +1347,133 @@ export async function mountLegacyApp(appRoot) {
   }
 
   async function saveUnit() {
-    const book = bookById(state.selectedBookManageId);
-    if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
-    const currentUnits = rawBookUnits(book);
-    if (book.bookType === 'exam_chapter') {
-      const rows = [...appRoot.querySelectorAll('[data-exam-chapter-row]')].map(row => ({
-        chapterName: row.querySelector('[data-field="chapterName"]')?.value.trim() || '',
-        startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
-        endText: row.querySelector('[data-field="end"]')?.value.trim() || '',
-        standardUnitIds: [...row.querySelectorAll('[data-field="chapterStandardUnit"]:checked')].map(input => input.value).filter(Boolean)
-      }));
-      const units = [];
+    try {
+      const book = bookById(state.selectedBookManageId);
+      if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
+      const currentUnits = rawBookUnits(book);
+      if (book.bookType === 'exam_chapter') {
+        const rows = [...appRoot.querySelectorAll('[data-exam-chapter-row]')].map(row => ({
+          chapterName: row.querySelector('[data-field="chapterName"]')?.value.trim() || '',
+          startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
+          endText: row.querySelector('[data-field="end"]')?.value.trim() || '',
+          standardUnitIds: [...row.querySelectorAll('[data-field="chapterStandardUnit"]:checked')].map(input => input.value).filter(Boolean)
+        }));
+        const units = [];
 
-      for (let index = 0; index < rows.length; index++) {
-        const row = rows[index];
-        const hasInput = row.chapterName || row.startText || row.endText || row.standardUnitIds.length;
-        if (!hasInput) continue;
-        const name = row.chapterName || `챕터 ${index + 1}`;
-        const start = Number(row.startText);
-        const end = Number(row.endText);
-        if (!row.startText || !row.endText || Number.isNaN(start) || Number.isNaN(end) || start < 1 || end < start) {
-          return showModalAlert(`"${name}"의 시작쪽과 끝쪽을 올바르게 입력해주세요.`);
+        for (let index = 0; index < rows.length; index++) {
+          const row = rows[index];
+          const defaultName = `챕터 ${index + 1}`;
+          const hasInput = row.startText || row.endText || row.standardUnitIds.length || (row.chapterName && row.chapterName.trim() !== defaultName);
+          if (!hasInput) continue;
+          const name = row.chapterName || defaultName;
+          const start = Number(row.startText);
+          const end = Number(row.endText);
+          if (!row.startText || !row.endText || Number.isNaN(start) || Number.isNaN(end) || start < 1 || end < start) {
+            return showModalAlert(`"${name}"의 시작쪽과 끝쪽을 올바르게 입력해주세요.`);
+          }
+          if (!row.standardUnitIds.length) {
+            return showModalAlert(`"${name}"에 연결할 시험범위 표준소단원을 하나 이상 선택해주세요.`);
+          }
+          const existing = currentUnits.find(unit => String(unit.name || '') === name);
+          units.push({
+            id: existing?.id || uid(),
+            name,
+            standardUnitIds: row.standardUnitIds,
+            start,
+            end,
+            color: existing?.color || pastel(index),
+            visibleToStudent: existing?.visibleToStudent !== false
+          });
         }
-        if (!row.standardUnitIds.length) {
-          return showModalAlert(`"${name}"에 연결할 시험범위 표준소단원을 하나 이상 선택해주세요.`);
+
+        if (!units.length) return showModalAlert('저장할 챕터 정보를 입력해주세요.');
+        const sortedUnits = [...units].sort((a, b) => Number(a.start) - Number(b.start));
+        for (let i = 1; i < sortedUnits.length; i++) {
+          if (Number(sortedUnits[i - 1].end) >= Number(sortedUnits[i].start)) {
+            return showModalAlert(`"${sortedUnits[i - 1].name}" 챕터와 "${sortedUnits[i].name}" 챕터의 페이지가 겹칩니다.`);
+          }
         }
-        const existing = currentUnits.find(unit => String(unit.name || '') === name);
+
+        await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
+        notify('시험대비 챕터표 저장 완료');
+        return;
+      }
+      const rows = [...appRoot.querySelectorAll('[data-standard-unit-row]')].map(row => ({
+        standardUnitId: row.dataset.standardUnitId,
+        standardLabel: row.dataset.standardLabel || '',
+        unitName: row.querySelector('[data-field="unitName"]')?.value.trim() || '',
+        startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
+        endText: row.querySelector('[data-field="end"]')?.value.trim() || ''
+      }));
+      const groups = [];
+      let currentGroup = null;
+
+      const flushGroup = () => {
+        if (!currentGroup) return;
+        groups.push(currentGroup);
+        currentGroup = null;
+      };
+
+      for (const row of rows) {
+        const hasInput = row.unitName || row.startText || row.endText;
+        if (!hasInput) {
+          flushGroup();
+          continue;
+        }
+        if (!row.unitName) return showModalAlert('입력한 행에는 소단원명을 모두 적어주세요.');
+        if (!currentGroup || currentGroup.name !== row.unitName) {
+          flushGroup();
+          currentGroup = { name: row.unitName, rows: [] };
+        }
+        currentGroup.rows.push(row);
+      }
+      flushGroup();
+
+      if (!groups.length) return showModalAlert('저장할 단원 정보를 입력해주세요.');
+
+      const units = [];
+      for (let index = 0; index < groups.length; index++) {
+        const group = groups[index];
+        const startText = group.rows.find(row => row.startText)?.startText || '';
+        const endText = [...group.rows].reverse().find(row => row.endText)?.endText || '';
+        const start = Number(startText);
+        const end = Number(endText);
+        if (!startText || !endText || Number.isNaN(start) || Number.isNaN(end)) {
+          return showModalAlert(`"${group.name}" 단원의 시작쪽과 끝쪽을 입력해주세요.`);
+        }
+        if (start < 1 || end < start) {
+          return showModalAlert(`"${group.name}" 단원의 페이지 범위를 확인해주세요.`);
+        }
+        const standardUnitIds = group.rows.map(row => row.standardUnitId).filter(Boolean);
+        const existing = currentUnits.find(unit => {
+          const prevIds = unit.standardUnitIds || [];
+          return prevIds.length === standardUnitIds.length && prevIds.every((id, idx) => id === standardUnitIds[idx]);
+        });
         units.push({
           id: existing?.id || uid(),
-          name,
-          standardUnitIds: row.standardUnitIds,
+          name: group.name,
+          standardUnitIds,
           start,
           end,
           color: existing?.color || pastel(index),
-          visibleToStudent: existing?.visibleToStudent
+          visibleToStudent: existing?.visibleToStudent !== false
         });
       }
 
-      if (!units.length) return showModalAlert('저장할 챕터 정보를 입력해주세요.');
       const sortedUnits = [...units].sort((a, b) => Number(a.start) - Number(b.start));
       for (let i = 1; i < sortedUnits.length; i++) {
         if (Number(sortedUnits[i - 1].end) >= Number(sortedUnits[i].start)) {
-          return showModalAlert(`"${sortedUnits[i - 1].name}" 챕터와 "${sortedUnits[i].name}" 챕터의 페이지가 겹칩니다.`);
+          return showModalAlert(`"${sortedUnits[i - 1].name}" 단원과 "${sortedUnits[i].name}" 단원의 페이지가 겹칩니다.`);
         }
       }
 
       await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
-      notify('시험대비 챕터표 저장 완료');
-      return;
+      state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
+      notify('단원 표 저장 완료');
+    } catch (error) {
+      console.error(error);
+      showModalAlert('저장 중 오류가 발생했습니다: ' + error.message);
     }
-    const rows = [...appRoot.querySelectorAll('[data-standard-unit-row]')].map(row => ({
-      standardUnitId: row.dataset.standardUnitId,
-      standardLabel: row.dataset.standardLabel || '',
-      unitName: row.querySelector('[data-field="unitName"]')?.value.trim() || '',
-      startText: row.querySelector('[data-field="start"]')?.value.trim() || '',
-      endText: row.querySelector('[data-field="end"]')?.value.trim() || ''
-    }));
-    const groups = [];
-    let currentGroup = null;
-
-    const flushGroup = () => {
-      if (!currentGroup) return;
-      groups.push(currentGroup);
-      currentGroup = null;
-    };
-
-    for (const row of rows) {
-      const hasInput = row.unitName || row.startText || row.endText;
-      if (!hasInput) {
-        flushGroup();
-        continue;
-      }
-      if (!row.unitName) return showModalAlert('입력한 행에는 소단원명을 모두 적어주세요.');
-      if (!currentGroup || currentGroup.name !== row.unitName) {
-        flushGroup();
-        currentGroup = { name: row.unitName, rows: [] };
-      }
-      currentGroup.rows.push(row);
-    }
-    flushGroup();
-
-    if (!groups.length) return showModalAlert('저장할 단원 정보를 입력해주세요.');
-
-    const units = [];
-    for (let index = 0; index < groups.length; index++) {
-      const group = groups[index];
-      const startText = group.rows.find(row => row.startText)?.startText || '';
-      const endText = [...group.rows].reverse().find(row => row.endText)?.endText || '';
-      const start = Number(startText);
-      const end = Number(endText);
-      if (!startText || !endText || Number.isNaN(start) || Number.isNaN(end)) {
-        return showModalAlert(`"${group.name}" 단원의 시작쪽과 끝쪽을 입력해주세요.`);
-      }
-      if (start < 1 || end < start) {
-        return showModalAlert(`"${group.name}" 단원의 페이지 범위를 확인해주세요.`);
-      }
-      const standardUnitIds = group.rows.map(row => row.standardUnitId).filter(Boolean);
-      const existing = currentUnits.find(unit => {
-        const prevIds = unit.standardUnitIds || [];
-        return prevIds.length === standardUnitIds.length && prevIds.every((id, idx) => id === standardUnitIds[idx]);
-      });
-      units.push({
-        id: existing?.id || uid(),
-        name: group.name,
-        standardUnitIds,
-        start,
-        end,
-        color: existing?.color || pastel(index),
-        visibleToStudent: existing?.visibleToStudent
-      });
-    }
-
-    const sortedUnits = [...units].sort((a, b) => Number(a.start) - Number(b.start));
-    for (let i = 1; i < sortedUnits.length; i++) {
-      if (Number(sortedUnits[i - 1].end) >= Number(sortedUnits[i].start)) {
-        return showModalAlert(`"${sortedUnits[i - 1].name}" 단원과 "${sortedUnits[i].name}" 단원의 페이지가 겹칩니다.`);
-      }
-    }
-
-    await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units, updatedAt: serverTimestamp() });
-    state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
-    notify('단원 표 저장 완료');
   }
 
   async function toggleUnitStudentVisible(bookId, unitId) {
@@ -1483,22 +1491,27 @@ export async function mountLegacyApp(appRoot) {
   }
 
   async function saveUnitBulk() {
-    const book = bookById(state.selectedBookManageId);
-    if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
-    const lines = String(state.bulkUnitText || '').split('\n').map(v => v.trim()).filter(Boolean);
-    if (!lines.length) return showModalAlert('붙여넣기 단원 텍스트를 입력해주세요.');
-    const next = [...rawBookUnits(book)];
-    for (const line of lines) {
-      const [name, s, e] = line.split('/').map(v => v.trim());
-      const start = Number(s), end = Number(e);
-      if (!name || isNaN(start) || isNaN(end) || end < start) continue;
-      const overlap = next.some(u => !(Number(u.end) < start || Number(u.start) > end));
-      if (overlap) continue;
-      next.push({ id: uid(), name, start, end, color: pastel(next.length) });
+    try {
+      const book = bookById(state.selectedBookManageId);
+      if (!book) return showModalAlert('교재를 먼저 선택해주세요.');
+      const lines = String(state.bulkUnitText || '').split('\n').map(v => v.trim()).filter(Boolean);
+      if (!lines.length) return showModalAlert('붙여넣기 단원 텍스트를 입력해주세요.');
+      const next = [...rawBookUnits(book)];
+      for (const line of lines) {
+        const [name, s, e] = line.split('/').map(v => v.trim());
+        const start = Number(s), end = Number(e);
+        if (!name || isNaN(start) || isNaN(end) || end < start) continue;
+        const overlap = next.some(u => !(Number(u.end) < start || Number(u.start) > end));
+        if (overlap) continue;
+        next.push({ id: uid(), name, start, end, color: pastel(next.length), visibleToStudent: true });
+      }
+      await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units: next, updatedAt: serverTimestamp() });
+      state.bulkUnitText = '';
+      notify('붙여넣기 단원 반영 완료');
+    } catch (error) {
+      console.error(error);
+      showModalAlert('붙여넣기 저장 중 오류가 발생했습니다: ' + error.message);
     }
-    await updateDoc(doc(db, COLLECTION_NAMES.books, book.id), { units: next, updatedAt: serverTimestamp() });
-    state.bulkUnitText = '';
-    notify('붙여넣기 단원 반영 완료');
   }
 
   async function toggleArchiveBook(bookId, archived) {
@@ -2265,6 +2278,22 @@ export async function mountLegacyApp(appRoot) {
           state.formUnit = { name: '', start: '', end: '', standardUnitIds: [] };
         }
 
+        render();
+      };
+    });
+
+    // 반 정렬 기준 스위치 바인딩
+    appRoot.querySelectorAll('[data-action="set-class-sort"]').forEach(el => {
+      el.onclick = () => {
+        state.classSortType = el.dataset.sort;
+        render();
+      };
+    });
+
+    // 학생 정렬 기준 스위치 바인딩
+    appRoot.querySelectorAll('[data-action="set-student-sort"]').forEach(el => {
+      el.onclick = () => {
+        state.studentSortType = el.dataset.sort;
         render();
       };
     });

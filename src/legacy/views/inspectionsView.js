@@ -36,7 +36,19 @@ export function renderInspectionsView(state, deps) {
     remarkTemplates
   } = deps;
 
-  const classes = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id);
+  let classes = state.currentTeacher.role==='admin' ? state.classes : teacherClasses(state.currentTeacher.id);
+  const classSort = state.classSortType || 'name';
+  if (classSort === 'grade') {
+    const GRADE_WEIGHTS = { '고1': 1, '고2': 2, '고3': 3 };
+    classes = [...classes].sort((a, b) => {
+      const wA = GRADE_WEIGHTS[a.grade] || 99;
+      const wB = GRADE_WEIGHTS[b.grade] || 99;
+      if (wA !== wB) return wA - wB;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+    });
+  } else {
+    classes = [...classes].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  }
   const students = studentsForClass(state.selectedInspectionClassId);
   const assigned = assignedBooksForClass(state.selectedInspectionClassId);
   const selectedBook = bookById(state.selectedInspectionBookId);
@@ -279,7 +291,14 @@ export function renderInspectionsView(state, deps) {
           </div>
 
           <div class="grid md:grid-cols-2 gap-4">
-            <div class="text-xs font-bold text-slate-400">반 선택
+            <div class="text-xs font-bold text-slate-400">
+              <div class="flex items-center justify-between mb-2">
+                <span>반 선택</span>
+                <div class="filter-switch">
+                  <span class="filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}" data-action="set-class-sort" data-sort="name">이름순</span>
+                  <span class="filter-switch-item ${state.classSortType === 'grade' ? 'active' : ''}" data-action="set-class-sort" data-sort="grade">학년별</span>
+                </div>
+              </div>
               ${renderBtnSelect({
                 id: 'selectedInspectionClassId',
                 options: classes.map(c=>({ value: c.id, label: c.name })),
