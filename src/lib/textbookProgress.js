@@ -160,6 +160,9 @@ export function buildCarryoverRows({
       return {
         sourceInspectionId: source.id,
         sourceDate: source.date || '',
+        rangeStart: source.rangeStart || '',
+        rangeEnd: source.rangeEnd || '',
+        completionRate: source.completionRate ?? 0,
         missedPages: remainingPages,
         resolvedPages: sourcePages.filter(page => resolvedPageSet.has(page)),
         order: sourceOrder

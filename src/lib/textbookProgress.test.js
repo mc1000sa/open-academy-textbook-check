@@ -146,12 +146,18 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'newer',
         sourceDate: '2026-05-10',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [20],
         resolvedPages: []
       },
       {
         sourceInspectionId: 'old-a',
         sourceDate: '2026-05-01',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [11],
         resolvedPages: [10]
       }
@@ -200,18 +206,27 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'late',
         sourceDate: '2026-05-01',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [4],
         resolvedPages: []
       },
       {
         sourceInspectionId: 'middle',
         sourceDate: '2026-05-01',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [3],
         resolvedPages: []
       },
       {
         sourceInspectionId: 'early',
         sourceDate: '2026-05-01',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [2],
         resolvedPages: [1]
       }
@@ -252,6 +267,9 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'later',
         sourceDate: '2026-05-01',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [8],
         resolvedPages: []
       }
@@ -287,6 +305,9 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'past',
         sourceDate: '2026-05-10',
+        rangeStart: '',
+        rangeEnd: '',
+        completionRate: 0,
         missedPages: [3],
         resolvedPages: []
       }

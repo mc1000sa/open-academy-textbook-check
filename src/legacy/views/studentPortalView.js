@@ -77,7 +77,9 @@ export function renderStudentPortalView(state, utils) {
     
     // 이 책의 최종 완료율 산출 (최근 점검 기록 기준 혹은 평균)
     const latestLog = bookLogs[0]; // 날짜 역순이므로 0번째가 최신
-    const completionRate = latestLog ? latestLog.completionRate : 0;
+    // 결석이나 교재미지참이 아닌 가장 최근의 활성 점검 로그를 찾아서 완료율 기준으로 삼음
+    const lastActiveLog = bookLogs.find(log => log.attendanceStatus !== 'absent' && log.attendanceStatus !== 'no_book');
+    const completionRate = lastActiveLog ? (lastActiveLog.completionRate ?? 0) : 0;
     
     // 미비 페이지 목록 취합
     const allMissed = new Set();
@@ -211,7 +213,12 @@ export function renderStudentPortalView(state, utils) {
                     <div class="text-right">
                       <span class="text-xs text-slate-400 block mb-1">최근 점검 범위</span>
                       <span class="text-sm font-bold text-slate-200">
-                        ${item.latestLog ? `${item.latestLog.rangeStart} ~ ${item.latestLog.rangeEnd}쪽` : '-'}
+                        ${(() => {
+                          if (!item.latestLog) return '-';
+                          if (item.latestLog.attendanceStatus === 'absent') return '결석';
+                          if (item.latestLog.attendanceStatus === 'no_book') return '교재 미지참';
+                          return `${item.latestLog.rangeStart} ~ ${item.latestLog.rangeEnd}쪽`;
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -244,14 +251,26 @@ export function renderStudentPortalView(state, utils) {
                   </div>
 
                   <!-- 피드백 코멘트 제공 -->
-                  ${item.latestLog && item.latestLog.memo ? `
-                    <div class="mt-4 pt-3 border-t border-slate-800/80">
-                      <span class="text-xs text-indigo-400 font-bold block mb-1">💬 선생님의 지도 코멘트</span>
-                      <p class="text-xs text-slate-300 bg-indigo-950/20 p-3 rounded-lg soft-border italic leading-relaxed">
-                        "${safe(item.latestLog.memo)}"
-                      </p>
-                    </div>
-                  ` : ''}
+                  ${item.latestLog && (item.latestLog.memo || item.latestLog.attendanceStatus === 'absent' || item.latestLog.attendanceStatus === 'no_book') ? (() => {
+                    const statusText = item.latestLog.attendanceStatus === 'absent' ? '결석' : item.latestLog.attendanceStatus === 'no_book' ? '교재 미지참' : '';
+                    const dateText = item.latestLog.date ? fmtDate(item.latestLog.date) : '';
+                    let memoContent = item.latestLog.memo || '';
+                    
+                    if (statusText) {
+                      memoContent = `[${dateText} ${statusText}] ${memoContent}`.trim();
+                    }
+                    
+                    if (!memoContent) return '';
+                    
+                    return `
+                      <div class="mt-4 pt-3 border-t border-slate-800/80">
+                        <span class="text-xs text-indigo-400 font-bold block mb-1">💬 선생님의 지도 코멘트</span>
+                        <p class="text-xs text-slate-300 bg-indigo-950/20 p-3 rounded-lg soft-border italic leading-relaxed">
+                          "${safe(memoContent)}"
+                        </p>
+                      </div>
+                    `;
+                  })() : ''}
                 </article>
               `;
             }).join('')}
@@ -307,11 +326,23 @@ export function renderStudentPortalView(state, utils) {
                 const unitNames = units.map(u => u.name).join(', ');
                 const unitText = unitNames ? ` (${unitNames})` : '';
 
+                let specText = '';
+                if (log.attendanceStatus === 'absent') {
+                  specText = '범위: 결석 (평가 제외)';
+                } else if (log.attendanceStatus === 'no_book') {
+                  specText = '범위: 교재 미지참 (평가 제외)';
+                } else {
+                  const rangeStartVal = log.rangeStart !== null && log.rangeStart !== undefined ? log.rangeStart : '-';
+                  const rangeEndVal = log.rangeEnd !== null && log.rangeEnd !== undefined ? log.rangeEnd : '-';
+                  const completionRateVal = log.completionRate !== null && log.completionRate !== undefined ? `${log.completionRate}%` : '-';
+                  specText = `` + `범위: ${rangeStartVal}~${rangeEndVal}쪽${safe(unitText)} (완료율 ${completionRateVal})`;
+                }
+
                 return `
                   <div class="p-3 bg-slate-900/30 rounded-xl soft-border text-xs flex justify-between items-start gap-3">
                     <div class="min-w-0">
                       <span class="font-extrabold text-slate-200 block">${safe(book?.title || '알 수 없는 교재')}</span>
-                      <span class="text-slate-400 mt-1 block leading-relaxed">범위: ${log.rangeStart}~${log.rangeEnd}쪽${safe(unitText)} (완료율 ${log.completionRate}%)</span>
+                      <span class="text-slate-400 mt-1 block leading-relaxed">${specText}</span>
                     </div>
                     <div class="text-right shrink-0 min-w-[72px] pt-0.5">
                       <span class="text-[#00d6cd] font-black block whitespace-nowrap leading-none" title="점검일: ${fmtDate(log.date)}">${round}회차 점검</span>

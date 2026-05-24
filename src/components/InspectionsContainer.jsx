@@ -179,7 +179,7 @@ export default function InspectionsContainer(props) {
   };
 
   const filteredHistoryRows = state.inspections
-    .filter(r => (!state.inspectionHistoryFilterClass || r.classId === state.inspectionHistoryFilterClass) && (!state.inspectionHistoryFilterStudent || r.studentId === state.inspectionHistoryFilterStudent))
+    .filter(r => selectedStudent ? r.studentId === selectedStudent.id : true)
     .sort((a, b) => {
       let valA = a[sortKey];
       let valB = b[sortKey];
@@ -440,121 +440,90 @@ export default function InspectionsContainer(props) {
       </div>
 
       {/* 3. 하단 최근 점검 기록 테이블 */}
-      <article className="card-3d rounded-2xl p-5 md:p-6 bg-slate-900/80 border border-slate-800">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h3 className="text-base font-extrabold text-white">최근 점검 기록</h3>
-          <span className="text-[10px] text-slate-400 font-bold">기존 기록 수정/삭제 가능</span>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-6 mb-5">
-          <div className="text-xs font-bold text-slate-400">
-            <span className="block mb-2">반 필터</span>
-            <div className="choice-grid mt-2">
-              <button
-                type="button"
-                onClick={() => updateLegacyState({ inspectionHistoryFilterClass: '', inspectionHistoryFilterStudent: '' })}
-                className={`choice-button btn-choice-teacher ${!state.inspectionHistoryFilterClass ? 'selected' : ''}`}
-              >
-                전체 반
-              </button>
-              {classes.map(c => {
-                const active = c.id === state.inspectionHistoryFilterClass;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => updateLegacyState({ inspectionHistoryFilterClass: c.id, inspectionHistoryFilterStudent: '' })}
-                    className={`choice-button btn-choice-teacher ${active ? 'selected' : ''}`}
-                  >
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
+      {selectedStudent && (
+        <article className="card-3d rounded-2xl p-5 md:p-6 bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-base font-extrabold text-white">
+              <span className="text-blue-400 font-extrabold">{selectedStudent.name}</span> 학생 최근 점검 상세 기록 <span className="text-xs font-medium text-slate-500 ml-1.5">({selectedClass?.name || '최근 20개 내역'})</span>
+            </h3>
+            <span className="text-[10px] text-slate-400 font-bold">기존 기록 수정/삭제 가능</span>
           </div>
-          
-          <div className="text-xs font-bold text-slate-400">
-            <span className="block mb-2">학생 필터</span>
-            <div className="choice-grid mt-2">
-              <button
-                type="button"
-                onClick={() => updateLegacyState({ inspectionHistoryFilterStudent: '' })}
-                className={`choice-button btn-choice-teacher ${!state.inspectionHistoryFilterStudent ? 'selected' : ''}`}
-              >
-                전체 학생
-              </button>
-              {state.students
-                .filter(s => !state.inspectionHistoryFilterClass || s.classId === state.inspectionHistoryFilterClass)
-                .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'))
-                .map(s => {
-                  const active = s.id === state.inspectionHistoryFilterStudent;
+
+          <div className="overflow-x-auto mini-scroll">
+            <table className="w-full text-sm text-center border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase">
+                  <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('date')}>날짜 {sortIndicator('date')}</th>
+                  <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('bookId')}>교재 {sortIndicator('bookId')}</th>
+                  <th className="py-3 font-bold">단원명</th>
+                  <th className="py-3 font-bold">범위</th>
+                  <th className="py-3 font-bold">미완료</th>
+                  <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('completionRate')}>완료율 {sortIndicator('completionRate')}</th>
+                  <th className="py-3 font-bold">관리</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {filteredHistoryRows.length ? filteredHistoryRows.map(r => {
+                  const book = bookById(r.bookId);
+                  const units = book && r.rangeStart && r.rangeEnd ? unitsForRange(book, Number(r.rangeStart), Number(r.rangeEnd)) : [];
+                  const unitNames = units.map(u => u.name).join(', ');
+                  
                   return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => updateLegacyState({ inspectionHistoryFilterStudent: s.id })}
-                      className={`choice-button btn-choice-teacher ${active ? 'selected' : ''}`}
-                    >
-                      {s.name}
-                    </button>
+                    <tr key={r.id} className="hover:bg-slate-950/20 transition-all text-xs">
+                      <td className="py-3 text-slate-300 font-bold">{fmtDate(r.date)}</td>
+                      <td className="text-slate-300 text-left pl-2">{bookById(r.bookId)?.title || '-'}</td>
+                      <td className="text-slate-400 text-left pl-2">
+                        {r.attendanceStatus === 'absent' || r.attendanceStatus === 'no_book' ? (
+                          <span className="text-slate-650">-</span>
+                        ) : (
+                          unitNames || <span className="text-slate-655">-</span>
+                        )}
+                      </td>
+                      <td className="text-slate-400">
+                        {r.attendanceStatus === 'absent' ? (
+                          <span className="text-rose-450 font-bold">결석</span>
+                        ) : r.attendanceStatus === 'no_book' ? (
+                          <span className="text-amber-400 font-bold">교재 미지참</span>
+                        ) : (
+                          <span className="font-bold text-slate-300">{r.rangeStart}~{r.rangeEnd}쪽</span>
+                        )}
+                      </td>
+                      <td className="text-rose-455 font-bold">
+                        {r.attendanceStatus === 'absent' || r.attendanceStatus === 'no_book' ? '-' : ((r.missedPages || []).join(', ') || '없음')}
+                      </td>
+                      <td className="font-extrabold text-blue-400">
+                        {r.attendanceStatus === 'absent' || r.attendanceStatus === 'no_book' ? '-' : `${r.completionRate}%`}
+                      </td>
+                      <td>
+                        <div className="flex justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleEditInspection(r)}
+                            className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 text-[11px] font-bold text-blue-400 hover:bg-blue-500 hover:text-white transition-all cursor-pointer"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInspection(r.id)}
+                            className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-[11px] font-bold text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
-                })}
-            </div>
+                }) : (
+                  <tr>
+                    <td colSpan="7" className="py-8 text-slate-500 text-center">점검 기록이 존재하지 않습니다.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        <div className="overflow-x-auto mini-scroll">
-          <table className="w-full text-sm text-center border-collapse">
-            <thead>
-              <tr class="border-b border-slate-800 bg-slate-950/40 text-slate-400 text-xs font-bold uppercase">
-                <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('date')}>날짜 {sortIndicator('date')}</th>
-                <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('classId')}>반 {sortIndicator('classId')}</th>
-                <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('studentId')}>학생 {sortIndicator('studentId')}</th>
-                <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('bookId')}>교재 {sortIndicator('bookId')}</th>
-                <th className="py-3 font-bold">범위</th>
-                <th className="py-3 font-bold">미완료</th>
-                <th className="py-3 cursor-pointer select-none hover:text-white" onClick={() => handleSort('completionRate')}>완료율 {sortIndicator('completionRate')}</th>
-                <th className="py-3 font-bold">관리</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {filteredHistoryRows.length ? filteredHistoryRows.map(r => (
-                <tr key={r.id} className="hover:bg-slate-950/20 transition-all text-xs">
-                  <td className="py-3 text-slate-300 font-bold">{fmtDate(r.date)}</td>
-                  <td className="text-slate-400">{classById(r.classId)?.name || '-'}</td>
-                  <td className="text-slate-200 font-semibold">{studentById(r.studentId)?.name || '-'}</td>
-                  <td className="text-slate-300">{bookById(r.bookId)?.title || '-'}</td>
-                  <td className="text-slate-400">{r.rangeStart}~{r.rangeEnd}쪽</td>
-                  <td className="text-rose-400 font-bold">{(r.missedPages || []).join(', ') || '없음'}</td>
-                  <td className="font-extrabold text-blue-400">{r.completionRate}%</td>
-                  <td>
-                    <div className="flex justify-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleEditInspection(r)}
-                        className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 text-[11px] font-bold text-blue-400 hover:bg-blue-500 hover:text-white transition-all cursor-pointer"
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteInspection(r.id)}
-                        className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-[11px] font-bold text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="8" className="py-8 text-slate-500 text-center">점검 기록이 존재하지 않습니다.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </article>
+        </article>
+      )}
 
       {/* 4. Wizard 모달 */}
       {isModalOpen && (
