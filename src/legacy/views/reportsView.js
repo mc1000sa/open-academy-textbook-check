@@ -165,16 +165,25 @@ function renderImageRubricChart(vector, safe) {
 }
 
 function rangeUnitSummary(book, rows, unitsForRange) {
-  const names = [];
+  const results = [];
   rows.forEach(row => {
     const units = typeof unitsForRange === 'function' ? unitsForRange(book, row.rangeStart, row.rangeEnd) : [];
-    units.forEach(unit => {
-      const name = String(unit?.name || '').trim();
-      if (name && !names.includes(name)) names.push(name);
-    });
+    if (units.length > 0) {
+      units.forEach(unit => {
+        const name = String(unit?.name || '').trim();
+        if (!name) return;
+        const start = unit.start != null ? unit.start : '';
+        const end = unit.end != null ? unit.end : '';
+        const pageRange = (start !== '' && end !== '') ? ` (${start}쪽~${end}쪽)` : '';
+        const entry = `${name}${pageRange}`;
+        if (!results.includes(entry)) results.push(entry);
+      });
+    } else {
+      const entry = `${row.rangeStart ?? '-'}~${row.rangeEnd ?? '-'}쪽`;
+      if (!results.includes(entry)) results.push(entry);
+    }
   });
-  if (names.length) return names.join(', ');
-  return rows.map(row => `${row.rangeStart ?? '-'}~${row.rangeEnd ?? '-'}쪽`).join(', ');
+  return results.length ? results.join(', ') : '';
 }
 
 function missedPagesSummary(rows) {
@@ -217,7 +226,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
           <h3><span class="parent-report-pipe">|</span>${escape(book?.title || '이름 없는 교재')}</h3>
           <strong aria-label="점검 완료율 ${escape(avg)}%"><span>점검 완료율</span><b>${escape(avg)}%</b></strong>
         </div>
-        <p><b>완료한 단원 :</b> ${escape(rangeUnitSummary(book, items, unitsForRange))}</p>
+        <p><b>점검 중인 단원 :</b> ${escape(rangeUnitSummary(book, items, unitsForRange))}</p>
         <p><b>보완 필요 쪽수 :</b> ${escape(missedPagesSummary(items))}</p>
       </section>
     `;

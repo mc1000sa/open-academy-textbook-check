@@ -998,7 +998,7 @@ details.group[open] summary span {
 .parent-report-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 2rem;
 }
 
@@ -1032,7 +1032,7 @@ details.group[open] summary span {
 }
 
 .parent-report-student-name {
-  font-size: 1.2em;
+  font-size: 1.32em;
   font-weight: 1000;
 }
 
@@ -1062,6 +1062,8 @@ details.group[open] summary span {
   line-height: 1;
   font-weight: 1000;
   white-space: nowrap;
+  align-self: flex-start;
+  padding-top: 2px;
 }
 
 .parent-report-round-num {
@@ -1114,9 +1116,9 @@ details.group[open] summary span {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  padding-bottom: 2px;
 }
 
 .parent-report-book h3 {
@@ -1184,15 +1186,15 @@ details.group[open] summary span {
 
 .parent-report-rubric li {
   display: flex;
-  justify-content: flex-start;
+  align-items: baseline;
   font-size: 14px;
   color: #334155;
 }
 
 .parent-report-rubric li span {
   display: inline-block;
-  width: auto;
-  margin-right: 8px;
+  min-width: 160px;
+  flex-shrink: 0;
 }
 
 .parent-report-rubric li b {
@@ -1201,7 +1203,7 @@ details.group[open] summary span {
 
 .parent-report-radar {
   width: 100%;
-  max-width: 310px;
+  max-width: 279px;
 }
 
 .parent-report-empty {
