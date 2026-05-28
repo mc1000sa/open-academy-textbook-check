@@ -232,6 +232,9 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
     .map(memo => `<p>${escape(memo)}</p>`)
     .join('');
 
+  const selectedPeriod = state.selectedReportPeriod || '';
+  const periodText = selectedPeriod ? `${escape(selectedPeriod)} | ` : '';
+
   return `
     <div class="parent-image-report" id="reportCaptureArea">
       <header class="parent-report-header">
@@ -246,7 +249,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
             <span class="parent-report-meta">(${escape(klass?.name || '-')}) - </span>
             <span class="parent-report-teacher-name">${escape(teacherTitleName(teacherName))}</span>
           </h1>
-          <p>${escape(roundLabel)} 교재 분석 보고서</p>
+          <p class="parent-report-subtitle">${periodText}<span class="parent-report-round-num">${escape(roundLabel)}</span> 교재 분석 보고서</p>
         </div>
         <div class="parent-report-brand">열린학원</div>
       </header>
@@ -573,6 +576,34 @@ export function renderReportsView(state, deps) {
     ? `${safe(selectedRoundInfo.round)}회차 ${safe(selectedRoundInfo.displayDate)} 기록으로 아래에 보고서를 표시합니다.`
     : '기준일, 반, 학생, 회차를 순서대로 선택하면 기존 다크 테마 보고서가 표시됩니다.';
 
+  const periodButtons = (state.reportPeriods || [])
+    .map(p => {
+      const isSelected = state.selectedReportPeriod === p;
+      return `
+        <div data-action="select-report-period" data-period="${safe(p)}" class="inline-flex items-center gap-1 bg-slate-900/40 border border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-700 cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-950/20' : ''}">
+          <span class="text-xs font-bold text-slate-300 ${isSelected ? 'text-blue-400 font-extrabold' : ''}">
+            ${safe(p)}
+          </span>
+          <button type="button" data-action="delete-report-period" data-period="${safe(p)}" class="text-[10px] text-slate-500 hover:text-rose-400 font-bold ml-1 transition-colors" title="삭제">
+            &times;
+          </button>
+        </div>
+      `;
+    })
+    .join('');
+
+  const periodSectionHtml = `
+    <div class="report-period-picker-container border-b border-slate-800/85 pb-4 mb-4">
+      <div class="text-xs font-black text-slate-300 mb-2">보고서 시기(기간) 선택</div>
+      <div class="flex flex-wrap gap-2 items-center">
+        ${periodButtons}
+        <button type="button" data-action="add-report-period" class="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-700 bg-slate-950/10 text-xs font-bold text-slate-400 hover:border-slate-500 hover:text-slate-200 transition-colors flex items-center gap-1">
+          <span>+ 직접입력</span>
+        </button>
+      </div>
+    </div>
+  `;
+
   return `
     <div class="space-y-6">
       <section class="report-round-panel no-print" data-report-flow="student-image">
@@ -586,6 +617,8 @@ export function renderReportsView(state, deps) {
             <input type="date" id="reportRoundStartDate" value="${safe(reportStartDate)}" data-class-id="${safe(activeReportClassId)}" onclick="try { this.showPicker(); } catch (err) {}" />
           </label>
         </div>
+
+        ${periodSectionHtml}
 
         <div class="report-flow-stack mt-5">
           <div>

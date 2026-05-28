@@ -446,7 +446,7 @@ describe('reportsView', () => {
     expect(html).toContain('Open Academy Textbook Insight System');
     expect(html).toContain('parent-report-student-name');
     expect(html).toContain('parent-report-teacher-name');
-    expect(html).toContain('1회차 교재 분석 보고서');
+    expect(html).toContain('<span class="parent-report-round-num">1회차</span> 교재 분석 보고서');
     expect(html).toContain('열린학원');
     expect(html).toContain('공통수학1');
     expect(html).toContain('점검 완료율 41%');

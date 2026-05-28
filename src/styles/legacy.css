@@ -1041,6 +1041,12 @@ details.group[open] summary span {
   white-space: nowrap;
 }
 
+.parent-report-round-num {
+  font-size: 1.2em;
+  color: #3730a3;
+  font-weight: 1000;
+}
+
 .parent-report-divider {
   height: 1px;
   margin: 26px 0;
@@ -1076,9 +1082,21 @@ details.group[open] summary span {
   margin-bottom: 12px;
 }
 
-.parent-report-book h3,
 .parent-report-rubric h2,
 .parent-report-comments h2 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 950;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.parent-report-book h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 950;
@@ -1086,6 +1104,8 @@ details.group[open] summary span {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .parent-report-book-head strong {
@@ -1104,10 +1124,16 @@ details.group[open] summary span {
   color: #4169e1;
 }
 
-.parent-report-book p,
-.parent-report-comments p {
+.parent-report-book p {
   margin: 8px 0 0;
   font-size: 14px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.parent-report-comments p {
+  margin: 8px 0 0;
+  font-size: 21px;
   line-height: 1.55;
   color: #334155;
 }
@@ -1134,10 +1160,14 @@ details.group[open] summary span {
 
 .parent-report-rubric li {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
   font-size: 14px;
   color: #334155;
+}
+
+.parent-report-rubric li span {
+  display: inline-block;
+  width: 110px;
 }
 
 .parent-report-rubric li b {

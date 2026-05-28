@@ -152,6 +152,15 @@ export async function mountLegacyApp(appRoot) {
     reportRoundStartDate: '',
     selectedReportRound: '',
     reportRounds: [],
+    reportPeriods: (() => {
+      try {
+        const stored = window.localStorage?.getItem('oatis.reportPeriods.v1');
+        return stored ? JSON.parse(stored) : ["1학기 중간", "1학기 기말", "2학기 중간", "2학기 기말", "여름방학", "겨울방학"];
+      } catch {
+        return ["1학기 중간", "1학기 기말", "2학기 중간", "2학기 기말", "여름방학", "겨울방학"];
+      }
+    })(),
+    selectedReportPeriod: window.localStorage?.getItem('oatis.selectedReportPeriod.v1') || "1학기 기말",
     dashboardTeacherFilter: 'all',
     dashboardMetricFocus: 'students',
     saveMsg: '',
@@ -2738,6 +2747,58 @@ export async function mountLegacyApp(appRoot) {
         }
       }
     });
+
+    appRoot.querySelectorAll('[data-action="select-report-period"]').forEach(el => {
+      el.onclick = () => {
+        const period = el.dataset.period;
+        state.selectedReportPeriod = period;
+        window.localStorage?.setItem('oatis.selectedReportPeriod.v1', period);
+        if (state.selectedReportRound) {
+          buildSelectedStudentWebReport();
+        }
+        render();
+      };
+    });
+
+    appRoot.querySelector('[data-action="add-report-period"]')?.addEventListener('click', async () => {
+      const val = await showModalPrompt('새로운 보고서 시기(기간)를 입력하세요.', '', '시기 직접 입력');
+      const clean = String(val || '').trim();
+      if (!clean) return;
+      if (state.reportPeriods.includes(clean)) {
+        return showModalAlert('이미 존재하는 시기명입니다.');
+      }
+      state.reportPeriods.push(clean);
+      window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
+      
+      state.selectedReportPeriod = clean;
+      window.localStorage?.setItem('oatis.selectedReportPeriod.v1', clean);
+      
+      if (state.selectedReportRound) {
+        buildSelectedStudentWebReport();
+      }
+      render();
+    });
+
+    appRoot.querySelectorAll('[data-action="delete-report-period"]').forEach(el => {
+      el.onclick = async (event) => {
+        event.stopPropagation();
+        const period = el.dataset.period;
+        const ok = await showModalConfirm(`"${period}" 시기를 삭제하시겠습니까?`, '시기 삭제');
+        if (!ok) return;
+        state.reportPeriods = state.reportPeriods.filter(p => p !== period);
+        window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
+        
+        if (state.selectedReportPeriod === period) {
+          state.selectedReportPeriod = '';
+          window.localStorage?.removeItem('oatis.selectedReportPeriod.v1');
+          if (state.selectedReportRound) {
+            state.printHtml = '';
+          }
+        }
+        render();
+      };
+    });
+
     appRoot.querySelectorAll('[data-action="open-report-date-picker"]').forEach(el => {
       el.onclick = (event) => {
         const input = el.querySelector('#reportRoundStartDate');
