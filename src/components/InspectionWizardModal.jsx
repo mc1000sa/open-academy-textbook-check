@@ -80,10 +80,11 @@ export default function InspectionWizardModal({
   const [currentBook, setCurrentBook] = useState(initialBook);
   const [selectedDate, setSelectedDate] = useState(initialDate);
 
-    // 로컬 편집 ID 및 가장 최근 저장된 학생 ID, 그리고 출석 상태
-    const [localEditingId, setLocalEditingId] = useState(state.editingInspectionId || '');
-    const [lastSavedStudentId, setLastSavedStudentId] = useState(null);
-    const [attendanceStatus, setAttendanceStatus] = useState('normal');
+  // 로컬 편집 ID 및 가장 최근 저장된 학생 ID, 그리고 출석 상태
+  const [localEditingId, setLocalEditingId] = useState(state.editingInspectionId || '');
+  const [lastSavedStudentId, setLastSavedStudentId] = useState(null);
+  const [attendanceStatus, setAttendanceStatus] = useState('normal');
+  const [isSaving, setIsSaving] = useState(false);
 
   // 단계 관리 상태
   // step 1: 지난 과제 재검 (🔴 완료 체크 - 초록색 테마)
@@ -272,10 +273,13 @@ export default function InspectionWizardModal({
 
   // 점검 저장 공통 로직
   const executeSave = async (showPrompt = true) => {
+    if (isSaving) return false;
     if (!currentStudent || !currentBook) {
       showModalAlert('학생과 교재가 정확히 지정되지 않았습니다.');
       return false;
     }
+
+    setIsSaving(true);
 
     let payload = {
       teacherId: state.currentTeacher.id,
@@ -319,12 +323,14 @@ export default function InspectionWizardModal({
       const endText = String(rangeEnd || '').trim();
       if (!startText || !endText) {
         showModalAlert('검사 범위를 입력해주세요.');
+        setIsSaving(false);
         return false;
       }
       start = Number(startText);
       end = Number(endText);
       if (isNaN(start) || isNaN(end) || start < 1 || end < start) {
         showModalAlert('검사 범위를 바르게 입력해주세요. (1 이상의 숫자, 끝 페이지 >= 시작 페이지)');
+        setIsSaving(false);
         return false;
       }
 
@@ -348,7 +354,10 @@ export default function InspectionWizardModal({
 
     if (duplicate && showPrompt) {
       const ok = await showModalConfirm('같은 학생/교재/날짜의 점검 기록이 이미 있습니다. 기존 기록을 덮어쓸까요?');
-      if (!ok) return false;
+      if (!ok) {
+        setIsSaving(false);
+        return false;
+      }
     }
 
     const targetInspectionId = duplicate?.id || localEditingId || state.editingInspectionId;
@@ -413,6 +422,8 @@ export default function InspectionWizardModal({
       console.error(err);
       showModalAlert('저장하는 도중 오류가 발생했습니다: ' + err.message, '오류');
       return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -437,7 +448,8 @@ export default function InspectionWizardModal({
 
     if (nextStudent) {
       const assignedBooks = assignedBooksForClass(selectedClassId);
-      const nextBook = assignedBooks.find(b => b.studentId === nextStudent.id)?.book || assignedBooks[0]?.book || currentBook;
+      const hasCurrentBook = assignedBooks.some(b => b.book?.id === currentBook?.id);
+      const nextBook = hasCurrentBook ? currentBook : (assignedBooks[0]?.book || currentBook);
 
       // 학생 및 교재 변경
       setCurrentStudent(nextStudent);
@@ -512,7 +524,8 @@ export default function InspectionWizardModal({
     if (stud.id === currentStudent.id) return;
 
     const assignedBooks = assignedBooksForClass(selectedClassId);
-    const matchedBook = assignedBooks.find(b => b.studentId === stud.id)?.book || assignedBooks[0]?.book || currentBook;
+    const hasCurrentBook = assignedBooks.some(b => b.book?.id === currentBook?.id);
+    const matchedBook = hasCurrentBook ? currentBook : (assignedBooks[0]?.book || currentBook);
 
     setCurrentStudent(stud);
     setCurrentBook(matchedBook);
@@ -1081,10 +1094,11 @@ export default function InspectionWizardModal({
                   </button>
                   <button
                     type="button"
+                    disabled={isSaving}
                     onClick={handleSaveAndClose}
-                    className="rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer"
+                    className={`rounded-xl bg-rose-600 hover:bg-rose-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    결석 등록 완료
+                    {isSaving ? '저장 중...' : '결석 등록 완료'}
                   </button>
                 </div>
               ) : (
@@ -1129,19 +1143,21 @@ export default function InspectionWizardModal({
                       {/* [저장 후 다음 학생] 버튼 */}
                       <button
                         type="button"
+                        disabled={isSaving}
                         onClick={handleSaveAndNext}
-                        className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer"
+                        className={`rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        저장 후 다음 학생 ➔
+                        {isSaving ? '저장 중...' : '저장 후 다음 학생 ➔'}
                       </button>
 
                       {/* [점검내역저장] 단독 저장 */}
                       <button
                         type="button"
+                        disabled={isSaving}
                         onClick={handleSaveAndClose}
-                        className="rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer"
+                        className={`rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        점검내역 저장 완료
+                        {isSaving ? '저장 중...' : '점검내역 저장 완료'}
                       </button>
                     </div>
                   )}
@@ -1172,7 +1188,7 @@ export default function InspectionWizardModal({
                     if (isCurrent) {
                       btnClass = "bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.6)] animate-[pulse_1.8s_infinite]";
                     } else if (isSaved) {
-                      btnClass = "bg-emerald-950/40 border-emerald-900/60 text-emerald-450 hover:border-emerald-700 hover:text-white shadow-[0_0_8px_rgba(16,185,129,0.1)]";
+                      btnClass = "inspected-saved";
                     } else {
                       btnClass = "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white";
                     }

@@ -136,6 +136,20 @@ export default function InspectionsContainer(props) {
     if (!confirmed) return;
     try {
       await deleteDoc(doc(db, COLLECTION_NAMES.inspections, id));
+      
+      // 만약 삭제하려는 기록이 현재 편집/수정 중인 기록이라면 상태를 리셋하여 부활/꼬임 방지
+      if (state.editingInspectionId === id) {
+        updateLegacyState({
+          editingInspectionId: '',
+          selectedRangeStart: '',
+          selectedRangeEnd: '',
+          missedPages: '',
+          memo: '',
+          rubricScores: { expression: null, grading: null, attitude: null, understanding: null, application: null },
+          selectedCarryoverResolutionKeys: []
+        });
+      }
+
       showModalAlert('성공적으로 삭제되었습니다.', '성공');
     } catch (err) {
       console.error(err);
@@ -290,19 +304,35 @@ export default function InspectionsContainer(props) {
                </div>
                {selectedClassId ? (
                  <div className="choice-grid" id="selectedInspectionStudentId">
-                   {students.map(s => {
-                     const active = s.id === selectedStudentId;
-                     return (
-                       <button
-                         key={s.id}
-                         type="button"
-                         onClick={() => handleStudentClick(s.id)}
-                         className={`choice-button btn-choice-teacher ${active ? 'selected' : ''}`}
-                       >
-                         {s.name}
-                       </button>
+                   {(() => {
+                     const checkedStudentIds = new Set(
+                       (state.inspections || [])
+                         .filter(r => r.classId === selectedClassId && r.date === selectedDate)
+                         .map(r => r.studentId)
                      );
-                   })}
+                     return students.map(s => {
+                       const active = s.id === selectedStudentId;
+                       const isSaved = checkedStudentIds.has(s.id);
+                       let btnClass = "";
+                       if (active) {
+                         btnClass = "selected";
+                       } else if (isSaved) {
+                         btnClass = "inspected-saved";
+                       } else {
+                         btnClass = "btn-choice-teacher";
+                       }
+                       return (
+                         <button
+                           key={s.id}
+                           type="button"
+                           onClick={() => handleStudentClick(s.id)}
+                           className={`choice-button ${btnClass}`}
+                         >
+                           {s.name}
+                         </button>
+                       );
+                     });
+                   })()}
                  </div>
                ) : (
                  <div className="text-xs text-slate-500 p-2 font-bold bg-slate-950/20 border border-dashed border-slate-850 rounded-xl">

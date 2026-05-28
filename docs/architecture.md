@@ -31,10 +31,19 @@ open-academy-textbook-check/
 │  │     ├─ loginView.js
 │  │     └─ loginView.test.js
 │  ├─ lib/
+│  │  ├─ adminStudentMaintenance.js
+│  │  ├─ adminStudentMaintenance.test.js
+│  │  ├─ inspectionBatchSave.js
+│  │  ├─ inspectionBatchSave.test.js
 │  │  ├─ projectStructure.js
-│  │  └─ projectStructure.test.js
+│  │  ├─ projectStructure.test.js
+│  │  ├─ remarkTemplates.js
 │  │  ├─ reportMetrics.js
-│  │  └─ reportMetrics.test.js
+│  │  ├─ reportMetrics.test.js
+│  │  ├─ reportRounds.js
+│  │  ├─ reportRounds.test.js
+│  │  ├─ standardUnits.js
+│  │  ├─ standardUnits.test.js
 │  │  ├─ textbookProgress.js
 │  │  └─ textbookProgress.test.js
 │  ├─ services/
@@ -57,6 +66,11 @@ open-academy-textbook-check/
 - 기존 앱 스타일은 `src/styles/legacy.css`로 분리되었다.
 - 교재 범위, 미완료 페이지 파싱, 단원 매핑, 완료율 계산은 `src/lib/textbookProgress.js`에서 관리한다.
 - 학생별/교재별/반별 평균 완료율 집계는 `src/lib/reportMetrics.js`에서 관리한다.
+- 보고서 회차 생성 및 이력 처리는 `src/lib/reportRounds.js`에서 관리한다.
+- 표준 소단원 명칭 매핑 및 ID 체계는 `src/lib/standardUnits.js`에서 관리한다.
+- 대표 특이사항 코멘트 템플릿 관리는 `src/lib/remarkTemplates.js`에서 관리한다.
+- 점검 기록 일괄 저장 및 자동 완성 타겟팅은 `src/lib/inspectionBatchSave.js`에서 관리한다.
+- 관리자 학생 목록 수정 및 이력 데이터 초기화는 `src/lib/adminStudentMaintenance.js`에서 관리한다.
 - Firebase 초기화, 인증, 컬렉션 이름, Firestore refs는 `src/services/firebaseService.js`에서 관리한다.
 - Firebase SDK는 npm 패키지를 Vite가 번들링한다.
 - 기존 앱은 Firestore 컬렉션을 실시간 구독하고, 상태 객체를 기준으로 화면 전체를 다시 렌더링한다.

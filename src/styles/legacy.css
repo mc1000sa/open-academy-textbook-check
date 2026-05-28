@@ -623,14 +623,20 @@ button[disabled] {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 12px;
   color: #e2e8f0 !important;
-  padding: 0.7rem 0.5rem;
+  padding: 0.6rem 0.5rem;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   text-align: center;
   transition: all 0.2s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: keep-all;
+  line-height: 1.25;
+  min-height: 2.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .choice-button:hover {
   background: rgba(255, 255, 255, 0.08) !important;
@@ -643,6 +649,17 @@ button[disabled] {
   border-color: transparent !important;
   color: #ffffff !important;
   box-shadow: 0 4px 15px rgba(65, 105, 225, 0.3);
+}
+
+/* 오늘 점검 완료된 학생 칩 스타일 (파스텔 연녹색) */
+.inspected-saved {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #a7f3d0 !important;
+}
+.inspected-saved:hover {
+  background: rgba(16, 185, 129, 0.3) !important;
+  border-color: rgba(16, 185, 129, 0.6) !important;
 }
 
 /* 학생용 청록색 선택 상태 */
