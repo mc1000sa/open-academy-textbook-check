@@ -449,7 +449,7 @@ describe('reportsView', () => {
     expect(html).toContain('<span class="parent-report-round-num">1회차</span> 교재 분석 보고서');
     expect(html).toContain('열린학원');
     expect(html).toContain('공통수학1');
-    expect(html).toContain('점검 완료율 41%');
+    expect(html).toContain('완료율 41%');
     expect(html).toContain('점검 중인 단원');
     expect(html).toContain('보완 필요 쪽수');
     expect(html).toContain('교재 6요소');

@@ -993,6 +993,7 @@ details.group[open] summary span {
   border: 1px solid #e5e7eb;
   font-family: "Pretendard", "SUIT", system-ui, sans-serif;
   letter-spacing: 0;
+  position: relative;
 }
 
 .parent-report-header {
@@ -1021,13 +1022,16 @@ details.group[open] summary span {
   color: #9bd7f5;
 }
 
-.parent-report-kicker strong,
-.parent-report-kicker b {
+.parent-report-kicker strong {
   color: #1746b7;
   font-weight: 1000;
 }
 
 .parent-report-kicker > span:first-of-type {
+  color: #4169e1;
+}
+
+.parent-report-kicker > span:last-of-type {
   color: #4169e1;
 }
 
@@ -1057,13 +1061,14 @@ details.group[open] summary span {
 }
 
 .parent-report-brand {
+  position: absolute;
+  top: 44px;
+  right: 50px;
   color: #4169e1;
   font-size: 34px;
   line-height: 1;
   font-weight: 1000;
   white-space: nowrap;
-  align-self: flex-start;
-  padding-top: 2px;
 }
 
 .parent-report-round-num {
@@ -1203,7 +1208,7 @@ details.group[open] summary span {
 
 .parent-report-radar {
   width: 100%;
-  max-width: 279px;
+  max-width: 240px;
 }
 
 .parent-report-empty {

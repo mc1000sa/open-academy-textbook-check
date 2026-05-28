@@ -224,7 +224,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
       <section class="parent-report-book">
         <div class="parent-report-book-head">
           <h3><span class="parent-report-pipe">|</span>${escape(book?.title || '이름 없는 교재')}</h3>
-          <strong aria-label="점검 완료율 ${escape(avg)}%"><span>점검 완료율</span><b>${escape(avg)}%</b></strong>
+          <strong aria-label="완료율 ${escape(avg)}%"><span>완료율</span><b>${escape(avg)}%</b></strong>
         </div>
         <p><b>점검 중인 단원 :</b> ${escape(rangeUnitSummary(book, items, unitsForRange))}</p>
         <p><b>보완 필요 쪽수 :</b> ${escape(missedPagesSummary(items))}</p>
@@ -251,7 +251,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
           <div class="parent-report-kicker" aria-label="OATIS | Open Academy Textbook Insight System">
             <strong>OATIS</strong>
             <span>|</span>
-            <span><b>O</b>pen <b>A</b>cademy <b>T</b>extbook <b>I</b>nsight <b>S</b>ystem</span>
+            <span>Open Academy Textbook Insight System</span>
           </div>
           <div style="height: 2px; background: #3730a3; margin: 10px 0 16px 0;"></div>
           <h1 aria-label="${escape(student.name)} (${escape(klass?.name || '-')}) - ${escape(teacherTitleName(teacherName))}">
@@ -261,7 +261,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
           </h1>
           <p class="parent-report-subtitle">${periodText}<span class="parent-report-round-num">${escape(roundLabel)}</span> 교재 분석 보고서</p>
         </div>
-        <div class="parent-report-brand" style="color: #3730a3 !important;">열린학원</div>
+        <div class="parent-report-brand">열린학원</div>
       </header>
 
       <div class="parent-report-divider"></div>
