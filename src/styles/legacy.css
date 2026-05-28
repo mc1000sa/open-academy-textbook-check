@@ -897,9 +897,13 @@ details.group[open] summary span {
   color: #f8fafc;
 }
 
-.report-section-title span,
-.parent-report-pipe {
+.report-section-title span {
   color: #384bff;
+  font-weight: 1000;
+}
+
+.parent-report-pipe {
+  color: #3730a3 !important;
   font-weight: 1000;
 }
 
@@ -994,7 +998,7 @@ details.group[open] summary span {
 .parent-report-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 2rem;
 }
 
@@ -1048,6 +1052,8 @@ details.group[open] summary span {
   font-size: 18px;
   font-weight: 850;
   color: #334155;
+  line-height: 1.6 !important;
+  padding-bottom: 4px !important;
 }
 
 .parent-report-brand {
@@ -1102,9 +1108,9 @@ details.group[open] summary span {
 .parent-report-rubric h2,
 .parent-report-comments h2 {
   margin: 0;
-  font-size: 27px;
+  font-size: 17px !important;
   font-weight: 950;
-  color: #111827;
+  color: #3730a3 !important;
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -1117,7 +1123,7 @@ details.group[open] summary span {
   margin: 0;
   font-size: 17px;
   font-weight: 950;
-  color: #111827;
+  color: #3730a3 !important;
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -1144,13 +1150,14 @@ details.group[open] summary span {
 .parent-report-book p {
   margin: 8px 0 0;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.85 !important;
   color: #334155;
+  padding-bottom: 4px !important;
 }
 
 .parent-report-comments p {
   margin: 8px 0 0;
-  font-size: 21px;
+  font-size: 17px !important;
   line-height: 1.55;
   color: #334155;
 }
@@ -1170,9 +1177,9 @@ details.group[open] summary span {
   margin: 16px 0 0;
   padding: 0;
   list-style: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .parent-report-rubric li {
@@ -1184,7 +1191,8 @@ details.group[open] summary span {
 
 .parent-report-rubric li span {
   display: inline-block;
-  width: 110px;
+  width: auto;
+  margin-right: 8px;
 }
 
 .parent-report-rubric li b {

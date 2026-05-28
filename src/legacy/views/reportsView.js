@@ -17,12 +17,12 @@ const RUBRIC_LABELS = {
 
 const RUBRIC_KEYS = Object.keys(RUBRIC_LABELS);
 const IMAGE_RUBRIC_LABELS = {
-  assignment: '과제 수행률',
-  expression: '풀이 표현력',
-  grading: '채점 성실도',
-  attitude: '수업 태도',
-  understanding: '개념 이해도',
-  application: '응용 해결력'
+  assignment: '과제',
+  expression: '풀이',
+  grading: '채점',
+  attitude: '태도',
+  understanding: '개념',
+  application: '응용'
 };
 
 function rubricScore(vector, key) {
@@ -150,7 +150,7 @@ function renderImageRubricChart(vector, safe) {
     const pos = rubricLabelPosition(index, 92);
     const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
     const dy = index === 0 ? -4 : index === 3 ? 5 : 0;
-    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#334155" font-size="7.5" font-weight="800">${escape(IMAGE_RUBRIC_LABELS[key])}</text>`;
+    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#334155" font-size="9" font-weight="800">${escape(IMAGE_RUBRIC_LABELS[key])}</text>`;
   }).join('');
 
   return `
@@ -224,7 +224,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
   }).join('');
 
   const rubricRows = RUBRIC_KEYS.map((key, index) => `
-    <li><span>${index + 1}. ${escape(IMAGE_RUBRIC_LABELS[key])}</span><b>${escape(scoreText(vector, key))}</b></li>
+    <li><span>${index + 1}. ${escape(RUBRIC_LABELS[key])}</span><b>${escape(scoreText(vector, key))}</b></li>
   `).join('');
   const comments = rows
     .map(row => String(row.memo || '').trim())
@@ -233,7 +233,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
     .join('');
 
   const selectedPeriod = state.selectedReportPeriod || '';
-  const periodText = selectedPeriod ? `${escape(selectedPeriod)} | ` : '';
+  const periodText = selectedPeriod ? `${escape(selectedPeriod)} ` : '';
 
   return `
     <div class="parent-image-report" id="reportCaptureArea">
@@ -244,6 +244,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
             <span>|</span>
             <span><b>O</b>pen <b>A</b>cademy <b>T</b>extbook <b>I</b>nsight <b>S</b>ystem</span>
           </div>
+          <div style="height: 2px; background: #3730a3; margin: 10px 0 16px 0;"></div>
           <h1 aria-label="${escape(student.name)} (${escape(klass?.name || '-')}) - ${escape(teacherTitleName(teacherName))}">
             <span class="parent-report-student-name">${escape(student.name)}</span>
             <span class="parent-report-meta">(${escape(klass?.name || '-')}) - </span>
@@ -251,7 +252,7 @@ export function reportForStudentImage(studentId, state, deps, options = {}) {
           </h1>
           <p class="parent-report-subtitle">${periodText}<span class="parent-report-round-num">${escape(roundLabel)}</span> 교재 분석 보고서</p>
         </div>
-        <div class="parent-report-brand">열린학원</div>
+        <div class="parent-report-brand" style="color: #3730a3 !important;">열린학원</div>
       </header>
 
       <div class="parent-report-divider"></div>
@@ -632,12 +633,35 @@ export function renderReportsView(state, deps) {
           </div>
           <div>
             <div class="report-flow-label">학생 선택</div>
-            ${activeReportClassId ? renderBtnSelect({
-              id: 'reportStudentId',
-              options: classStudents.map(student => ({ value: student.id, label: student.name })),
-              selectedValue: state.reportStudentId,
-              placeholder: '이 반에 배정된 학생이 없습니다.'
-            }) : '<div class="report-empty-message">반을 먼저 선택하면 학생 버튼이 나타납니다.</div>'}
+            ${activeReportClassId ? (() => {
+              if (classStudents.length === 0) {
+                return '<div class="text-xs text-slate-500 p-2 font-bold">이 반에 배정된 학생이 없습니다.</div>';
+              }
+              const checkedStudentIds = new Set(
+                (state.inspections || [])
+                  .filter(r => r.classId === activeReportClassId && reportStartDate && r.date >= reportStartDate)
+                  .map(r => r.studentId)
+              );
+              return `
+                <div class="choice-grid" id="reportStudentId">
+                  ${classStudents.map(student => {
+                    const active = student.id === state.reportStudentId;
+                    const isSaved = checkedStudentIds.has(student.id);
+                    let btnClass = "";
+                    if (active) {
+                      btnClass = "selected";
+                    } else if (isSaved) {
+                      btnClass = "inspected-saved";
+                    }
+                    return `
+                      <button type="button" data-action="select-option" data-target="reportStudentId" data-value="${safe(student.id)}" class="choice-button btn-choice-teacher ${btnClass}">
+                        ${safe(student.name)}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              `;
+            })() : '<div class="report-empty-message">반을 먼저 선택하면 학생 버튼이 나타납니다.</div>'}
           </div>
         </div>
 
@@ -654,6 +678,9 @@ export function renderReportsView(state, deps) {
           <div class="flex justify-end gap-2.5 no-print bg-slate-900/50 p-3 rounded-2xl border border-slate-800 max-w-4xl mx-auto">
             <button type="button" data-action="export-image" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5">
               <span>이미지 파일(PNG)로 저장</span>
+            </button>
+            <button type="button" data-action="export-class-images" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
+              <span>반 일괄 이미지 저장</span>
             </button>
             <button type="button" data-action="print" class="ghost-button px-4 py-2 rounded-xl text-xs font-extrabold">
               인쇄 / PDF 저장

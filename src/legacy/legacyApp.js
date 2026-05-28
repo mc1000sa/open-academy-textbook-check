@@ -2727,6 +2727,133 @@ export async function mountLegacyApp(appRoot) {
         }
       }, 3000);
     });
+    appRoot.querySelectorAll('[data-action="export-class-images"]').forEach(el => el.onclick = async () => {
+      const classId = state.reportClassId;
+      const roundNumber = Number(state.selectedReportRound);
+      if (!classId) {
+        showModalAlert('반을 먼저 선택해 주세요.');
+        return;
+      }
+      if (!roundNumber) {
+        showModalAlert('다운로드할 보고서 회차를 먼저 선택해 주세요.');
+        return;
+      }
+      
+      const klass = classById(classId);
+      if (!klass) return;
+      
+      const classStudents = state.students
+        .filter(s => s.classId === classId && s.active !== false)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+        
+      if (classStudents.length === 0) {
+        showModalAlert('이 반에 배정된 학생이 없습니다.');
+        return;
+      }
+
+      state.saveMsg = `🖼️ 반 일괄 이미지 다운로드를 시작합니다 (총 ${classStudents.length}명)...`;
+      render();
+
+      try {
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+        if (typeof window.html2canvas !== 'function') {
+          throw new Error('html2canvas 라이브러리 로드에 실패했습니다.');
+        }
+
+        for (let i = 0; i < classStudents.length; i++) {
+          const student = classStudents[i];
+          
+          state.saveMsg = `🖼️ 이미지 생성 중... (${i + 1}/${classStudents.length}) - ${student.name} 학생`;
+          render();
+
+          const startDate = state.reportRoundStartDate || klass.reportRoundStartDate || '';
+          const studentRounds = buildReportRounds({
+            inspections: state.inspections,
+            classId,
+            studentId: student.id,
+            startDate
+          });
+          const round = studentRounds.find(r => r.round === roundNumber);
+          if (!round) {
+            console.log(`${student.name} 학생은 ${roundNumber}회차 점검 기록이 없어 스킵합니다.`);
+            continue;
+          }
+
+          const studentHtml = reportForStudentImage(student.id, state, {
+            studentById,
+            classById,
+            inspectionsForStudent,
+            groupInspectionsByBook,
+            bookById,
+            averageCompletionRate,
+            fmtDate,
+            safe,
+            teacherNameById,
+            classRubricAverage,
+            studentRubricAverage,
+            students: state.students,
+            inspections: state.inspections,
+            assignedBooksForClass,
+            unitsForRange: unitsForRangeWithStandardNames
+          }, { round });
+
+          const fileName = formatRoundFileName({
+            teacherName: teacherNameById(klass.teacherId),
+            className: klass.name,
+            studentName: student.name,
+            round
+          });
+
+          const captureHost = document.createElement('div');
+          captureHost.style.position = 'fixed';
+          captureHost.style.left = '-10000px';
+          captureHost.style.top = '0';
+          captureHost.style.width = '720px';
+          captureHost.style.background = '#ffffff';
+          captureHost.style.zIndex = '-1';
+          captureHost.innerHTML = studentHtml;
+          document.body.appendChild(captureHost);
+
+          try {
+            const targetElement = captureHost.querySelector('#reportCaptureArea') || captureHost.firstChild;
+            if (targetElement) {
+              const canvas = await window.html2canvas(targetElement, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                useCORS: true,
+                logging: false
+              });
+
+              const link = document.createElement('a');
+              link.href = canvas.toDataURL('image/png');
+              link.download = fileName;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
+          } catch (err) {
+            console.error(`${student.name} 학생 이미지 저장 실패:`, err);
+          } finally {
+            document.body.removeChild(captureHost);
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        state.saveMsg = '🎉 반 전체 이미지 일괄 다운로드가 완료되었습니다!';
+      } catch (err) {
+        console.error(err);
+        state.saveMsg = '';
+        showModalAlert(`일괄 다운로드 중 오류가 발생했습니다: ${err.message}`);
+      }
+      render();
+      setTimeout(() => {
+        if (state.saveMsg && state.saveMsg.includes('완료')) {
+          state.saveMsg = '';
+          render();
+        }
+      }, 3000);
+    });
     document.getElementById('reportRoundStartDate')?.addEventListener('change', async (e) => {
       const value = e.target.value || '';
       const classId = e.target.dataset.classId || activeReportClassId();
