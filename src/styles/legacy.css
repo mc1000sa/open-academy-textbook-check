@@ -1065,7 +1065,7 @@ details.group[open] summary span {
   top: 35px;
   right: 50px;
   color: #4169e1;
-  font-size: 31px;
+  font-size: 25px;
   line-height: 1;
   font-weight: 1000;
   white-space: nowrap;
@@ -1139,8 +1139,9 @@ details.group[open] summary span {
 }
 
 .parent-report-book-head strong {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   min-width: 74px;
   color: #4169e1;
@@ -1149,10 +1150,16 @@ details.group[open] summary span {
   white-space: nowrap;
 }
 
+.parent-report-book-head strong span {
+  text-align: center;
+  width: 100%;
+}
+
 .parent-report-book-head strong b {
   font-size: 16px;
   line-height: 1.1;
   color: #4169e1;
+  text-align: center;
 }
 
 .parent-report-book p {
