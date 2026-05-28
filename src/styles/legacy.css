@@ -1062,10 +1062,10 @@ details.group[open] summary span {
 
 .parent-report-brand {
   position: absolute;
-  top: 44px;
+  top: 35px;
   right: 50px;
   color: #4169e1;
-  font-size: 34px;
+  font-size: 31px;
   line-height: 1;
   font-weight: 1000;
   white-space: nowrap;
@@ -1140,7 +1140,8 @@ details.group[open] summary span {
 
 .parent-report-book-head strong {
   display: grid;
-  justify-items: end;
+  justify-items: center;
+  text-align: center;
   min-width: 74px;
   color: #4169e1;
   font-size: 11px;

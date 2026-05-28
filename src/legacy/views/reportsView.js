@@ -150,7 +150,7 @@ function renderImageRubricChart(vector, safe) {
     const pos = rubricLabelPosition(index, 92);
     const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
     const dy = index === 0 ? -4 : index === 3 ? 5 : 0;
-    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#334155" font-size="9" font-weight="800">${escape(IMAGE_RUBRIC_LABELS[key])}</text>`;
+    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#3730a3" font-size="9" font-weight="800">${escape(IMAGE_RUBRIC_LABELS[key])}</text>`;
   }).join('');
 
   return `
