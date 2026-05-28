@@ -16,6 +16,14 @@ const RUBRIC_LABELS = {
 };
 
 const RUBRIC_KEYS = Object.keys(RUBRIC_LABELS);
+const IMAGE_RUBRIC_LABELS = {
+  assignment: '과제 수행률',
+  expression: '풀이 표현력',
+  grading: '채점 성실도',
+  attitude: '수업 태도',
+  understanding: '개념 이해도',
+  application: '응용 해결력'
+};
 
 function rubricScore(vector, key) {
   const score = Number(vector?.[key]);
@@ -111,6 +119,165 @@ export function renderRubricCompare(title, primary, secondary, secondaryLabel, s
         </svg>
       </div>
     </section>
+  `;
+}
+
+function normalizeDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+}
+
+function teacherTitleName(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return '담당T';
+  return /t$/i.test(clean) ? clean.replace(/t$/i, 'T') : `${clean}T`;
+}
+
+function scoreText(vector, key) {
+  return rubricScore(vector, key).toFixed(1);
+}
+
+function renderImageRubricChart(vector, safe) {
+  const escape = typeof safe === 'function' ? safe : value => String(value ?? '');
+  const grid = [0.25, 0.5, 0.75, 1].map(scale => `
+    <polygon points="${rubricGridPoints(scale)}" fill="none" stroke="#d7deea" stroke-width="1"></polygon>
+  `).join('');
+  const axes = RUBRIC_KEYS.map((_, index) => {
+    const point = rubricGridPoints(1).split(' ')[index];
+    return `<line x1="100" y1="100" x2="${point.split(',')[0]}" y2="${point.split(',')[1]}" stroke="#d7deea" stroke-width="1"></line>`;
+  }).join('');
+  const labels = RUBRIC_KEYS.map((key, index) => {
+    const pos = rubricLabelPosition(index, 92);
+    const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
+    const dy = index === 0 ? -4 : index === 3 ? 5 : 0;
+    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#334155" font-size="7.5" font-weight="800">${escape(IMAGE_RUBRIC_LABELS[key])}</text>`;
+  }).join('');
+
+  return `
+    <svg class="parent-report-radar" viewBox="-30 -24 260 248" role="img" aria-label="교재 6요소 육각형 차트">
+      ${grid}
+      ${axes}
+      <polygon points="${rubricPoints(vector)}" fill="rgba(65,105,225,0.18)" stroke="#4169e1" stroke-width="3" stroke-linejoin="round"></polygon>
+      ${rubricCircles(vector, '#4169e1')}
+      ${labels}
+    </svg>
+  `;
+}
+
+function rangeUnitSummary(book, rows, unitsForRange) {
+  const names = [];
+  rows.forEach(row => {
+    const units = typeof unitsForRange === 'function' ? unitsForRange(book, row.rangeStart, row.rangeEnd) : [];
+    units.forEach(unit => {
+      const name = String(unit?.name || '').trim();
+      if (name && !names.includes(name)) names.push(name);
+    });
+  });
+  if (names.length) return names.join(', ');
+  return rows.map(row => `${row.rangeStart ?? '-'}~${row.rangeEnd ?? '-'}쪽`).join(', ');
+}
+
+function missedPagesSummary(rows) {
+  const missed = [...new Set(rows.flatMap(row => Array.isArray(row.missedPages) ? row.missedPages : []))]
+    .sort((a, b) => Number(a) - Number(b));
+  return missed.length ? missed.map(page => `${page}쪽`).join(', ') : '없음';
+}
+
+export function reportForStudentImage(studentId, state, deps, options = {}) {
+  const {
+    studentById,
+    classById,
+    inspectionsForStudent,
+    groupInspectionsByBook,
+    bookById,
+    averageCompletionRate,
+    safe,
+    teacherNameById,
+    unitsForRange
+  } = deps;
+  const escape = typeof safe === 'function' ? safe : value => String(value ?? '');
+  const student = studentById(studentId);
+  if (!student) return '';
+  const klass = classById(student.classId);
+  const teacherName = teacherNameById?.(klass?.teacherId) || state.currentTeacher?.name || '담당';
+  const round = options.round || null;
+  const roundDate = normalizeDate(round?.date);
+  const allRows = inspectionsForStudent(studentId);
+  const rows = roundDate ? allRows.filter(row => normalizeDate(row.date) === roundDate) : allRows;
+  const grouped = groupInspectionsByBook(rows);
+  const vector = averageRubricVector(rows);
+  const roundLabel = round?.round ? `${round.round}회차` : '선택 회차';
+
+  const bookSections = Object.entries(grouped).map(([bookId, items]) => {
+    const book = bookById(bookId);
+    const avg = Math.round(averageCompletionRate(items));
+    return `
+      <section class="parent-report-book">
+        <div class="parent-report-book-head">
+          <h3><span class="parent-report-pipe">|</span>${escape(book?.title || '이름 없는 교재')}</h3>
+          <strong aria-label="점검 완료율 ${escape(avg)}%"><span>점검 완료율</span><b>${escape(avg)}%</b></strong>
+        </div>
+        <p><b>완료한 단원 :</b> ${escape(rangeUnitSummary(book, items, unitsForRange))}</p>
+        <p><b>보완 필요 쪽수 :</b> ${escape(missedPagesSummary(items))}</p>
+      </section>
+    `;
+  }).join('');
+
+  const rubricRows = RUBRIC_KEYS.map((key, index) => `
+    <li><span>${index + 1}. ${escape(IMAGE_RUBRIC_LABELS[key])}</span><b>${escape(scoreText(vector, key))}</b></li>
+  `).join('');
+  const comments = rows
+    .map(row => String(row.memo || '').trim())
+    .filter(Boolean)
+    .map(memo => `<p>${escape(memo)}</p>`)
+    .join('');
+
+  return `
+    <div class="parent-image-report" id="reportCaptureArea">
+      <header class="parent-report-header">
+        <div>
+          <div class="parent-report-kicker" aria-label="OATIS | Open Academy Textbook Insight System">
+            <strong>OATIS</strong>
+            <span>|</span>
+            <span><b>O</b>pen <b>A</b>cademy <b>T</b>extbook <b>I</b>nsight <b>S</b>ystem</span>
+          </div>
+          <h1 aria-label="${escape(student.name)} (${escape(klass?.name || '-')}) - ${escape(teacherTitleName(teacherName))}">
+            <span class="parent-report-student-name">${escape(student.name)}</span>
+            <span class="parent-report-meta">(${escape(klass?.name || '-')}) - </span>
+            <span class="parent-report-teacher-name">${escape(teacherTitleName(teacherName))}</span>
+          </h1>
+          <p>${escape(roundLabel)} 교재 분석 보고서</p>
+        </div>
+        <div class="parent-report-brand">열린학원</div>
+      </header>
+
+      <div class="parent-report-divider"></div>
+
+      <div class="parent-report-books">
+        ${bookSections || '<div class="parent-report-empty">선택 회차의 교재 점검 기록이 없습니다.</div>'}
+      </div>
+
+      <div class="parent-report-divider"></div>
+
+      <section class="parent-report-rubric">
+        <div>
+          <h2><span class="parent-report-pipe">|</span>교재 6요소</h2>
+          <ol>${rubricRows}</ol>
+        </div>
+        ${renderImageRubricChart(vector, escape)}
+      </section>
+
+      <div class="parent-report-divider"></div>
+
+      <section class="parent-report-comments">
+        <h2><span class="parent-report-pipe">|</span>교재 점검 최근 코멘트</h2>
+        ${comments || '<p>등록된 코멘트가 없습니다.</p>'}
+      </section>
+
+      <div class="parent-report-divider"></div>
+
+      <footer>열린학원 OATIS 교재분석 리포트</footer>
+    </div>
   `;
 }
 
@@ -359,7 +526,7 @@ export function reportForClass(classId, state, deps) {
 
 // 3. 메인 보고서 뷰 렌더러
 export function renderReportsView(state, deps) {
-  const { teacherClasses, classById } = deps;
+  const { teacherClasses, classById, safe } = deps;
   let teacherClassesList = state.currentTeacher.role === 'admin' ? state.classes : teacherClasses(state.currentTeacher.id);
   const classSort = state.classSortType || 'name';
   if (classSort === 'grade') {
@@ -375,131 +542,88 @@ export function renderReportsView(state, deps) {
   }
   const studentsList = state.currentTeacher.role === 'admin' ? state.students : state.students.filter(s => teacherClassesList.some(c => c.id === s.classId));
 
-  // 포털 테마에 따른 전용 버튼 스타일링: Royal Blue
   const btnClass = 'btn-teacher';
+  const selectedStudent = studentsList.find(student => student.id === state.reportStudentId);
+  const activeReportClassId = selectedStudent?.classId || state.reportClassId || '';
+  const activeReportClass = classById(activeReportClassId);
+  const reportStartDate = state.reportRoundStartDate || activeReportClass?.reportRoundStartDate || '';
+  const reportRounds = state.reportStudentId ? (state.reportRounds || []) : [];
+  const selectedReportRound = Number(state.selectedReportRound || 0);
+  const classStudents = activeReportClassId
+    ? studentsList
+      .filter(student => student.classId === activeReportClassId)
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'))
+    : [];
+  const selectedRoundInfo = reportRounds.find(round => round.round === selectedReportRound);
+  const roundButtons = reportRounds.length
+    ? reportRounds.map(round => `
+      <button type="button" data-action="select-report-round" data-round="${safe(round.round)}" class="report-round-button ${selectedReportRound === round.round ? 'active' : ''}">
+        ${safe(round.round)}회차 (${safe(round.displayDate)})
+      </button>
+    `).join('')
+    : `<div class="text-xs font-bold text-slate-500">${state.reportStudentId ? '기준일 이후 해당 학생 점검 기록이 아직 없습니다.' : '학생을 선택하면 생성 가능한 회차가 표시됩니다.'}</div>`;
+  const previewPlaceholder = !reportStartDate
+    ? '보고서 회차 기준일을 먼저 선택해주세요'
+    : !activeReportClassId
+      ? '보고서를 생성할 반을 선택해주세요'
+      : !state.reportStudentId
+        ? '학생을 선택하면 생성 가능한 회차가 나타납니다'
+        : '보고서를 생성할 회차를 선택해주세요';
+  const previewHelp = selectedRoundInfo
+    ? `${safe(selectedRoundInfo.round)}회차 ${safe(selectedRoundInfo.displayDate)} 기록으로 아래에 보고서를 표시합니다.`
+    : '기준일, 반, 학생, 회차를 순서대로 선택하면 기존 다크 테마 보고서가 표시됩니다.';
 
   return `
     <div class="space-y-6">
-      <div class="grid xl:grid-cols-[1fr_1fr] gap-6 no-print">
-        
-        <!-- 학생별 보고서 생성 카드 -->
-        <article class="card-3d rounded-2xl p-5 md:p-6">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <h3 class="text-base font-extrabold text-white">학생별 보고서 출력</h3>
-            <span class="text-[10px] text-slate-400 font-medium">개인 맞춤 피드백</span>
+      <section class="report-round-panel no-print" data-report-flow="student-image">
+        <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-5">
+          <div class="min-w-0">
+            <h3 class="report-section-title" title="| 학생별 보고서 생성 설정"><span>|</span> 학생별 보고서 생성 설정</h3>
+            <p class="text-xs text-slate-500 mt-1">기준일, 반, 학생, 회차를 순서대로 선택하면 해당 회차 보고서가 실시간으로 표시됩니다.</p>
           </div>
-          
-          <div class="space-y-4">
-            <div class="flex flex-col gap-2">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs font-bold text-slate-400">대상 학생 선택</span>
-                <div class="filter-switch">
-                  <span class="filter-switch-item ${(!state.studentSortType || state.studentSortType === 'name') ? 'active' : ''}" data-action="set-student-sort" data-sort="name">이름순</span>
-                  <span class="filter-switch-item ${state.studentSortType === 'class' ? 'active' : ''}" data-action="set-student-sort" data-sort="class">반별</span>
-                </div>
-              </div>
-              ${(() => {
-                const studentSort = state.studentSortType || 'name';
-                if (studentSort === 'class') {
-                  const html = teacherClassesList.map(c => {
-                    const classStudents = studentsList.filter(s => s.classId === c.id)
-                      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'));
-                    if (classStudents.length === 0) return '';
-                    return `
-                      <div class="mb-3 p-3 rounded-xl bg-slate-950/20 border border-slate-800/40">
-                        <div class="text-[10px] font-black text-slate-400 mb-2 pb-1 border-b border-slate-900 flex items-center justify-between">
-                          <span>${c.name}</span>
-                          <span class="text-[9px] text-slate-500 font-bold">${classStudents.length}명</span>
-                        </div>
-                        ${renderBtnSelect({
-                          id: 'reportStudentId',
-                          options: classStudents.map(s => ({ value: s.id, label: s.name })),
-                          selectedValue: state.reportStudentId,
-                          placeholder: '이 반에 배정된 학생이 없습니다.'
-                        })}
-                      </div>
-                    `;
-                  }).filter(Boolean).join('');
-                  return html || `<div class="text-xs text-slate-500 p-2 font-bold">배정된 학생이 없습니다.</div>`;
-                } else {
-                  return renderBtnSelect({
-                    id: 'reportStudentId',
-                    options: studentsList.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko')).map(s=>({
-                      value: s.id,
-                      label: `${s.name} (${classById(s.classId)?.name || '-'})`
-                    })),
-                    selectedValue: state.reportStudentId,
-                    placeholder: '배정된 학생이 없습니다.'
-                  });
-                }
-              })()}
-            </div>
-            
-            <p class="text-xs text-slate-500 leading-normal">
-              학생 개인별 완료율 추이, 교재 미비 쪽수 리스트 및 최종 선생님 피드백이 담긴 리포트를 생성합니다.
-            </p>
-            
-            <div class="flex gap-2">
-              <button type="button" data-action="build-student-report" class="${btnClass} px-4 py-2.5 rounded-xl text-xs font-extrabold flex-1">
-                학생 보고서 생성
-              </button>
-              <button type="button" data-action="print" class="ghost-button px-4 py-2.5 rounded-xl text-xs font-extrabold">
-                인쇄 / PDF
-              </button>
-            </div>
-          </div>
-        </article>
+          <label class="report-date-control" data-action="open-report-date-picker">
+            <span>보고서 회차 기준일</span>
+            <input type="date" id="reportRoundStartDate" value="${safe(reportStartDate)}" data-class-id="${safe(activeReportClassId)}" onclick="try { this.showPicker(); } catch (err) {}" />
+          </label>
+        </div>
 
-        <!-- 반별 현황표 생성 카드 -->
-        <article class="card-3d rounded-2xl p-5 md:p-6">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <h3 class="text-base font-extrabold text-white">반별 전체 진행표 출력</h3>
-            <span class="text-[10px] text-slate-400 font-medium">학급 전체 현황</span>
+        <div class="report-flow-stack mt-5">
+          <div>
+            <div class="report-flow-label">반 선택</div>
+            ${renderBtnSelect({
+              id: 'reportClassId',
+              options: teacherClassesList.map(c => ({ value: c.id, label: c.name })),
+              selectedValue: activeReportClassId,
+              placeholder: '개설된 반이 없습니다.'
+            })}
           </div>
-          
-          <div class="space-y-4">
-            <div class="flex flex-col gap-2">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs font-bold text-slate-400">대상 반 선택</span>
-                <div class="filter-switch">
-                  <span class="filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}" data-action="set-class-sort" data-sort="name">이름순</span>
-                  <span class="filter-switch-item ${state.classSortType === 'grade' ? 'active' : ''}" data-action="set-class-sort" data-sort="grade">학년별</span>
-                </div>
-              </div>
-              ${renderBtnSelect({
-                id: 'reportClassId',
-                options: teacherClassesList.map(c=>({ value: c.id, label: c.name })),
-                selectedValue: state.reportClassId,
-                placeholder: '개설된 반이 없습니다.'
-              })}
-            </div>
-            
-            <p class="text-xs text-slate-500 leading-normal">
-              반에 소속된 전체 학생의 평균 학습 진도 완료율 및 최근 점검 로그를 요약한 현황표를 만듭니다.
-            </p>
-            
-            <div class="flex gap-2">
-              <button type="button" data-action="build-class-report" class="${btnClass} px-4 py-2.5 rounded-xl text-xs font-extrabold flex-1">
-                반 전체표 생성
-              </button>
-              <button type="button" data-action="print" class="ghost-button px-4 py-2.5 rounded-xl text-xs font-extrabold">
-                인쇄 / PDF
-              </button>
-            </div>
+          <div>
+            <div class="report-flow-label">학생 선택</div>
+            ${activeReportClassId ? renderBtnSelect({
+              id: 'reportStudentId',
+              options: classStudents.map(student => ({ value: student.id, label: student.name })),
+              selectedValue: state.reportStudentId,
+              placeholder: '이 반에 배정된 학생이 없습니다.'
+            }) : '<div class="report-empty-message">반을 먼저 선택하면 학생 버튼이 나타납니다.</div>'}
           </div>
-        </article>
+        </div>
 
-      </div>
+        <div class="mt-4">
+          <div class="text-xs font-black text-slate-300 mb-2">현재 생성 가능 회차</div>
+          <div class="report-round-buttons">
+            ${roundButtons}
+          </div>
+        </div>
+      </section>
 
-      <!-- 리포트 출력 및 제어부 -->
       <div class="space-y-4">
         ${state.printHtml ? `
           <div class="flex justify-end gap-2.5 no-print bg-slate-900/50 p-3 rounded-2xl border border-slate-800 max-w-4xl mx-auto">
             <button type="button" data-action="export-image" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5">
-              <span>🖼️ 이미지 파일(PNG)로 저장</span>
+              <span>이미지 파일(PNG)로 저장</span>
             </button>
             <button type="button" data-action="print" class="ghost-button px-4 py-2 rounded-xl text-xs font-extrabold">
-              🖨️ 인쇄 / PDF 저장
+              인쇄 / PDF 저장
             </button>
           </div>
         ` : ''}
@@ -507,11 +631,56 @@ export function renderReportsView(state, deps) {
         <div id="printArea" class="max-w-4xl mx-auto">
           ${state.printHtml || `
             <div class="card-3d rounded-2xl p-10 text-center text-slate-500 text-xs">
-              위 선택 카드에서 보고서 또는 현황표를 생성해 주세요. 결과물이 여기에 미리보기로 표시됩니다.
+              <div class="text-lg sm:text-xl font-black text-slate-300 mb-2">${previewPlaceholder}</div>
+              <div>${previewHelp}</div>
             </div>
           `}
         </div>
       </div>
+
+      <section class="report-round-panel no-print" data-report-section="class-summary">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 class="report-section-title" title="| 반전체 보고서"><span>|</span> 반전체 보고서</h3>
+            <p class="text-xs text-slate-500 mt-1">반 전체 진행표가 필요할 때만 이 영역에서 생성합니다.</p>
+          </div>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="report-flow-label">반 선택</span>
+              <div class="filter-switch">
+                <span class="filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}" data-action="set-class-sort" data-sort="name">이름순</span>
+                <span class="filter-switch-item ${state.classSortType === 'grade' ? 'active' : ''}" data-action="set-class-sort" data-sort="grade">학년별</span>
+              </div>
+            </div>
+            ${renderBtnSelect({
+              id: 'reportClassId',
+              options: teacherClassesList.map(c => ({ value: c.id, label: c.name })),
+              selectedValue: activeReportClassId,
+              placeholder: '개설된 반이 없습니다.'
+            })}
+          </div>
+          <div class="flex justify-end gap-2">
+            <button type="button" data-action="build-class-report" class="${btnClass} px-4 py-2.5 rounded-xl text-xs font-extrabold">
+              반 전체표 생성
+            </button>
+            <button type="button" data-action="print-class-report" class="ghost-button px-4 py-2.5 rounded-xl text-xs font-extrabold">
+              인쇄 / PDF
+            </button>
+          </div>
+          ${state.classReportHtml ? `
+            <div id="classReportPreviewArea" class="max-w-4xl mx-auto pt-2">
+              ${state.classReportHtml}
+            </div>
+          ` : ''}
+        </div>
+      </section>
+      ${state.classReportHtml ? `
+        <div id="classReportPrintArea" class="print-only">
+          ${state.classReportHtml}
+        </div>
+      ` : ''}
     </div>
   `;
 }

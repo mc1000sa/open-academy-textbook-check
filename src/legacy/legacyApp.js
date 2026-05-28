@@ -37,6 +37,10 @@ import {
   studentRubricAverage
 } from '../lib/reportMetrics.js';
 import {
+  buildReportRounds,
+  formatRoundFileName
+} from '../lib/reportRounds.js';
+import {
   calculateStudentDeleteAfter,
   studentsDueForDeletion
 } from '../lib/adminStudentMaintenance.js';
@@ -56,7 +60,7 @@ import { renderLoginView } from './views/loginView.js';
 import { renderSetupView } from './views/setupView.js';
 import { renderBookSetupView } from './views/bookSetupView.js';
 import { renderInspectionsView, unitChipTextColor } from './views/inspectionsView.js';
-import { renderReportsView, reportForStudent, reportForClass } from './views/reportsView.js';
+import { renderReportsView, reportForStudent, reportForClass, reportForStudentImage } from './views/reportsView.js';
 import { renderTeachersAdminView } from './views/teachersAdminView.js';
 import { renderStudentPortalView } from './views/studentPortalView.js'; // [NEW]
 
@@ -145,10 +149,14 @@ export async function mountLegacyApp(appRoot) {
     editingInspectionId: '',
     reportStudentId: '',
     reportClassId: '',
+    reportRoundStartDate: '',
+    selectedReportRound: '',
+    reportRounds: [],
     dashboardTeacherFilter: 'all',
     dashboardMetricFocus: 'students',
     saveMsg: '',
     printHtml: '',
+    classReportHtml: '',
     inspectionHistoryFilterStudent: '',
     inspectionHistoryFilterClass: '',
     adminTeacherForm: { id: '', name: '', pin: '', role: 'teacher' },
@@ -503,6 +511,106 @@ export async function mountLegacyApp(appRoot) {
   }
   function inspectionsForStudent(studentId) {
     return state.inspections.filter(i => i.studentId === studentId).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  }
+  function loadScript(src) {
+    if ([...document.scripts].some(script => script.src === src)) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`${src} 로드에 실패했습니다.`));
+      document.head.appendChild(script);
+    });
+  }
+  function activeReportClassId() {
+    const selectedStudent = studentById(state.reportStudentId);
+    return selectedStudent?.classId || state.reportClassId || '';
+  }
+  function currentReportRoundStartDate() {
+    const klass = classById(activeReportClassId());
+    return state.reportRoundStartDate || klass?.reportRoundStartDate || '';
+  }
+  function refreshReportRounds() {
+    if (!state.reportStudentId) {
+      state.reportRounds = [];
+      state.selectedReportRound = '';
+      state.printHtml = '';
+      return;
+    }
+    state.reportRounds = buildReportRounds({
+      inspections: state.inspections,
+      classId: activeReportClassId(),
+      studentId: state.reportStudentId,
+      startDate: currentReportRoundStartDate()
+    });
+    if (state.selectedReportRound && !state.reportRounds.some(round => round.round === Number(state.selectedReportRound))) {
+      state.selectedReportRound = '';
+      state.printHtml = '';
+    }
+  }
+  function selectedReportRoundInfo() {
+    const roundNumber = Number(state.selectedReportRound);
+    return state.reportRounds.find(round => round.round === roundNumber) || null;
+  }
+  function normalizeReportDate(value) {
+    return String(value || '').trim().slice(0, 10);
+  }
+  function inspectionsForSelectedReportRound(studentId) {
+    const round = selectedReportRoundInfo();
+    const roundDate = normalizeReportDate(round?.date);
+    return inspectionsForStudent(studentId).filter(inspection => {
+      if (!roundDate) return true;
+      return normalizeReportDate(inspection.date) === roundDate;
+    });
+  }
+  function buildSelectedStudentWebReport() {
+    const round = selectedReportRoundInfo();
+    if (!state.reportStudentId || !round) {
+      state.printHtml = '';
+      return;
+    }
+    state.printHtml = reportForStudent(state.reportStudentId, state, {
+      studentById,
+      classById,
+      inspectionsForStudent: inspectionsForSelectedReportRound,
+      groupInspectionsByBook,
+      bookById,
+      averageCompletionRate,
+      fmtDate,
+      safe,
+      progressTone,
+      classRubricAverage,
+      studentRubricAverage,
+      students: state.students,
+      inspections: state.inspections,
+      assignedBooksForClass
+    });
+  }
+  function selectedStudentImageReportHtml() {
+    const round = selectedReportRoundInfo();
+    if (!state.reportStudentId || !round) {
+      return '';
+    }
+    return reportForStudentImage(state.reportStudentId, state, {
+      studentById,
+      classById,
+      inspectionsForStudent,
+      groupInspectionsByBook,
+      bookById,
+      averageCompletionRate,
+      fmtDate,
+      safe,
+      teacherNameById,
+      classRubricAverage,
+      studentRubricAverage,
+      students: state.students,
+      inspections: state.inspections,
+      assignedBooksForClass,
+      unitsForRange: unitsForRangeWithStandardNames
+    }, { round });
   }
   function inspectionsForStudentProfile(studentId) {
     const students = state.allStudents || state.students || [];
@@ -949,7 +1057,7 @@ export async function mountLegacyApp(appRoot) {
       state.assigningClassId = firstClass?.id || '';
       state.selectedInspectionClassId = firstClass?.id || '';
       state.quickClassId = firstClass?.id || '';
-      state.reportClassId = firstClass?.id || '';
+      state.reportClassId = '';
       return;
     }
     
@@ -965,7 +1073,7 @@ export async function mountLegacyApp(appRoot) {
       state.assigningClassId = firstClass?.id || '';
       state.selectedInspectionClassId = firstClass?.id || '';
       state.quickClassId = firstClass?.id || '';
-      state.reportClassId = firstClass?.id || '';
+      state.reportClassId = '';
       return;
     }
   }
@@ -1045,7 +1153,7 @@ export async function mountLegacyApp(appRoot) {
     state.assigningClassId = firstClass?.id || '';
     state.selectedInspectionClassId = firstClass?.id || '';
     state.quickClassId = firstClass?.id || '';
-    state.reportClassId = firstClass?.id || '';
+    state.reportClassId = '';
     
     if (teacher.role === 'admin') {
       window.localStorage?.setItem(ADMIN_SESSION_KEY, JSON.stringify(teacher));
@@ -2140,6 +2248,8 @@ export async function mountLegacyApp(appRoot) {
       inspectionsReactRoot = null;
     }
 
+    if (state.view === 'reports') refreshReportRounds();
+
     const content = state.view === 'reports'
       ? renderReportsView(state, { teacherClasses, classById, safe })
       : state.view === 'setup'
@@ -2206,7 +2316,7 @@ export async function mountLegacyApp(appRoot) {
           state.assigningClassId = firstClass?.id || '';
           state.selectedInspectionClassId = firstClass?.id || '';
           state.quickClassId = firstClass?.id || '';
-          state.reportClassId = firstClass?.id || '';
+          state.reportClassId = '';
         }
       } else if (portal === 'admin') {
         const adminTeacher = state.teachers.find(t => t.role === 'admin') || { id: 't_admin' };
@@ -2223,7 +2333,7 @@ export async function mountLegacyApp(appRoot) {
           state.assigningClassId = firstClass?.id || '';
           state.selectedInspectionClassId = firstClass?.id || '';
           state.quickClassId = firstClass?.id || '';
-          state.reportClassId = firstClass?.id || '';
+          state.reportClassId = '';
         }
       }
       render();
@@ -2518,9 +2628,22 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="dashboard-filter"]').forEach(el => el.onclick = () => { state.dashboardTeacherFilter = el.dataset.id; render(); });
     appRoot.querySelectorAll('[data-action="dashboard-metric"]').forEach(el => el.onclick = () => { state.dashboardMetricFocus = el.dataset.metric; render(); });
     appRoot.querySelectorAll('[data-action="print"]').forEach(el => el.onclick = () => window.print());
+    appRoot.querySelectorAll('[data-action="print-class-report"]').forEach(el => el.onclick = () => {
+      if (!state.classReportHtml) {
+        showModalAlert('먼저 반 전체표를 생성해 주세요.');
+        return;
+      }
+      const clearPrintMode = () => document.body.classList.remove('printing-class-report');
+      document.body.classList.add('printing-class-report');
+      window.addEventListener('afterprint', clearPrintMode, { once: true });
+      window.print();
+      window.setTimeout(clearPrintMode, 1000);
+    });
     appRoot.querySelectorAll('[data-action="export-image"]').forEach(el => el.onclick = async () => {
-      const targetArea = document.getElementById('reportCaptureArea');
-      if (!targetArea) {
+      let targetArea = document.getElementById('reportCaptureArea');
+      const round = selectedReportRoundInfo();
+      let temporaryCaptureHost = null;
+      if (!targetArea && !(state.reportStudentId && round)) {
         showModalAlert('캡처할 보고서 영역을 찾을 수 없습니다.');
         return;
       }
@@ -2531,14 +2654,40 @@ export async function mountLegacyApp(appRoot) {
         if (typeof window.html2canvas !== 'function') {
           throw new Error('html2canvas 라이브러리 로드에 실패했습니다.');
         }
+        if (state.reportStudentId && round) {
+          temporaryCaptureHost = document.createElement('div');
+          temporaryCaptureHost.style.position = 'fixed';
+          temporaryCaptureHost.style.left = '-10000px';
+          temporaryCaptureHost.style.top = '0';
+          temporaryCaptureHost.style.background = '#ffffff';
+          temporaryCaptureHost.innerHTML = selectedStudentImageReportHtml();
+          document.body.appendChild(temporaryCaptureHost);
+          targetArea = temporaryCaptureHost.querySelector('#reportCaptureArea');
+        } else {
+          targetArea = document.getElementById('reportCaptureArea');
+        }
+        if (!targetArea) {
+          throw new Error('캡처할 보고서 영역을 다시 찾을 수 없습니다.');
+        }
         const canvas = await window.html2canvas(targetArea, {
-          backgroundColor: '#050507',
+          backgroundColor: targetArea.classList.contains('parent-image-report') ? '#ffffff' : '#050507',
           useCORS: true,
           scale: 2
         });
         const imageUri = canvas.toDataURL('image/png');
         let fileName = 'OATIS_보고서.png';
-        if (state.reportStudentId) {
+        if (state.reportStudentId && round) {
+          const student = state.students.find(s => s.id === state.reportStudentId);
+          const klass = classById(student?.classId);
+          if (student && klass) {
+            fileName = formatRoundFileName({
+              teacherName: teacherNameById(klass.teacherId),
+              className: klass.name,
+              studentName: student.name,
+              round
+            });
+          }
+        } else if (state.reportStudentId) {
           const student = state.students.find(s => s.id === state.reportStudentId);
           if (student) fileName = `${student.name}_교재분석보고서.png`;
         } else if (state.reportClassId) {
@@ -2556,6 +2705,10 @@ export async function mountLegacyApp(appRoot) {
         console.error(err);
         state.saveMsg = '';
         showModalAlert(`이미지 내보내기 중 오류가 발생했습니다: ${err.message}`);
+      } finally {
+        if (temporaryCaptureHost) {
+          document.body.removeChild(temporaryCaptureHost);
+        }
       }
       render();
       setTimeout(() => {
@@ -2564,6 +2717,52 @@ export async function mountLegacyApp(appRoot) {
           render();
         }
       }, 3000);
+    });
+    document.getElementById('reportRoundStartDate')?.addEventListener('change', async (e) => {
+      const value = e.target.value || '';
+      const classId = e.target.dataset.classId || activeReportClassId();
+      state.reportRoundStartDate = value;
+      state.selectedReportRound = '';
+      state.printHtml = '';
+      refreshReportRounds();
+      render();
+      if (classId && value) {
+        try {
+          await updateDoc(doc(refs.classes, classId), {
+            reportRoundStartDate: value,
+            updatedAt: serverTimestamp()
+          });
+        } catch (err) {
+          console.error(err);
+          showModalAlert(`보고서 회차 기준일 저장 중 오류가 발생했습니다: ${err.message}`);
+        }
+      }
+    });
+    appRoot.querySelectorAll('[data-action="open-report-date-picker"]').forEach(el => {
+      el.onclick = (event) => {
+        const input = el.querySelector('#reportRoundStartDate');
+        if (!input || event.target === input) return;
+        input.focus();
+        try {
+          input.showPicker?.();
+        } catch (err) {
+          // Older browsers still focus the date input, which keeps the control usable.
+        }
+      };
+    });
+    appRoot.querySelectorAll('[data-action="select-report-round"]').forEach(el => {
+      el.onclick = () => {
+        const nextRound = Number(el.dataset.round);
+        if (!nextRound) return;
+        const willClear = Number(state.selectedReportRound) === nextRound;
+        state.selectedReportRound = willClear ? '' : String(nextRound);
+        if (willClear) {
+          state.printHtml = '';
+        } else {
+          buildSelectedStudentWebReport();
+        }
+        render();
+      };
     });
     appRoot.querySelector('[data-action="open-setup-wizard"]')?.addEventListener('click', () => { state.wizardOpen = true; state.wizardStep = 1; state.assigningClassId = state.selectedSetupClassId || state.assigningClassId || state.classes[0]?.id || ''; render(); });
     appRoot.querySelector('[data-action="close-setup-wizard"]')?.addEventListener('click', () => { state.wizardOpen = false; render(); });
@@ -2609,6 +2808,19 @@ export async function mountLegacyApp(appRoot) {
           state.setupFormClass.grade = value;
         } else if (target === 'setupClassTeacherId') {
           state.setupFormClass.teacherId = value;
+        } else if (target === 'reportStudentId') {
+          state.reportStudentId = value;
+          const selectedStudent = studentById(value);
+          if (selectedStudent?.classId) state.reportClassId = selectedStudent.classId;
+          state.selectedReportRound = '';
+          state.printHtml = '';
+          refreshReportRounds();
+        } else if (target === 'reportClassId') {
+          state.reportClassId = value;
+          state.reportStudentId = '';
+          state.selectedReportRound = '';
+          state.printHtml = '';
+          refreshReportRounds();
         } else {
           state[target] = value;
         }
@@ -2900,13 +3112,13 @@ export async function mountLegacyApp(appRoot) {
     appRoot.querySelectorAll('[data-action="quick-fill"]').forEach(el => el.onclick = () => { state.selectedInspectionStudentId = el.dataset.id; state.selectedInspectionClassId = studentById(el.dataset.id)?.classId || ''; state.view = 'inspections'; render(); });
     
     // 보고서 생성 바인딩
-    appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', () => { 
-      state.printHtml = reportForStudent(state.reportStudentId, state, { 
-        studentById, classById, inspectionsForStudent, groupInspectionsByBook, 
+    appRoot.querySelector('[data-action="build-student-report"]')?.addEventListener('click', () => {
+      state.printHtml = reportForStudent(state.reportStudentId, state, {
+        studentById, classById, inspectionsForStudent, groupInspectionsByBook,
         bookById, averageCompletionRate, fmtDate, safe, progressTone,
         classRubricAverage, studentRubricAverage, students: state.students,
         inspections: state.inspections, assignedBooksForClass
-      }); 
+      });
       render(); 
       setTimeout(() => {
         document.getElementById('reportPreviewArea')?.scrollIntoView({ behavior: 'smooth' });
@@ -2914,7 +3126,7 @@ export async function mountLegacyApp(appRoot) {
     });
     
     appRoot.querySelector('[data-action="build-class-report"]')?.addEventListener('click', () => { 
-      state.printHtml = reportForClass(state.reportClassId, state, { 
+      state.classReportHtml = reportForClass(state.reportClassId, state, {
         classById, studentsForClass, inspectionsForStudent, 
         averageCompletionRate, fmtDate, teacherNameById, safe,
         classRubricAverage, studentRubricAverage, students: state.students,

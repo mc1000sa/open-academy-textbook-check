@@ -862,6 +862,307 @@ details.group[open] summary span {
   page-break-inside: avoid;
 }
 
+.report-round-panel {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1rem;
+  border: 1px solid rgba(30, 41, 59, 0.95);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.report-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #f8fafc;
+}
+
+.report-section-title span,
+.parent-report-pipe {
+  color: #384bff;
+  font-weight: 1000;
+}
+
+.report-date-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: min(100%, 18rem);
+  padding: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.report-date-control input {
+  min-height: 3rem;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(71, 85, 105, 0.9);
+  border-radius: 0.9rem;
+  background: rgba(2, 6, 23, 0.85);
+  color: #f8fafc;
+  font-weight: 900;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.report-flow-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.report-flow-label {
+  margin-bottom: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #cbd5e1;
+}
+
+.report-empty-message {
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1rem;
+  border: 1px dashed rgba(71, 85, 105, 0.85);
+  border-radius: 0.9rem;
+  background: rgba(2, 6, 23, 0.35);
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.print-only {
+  display: none;
+}
+
+.report-round-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.report-round-button {
+  min-height: 2.55rem;
+  padding: 0 1rem;
+  border: 1px solid rgba(71, 85, 105, 0.85);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.report-round-button.active {
+  border-color: #4169e1;
+  background: #384bff;
+  color: white;
+}
+
+.parent-image-report {
+  width: min(100%, 920px);
+  margin: 0 auto;
+  padding: 44px 50px 34px;
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  font-family: "Pretendard", "SUIT", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.parent-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.parent-report-header h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 950;
+  color: #111827;
+}
+
+.parent-report-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #9bd7f5;
+}
+
+.parent-report-kicker strong,
+.parent-report-kicker b {
+  color: #1746b7;
+  font-weight: 1000;
+}
+
+.parent-report-kicker > span:first-of-type {
+  color: #4169e1;
+}
+
+.parent-report-student-name {
+  font-size: 1.2em;
+  font-weight: 1000;
+}
+
+.parent-report-meta {
+  font-size: 0.9em;
+  color: #334155;
+}
+
+.parent-report-teacher-name {
+  font-size: 0.9em;
+  color: #4169e1;
+  font-weight: 1000;
+}
+
+.parent-report-header p {
+  margin: 8px 0 0;
+  font-size: 18px;
+  font-weight: 850;
+  color: #334155;
+}
+
+.parent-report-brand {
+  color: #4169e1;
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+.parent-report-divider {
+  height: 1px;
+  margin: 26px 0;
+  background: #4169e1;
+}
+
+.parent-report-books {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 26px;
+}
+
+.parent-report-book {
+  padding: 0 20px 0 0;
+}
+
+.parent-report-book:nth-child(2n) {
+  padding-left: 26px;
+  border-left: 1px solid #d9dee8;
+}
+
+.parent-report-book:nth-child(n + 3) {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #eef2f7;
+}
+
+.parent-report-book-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 12px;
+}
+
+.parent-report-book h3,
+.parent-report-rubric h2,
+.parent-report-comments h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 950;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.parent-report-book-head strong {
+  display: grid;
+  justify-items: end;
+  min-width: 74px;
+  color: #4169e1;
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.parent-report-book-head strong b {
+  font-size: 16px;
+  line-height: 1.1;
+  color: #4169e1;
+}
+
+.parent-report-book p,
+.parent-report-comments p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.parent-report-book b {
+  color: #111827;
+}
+
+.parent-report-rubric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 26px;
+  align-items: center;
+}
+
+.parent-report-rubric ol {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 24px;
+}
+
+.parent-report-rubric li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 14px;
+  color: #334155;
+}
+
+.parent-report-rubric li b {
+  color: #111827;
+}
+
+.parent-report-radar {
+  width: 100%;
+  max-width: 310px;
+}
+
+.parent-report-empty {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.parent-image-report footer {
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 /* OATIS Filter Switch styling */
 .filter-switch {
   display: inline-flex;
@@ -1043,6 +1344,20 @@ details.group[open] summary span {
     inset: 0;
     background: white !important;
     color: black !important;
+  }
+  body.printing-class-report #printArea {
+    display: none !important;
+  }
+  body.printing-class-report #classReportPrintArea {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    background: white !important;
+    color: black !important;
+  }
+  body.printing-class-report #classReportPrintArea,
+  body.printing-class-report #classReportPrintArea * {
+    visibility: visible;
   }
   .print-report {
     color: black !important;

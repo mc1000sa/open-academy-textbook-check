@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderReportsView, reportForStudent, reportForClass } from './reportsView.js';
+import { renderReportsView, reportForStudent, reportForClass, reportForStudentImage } from './reportsView.js';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -252,8 +252,8 @@ describe('reportsView', () => {
 
     const html = renderReportsView(xssState, xssDeps);
 
-    expect(html).toContain('학생별 보고서 출력');
-    expect(html).toContain('반별 전체 진행표 출력');
+    expect(html).toContain('학생별 보고서 생성 설정');
+    expect(html).toContain('반전체 보고서');
     expect(html).not.toContain(maliciousStudent);
     expect(html).not.toContain(maliciousClass);
     expect(html).not.toContain(maliciousStudentId);
@@ -272,5 +272,189 @@ describe('reportsView', () => {
     expect(html).toContain('풀이 표현력');
     expect(html).toContain('응용 해결력');
     expect(html).toContain('김다인');
+  });
+  it('renders report round settings and selectable round buttons', () => {
+    const reportState = {
+      ...state,
+      currentTeacher: { id: 't1', role: 'teacher' },
+      reportClassId: 'c1',
+      reportStudentId: 's1',
+      reportRoundStartDate: '2026-05-01',
+      selectedReportRound: 1,
+      reportRounds: [
+        { round: 1, date: '2026-05-02', displayDate: '05.02.토', fileDate: '05.02.토', count: 2 },
+        { round: 2, date: '2026-05-11', displayDate: '05.11.월', fileDate: '05.11.월', count: 1 }
+      ],
+      printHtml: ''
+    };
+
+    const html = renderReportsView(reportState, {
+      teacherClasses: vi.fn(() => reportState.classes),
+      classById: vi.fn(id => reportState.classes.find(klass => klass.id === id)),
+      safe: vi.fn(escapeHtml)
+    });
+
+    expect(html).toContain('| 학생별 보고서 생성 설정');
+    expect(html).toContain('보고서 회차 기준일');
+    expect(html).toContain('1회차 (05.02.토)');
+    expect(html).toContain('data-action="select-report-round" data-round="1"');
+    expect(html).toContain('보고서를 생성할 회차를 선택해주세요');
+    expect(html).not.toContain('parent-image-report');
+  });
+
+  it('uses a single setup card for date, class, student, and round selection', () => {
+    const reportState = {
+      ...state,
+      currentTeacher: { id: 't1', role: 'teacher' },
+      reportClassId: 'c1',
+      reportStudentId: '',
+      reportRoundStartDate: '2026-05-01',
+      selectedReportRound: '',
+      reportRounds: [],
+      printHtml: ''
+    };
+
+    const html = renderReportsView(reportState, {
+      teacherClasses: vi.fn(() => reportState.classes),
+      classById: vi.fn(id => reportState.classes.find(klass => klass.id === id)),
+      safe: vi.fn(escapeHtml)
+    });
+
+    expect(html).toContain('data-report-flow="student-image"');
+    expect(html).toContain('data-action="open-report-date-picker"');
+    expect(html).toContain('data-target="reportClassId"');
+    expect(html).toContain('data-target="reportStudentId"');
+    expect(html).not.toContain('data-action="build-student-report"');
+    expect(html).toContain('data-report-section="class-summary"');
+  });
+
+  it('does not show selectable rounds before a student is selected', () => {
+    const reportState = {
+      ...state,
+      currentTeacher: { id: 't1', role: 'teacher' },
+      reportClassId: 'c1',
+      reportStudentId: '',
+      reportRoundStartDate: '2026-05-01',
+      selectedReportRound: '',
+      reportRounds: [
+        { round: 1, date: '2026-05-02', displayDate: '05.02.토', fileDate: '05.02.토', count: 2 }
+      ],
+      printHtml: ''
+    };
+
+    const html = renderReportsView(reportState, {
+      teacherClasses: vi.fn(() => reportState.classes),
+      classById: vi.fn(id => reportState.classes.find(klass => klass.id === id)),
+      safe: vi.fn(escapeHtml)
+    });
+
+    expect(html).toContain('학생을 선택하면 생성 가능한 회차가 표시됩니다.');
+    expect(html).not.toContain('data-action="select-report-round"');
+  });
+
+  it('renders class report preview in the bottom class section without replacing student preview', () => {
+    const reportState = {
+      ...state,
+      currentTeacher: { id: 't1', role: 'teacher' },
+      reportClassId: 'c1',
+      reportStudentId: 's1',
+      reportRoundStartDate: '2026-05-01',
+      selectedReportRound: '1',
+      reportRounds: [{ round: 1, date: '2026-05-02', displayDate: '05.02.토', fileDate: '05.02.토', count: 1 }],
+      printHtml: '<div id="student-preview">학생 개인 보고서</div>',
+      classReportHtml: '<div id="class-preview">반 전체 보고서</div>'
+    };
+
+    const html = renderReportsView(reportState, {
+      teacherClasses: vi.fn(() => reportState.classes),
+      classById: vi.fn(id => reportState.classes.find(klass => klass.id === id)),
+      safe: vi.fn(escapeHtml)
+    });
+    const classSection = html.slice(html.indexOf('data-report-section="class-summary"'));
+
+    expect(html).toContain('id="student-preview"');
+    expect(classSection).toContain('id="classReportPreviewArea"');
+    expect(classSection).toContain('id="class-preview"');
+    expect(classSection).toContain('data-action="print-class-report"');
+    expect(html).toContain('id="classReportPrintArea"');
+  });
+
+  it('renders the bright parent image report title and selected round only', () => {
+    const imageState = {
+      ...state,
+      students: [{ id: 's1', name: '고준화', classId: 'c1', school: '서울고', grade: '고1' }],
+      classes: [{ id: 'c1', name: '고1 서울대2반', teacherId: 't1' }],
+      teachers: [{ id: 't1', name: '수최' }],
+      books: [
+        { id: 'b1', title: '공통수학1' },
+        { id: 'b2', title: '일품 수학' }
+      ],
+      inspections: [
+        {
+          id: 'r1',
+          date: '2026-05-02',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b1',
+          rangeStart: 1,
+          rangeEnd: 20,
+          missedPages: [12, 13],
+          completionRate: 41,
+          memo: '개인 사정',
+          rubricScores: { expression: 8, grading: 9, attitude: 9, understanding: 7, application: 8 }
+        },
+        {
+          id: 'r2',
+          date: '2026-05-11',
+          classId: 'c1',
+          studentId: 's1',
+          bookId: 'b2',
+          rangeStart: 21,
+          rangeEnd: 40,
+          missedPages: [],
+          completionRate: 100,
+          memo: '다음 회차',
+          rubricScores: {}
+        }
+      ]
+    };
+    const imageDeps = {
+      ...deps,
+      studentById: vi.fn(id => imageState.students.find(student => student.id === id)),
+      classById: vi.fn(id => imageState.classes.find(klass => klass.id === id)),
+      inspectionsForStudent: vi.fn(studentId => imageState.inspections.filter(row => row.studentId === studentId)),
+      groupInspectionsByBook: vi.fn(rows => rows.reduce((grouped, row) => {
+        grouped[row.bookId] = grouped[row.bookId] || [];
+        grouped[row.bookId].push(row);
+        return grouped;
+      }, {})),
+      bookById: vi.fn(id => imageState.books.find(book => book.id === id)),
+      teacherNameById: vi.fn(() => '수최'),
+      averageCompletionRate: vi.fn(rows => rows.reduce((sum, row) => sum + row.completionRate, 0) / rows.length),
+      safe: vi.fn(escapeHtml),
+      unitsForRange: vi.fn(() => [{ name: '다항식의 연산' }]),
+      inspections: imageState.inspections,
+      students: imageState.students
+    };
+
+    const html = reportForStudentImage('s1', imageState, imageDeps, {
+      round: { round: 1, date: '2026-05-02', displayDate: '05.02.토', fileDate: '05.02.토' }
+    });
+
+    expect(html).toContain('고준화 (고1 서울대2반) - 수최T');
+    expect(html).toContain('OATIS');
+    expect(html).toContain('Open Academy Textbook Insight System');
+    expect(html).toContain('parent-report-student-name');
+    expect(html).toContain('parent-report-teacher-name');
+    expect(html).toContain('1회차 교재 분석 보고서');
+    expect(html).toContain('열린학원');
+    expect(html).toContain('공통수학1');
+    expect(html).toContain('점검 완료율 41%');
+    expect(html).toContain('완료한 단원');
+    expect(html).toContain('보완 필요 쪽수');
+    expect(html).toContain('교재 6요소');
+    expect(html).toContain('교재 점검 최근 코멘트');
+    expect(html).toContain('개인 사정');
+    expect(html).not.toContain('다음 회차');
   });
 });
