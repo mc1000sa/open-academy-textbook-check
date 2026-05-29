@@ -12,7 +12,9 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  writeBatch
+  writeBatch,
+  query,
+  where
 } from 'firebase/firestore';
 
 export {
@@ -25,7 +27,9 @@ export {
   serverTimestamp,
   setDoc,
   updateDoc,
-  writeBatch
+  writeBatch,
+  query,
+  where
 };
 
 export const firebaseConfig = {

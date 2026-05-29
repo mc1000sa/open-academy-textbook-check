@@ -590,11 +590,15 @@ export function renderReportsView(state, deps) {
     .map(p => {
       const isSelected = state.selectedReportPeriod === p;
       return `
-        <div data-action="select-report-period" data-period="${safe(p)}" class="inline-flex items-center gap-1 bg-slate-900/40 border border-slate-800 rounded-xl px-2.5 py-1.5 transition-all hover:border-slate-700 cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-950/20' : ''}">
-          <span class="text-xs font-bold text-slate-300 ${isSelected ? 'text-blue-400 font-extrabold' : ''}">
+        <div class="inline-flex items-center gap-1 bg-slate-900/40 border border-slate-800 rounded-xl px-2 py-1.5 transition-all hover:border-slate-700 ${isSelected ? 'selected-period' : ''}">
+          <button type="button" data-action="move-report-period" data-period="${safe(p)}" data-direction="left" class="text-[9px] text-slate-600 hover:text-blue-400 font-bold px-0.5 transition-colors cursor-pointer bg-transparent border-none p-0 outline-none" title="왼쪽으로 이동">◀</button>
+          &nbsp;
+          <button type="button" data-action="select-option" data-target="selectedReportPeriod" data-value="${safe(p)}" class="text-xs font-bold text-slate-300 cursor-pointer bg-transparent border-none p-0 outline-none transition-colors">
             ${safe(p)}
-          </span>
-          <button type="button" data-action="delete-report-period" data-period="${safe(p)}" class="text-[10px] text-slate-500 hover:text-rose-400 font-bold ml-1 transition-colors" title="삭제">
+          </button>
+          &nbsp;
+          <button type="button" data-action="move-report-period" data-period="${safe(p)}" data-direction="right" class="text-[9px] text-slate-600 hover:text-blue-400 font-bold px-0.5 transition-colors cursor-pointer bg-transparent border-none p-0 outline-none" title="오른쪽으로 이동">▶</button>
+          <button type="button" data-action="delete-report-period" data-period="${safe(p)}" class="text-[10px] text-slate-500 hover:text-rose-400 font-bold ml-1 transition-colors cursor-pointer bg-transparent border-none p-0 outline-none" title="삭제">
             &times;
           </button>
         </div>
@@ -615,7 +619,7 @@ export function renderReportsView(state, deps) {
   `;
 
   return `
-    <div class="space-y-6">
+    <div class="space-y-8">
       <section class="report-round-panel no-print" data-report-flow="student-image">
         <div class="flex flex-col xl:flex-row xl:items-start justify-between gap-5">
           <div class="min-w-0">
@@ -680,32 +684,32 @@ export function renderReportsView(state, deps) {
             ${roundButtons}
           </div>
         </div>
-      </section>
 
-      <div class="space-y-4">
-        ${state.printHtml ? `
-          <div class="flex justify-end gap-2.5 no-print bg-slate-900/50 p-3 rounded-2xl border border-slate-800 max-w-4xl mx-auto">
-            <button type="button" data-action="export-image" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5">
-              <span>이미지 파일(PNG)로 저장</span>
-            </button>
-            <button type="button" data-action="export-class-images" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
-              <span>반 일괄 이미지 저장</span>
-            </button>
-            <button type="button" data-action="print" class="ghost-button px-4 py-2 rounded-xl text-xs font-extrabold">
-              인쇄 / PDF 저장
-            </button>
-          </div>
-        ` : ''}
-
-        <div id="printArea" class="max-w-4xl mx-auto">
-          ${state.printHtml || `
-            <div class="card-3d rounded-2xl p-10 text-center text-slate-500 text-xs">
-              <div class="text-lg sm:text-xl font-black text-slate-300 mb-2">${previewPlaceholder}</div>
-              <div>${previewHelp}</div>
+        <div class="mt-6 border-t border-slate-800/80 pt-6">
+          ${state.printHtml ? `
+            <div class="flex justify-end gap-2.5 no-print bg-slate-900/50 p-3 rounded-2xl border border-slate-800 mb-4">
+              <button type="button" data-action="export-image" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5">
+                <span>이미지 파일(PNG)로 저장</span>
+              </button>
+              <button type="button" data-action="export-class-images" class="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;">
+                <span>반 일괄 이미지 저장</span>
+              </button>
+              <button type="button" data-action="print" class="ghost-button px-4 py-2 rounded-xl text-xs font-extrabold">
+                인쇄 / PDF 저장
+              </button>
             </div>
-          `}
+          ` : ''}
+
+          <div id="printArea">
+            ${state.printHtml || `
+              <div class="card-3d rounded-2xl p-10 text-center text-slate-500 text-xs">
+                <div class="text-lg sm:text-xl font-black text-slate-300 mb-2">${previewPlaceholder}</div>
+                <div>${previewHelp}</div>
+              </div>
+            `}
+          </div>
         </div>
-      </div>
+      </section>
 
       <section class="report-round-panel no-print" data-report-section="class-summary">
         <div class="flex items-center justify-between gap-3 mb-4">
@@ -739,7 +743,7 @@ export function renderReportsView(state, deps) {
             </button>
           </div>
           ${state.classReportHtml ? `
-            <div id="classReportPreviewArea" class="max-w-4xl mx-auto pt-2">
+            <div id="classReportPreviewArea" class="pt-4">
               ${state.classReportHtml}
             </div>
           ` : ''}

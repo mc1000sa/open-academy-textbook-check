@@ -13,7 +13,9 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  query,
+  where
 } from '../services/firebaseService.js';
 import {
   buildCarryoverResolutions,
@@ -54,21 +56,33 @@ import {
   DEFAULT_REMARK_TEMPLATES,
   normalizeRemarkTemplates
 } from '../lib/remarkTemplates.js';
-import { renderDashboardView } from './views/dashboardView.js';
+// renderDashboardView 삭제 - Dashboard.jsx React 컴포넌트로 대체됨
 import { renderCustomModalMarkup, renderLayoutView } from './views/layoutView.js';
 import { renderLoginView } from './views/loginView.js';
 import { renderSetupView } from './views/setupView.js';
 import { renderBookSetupView } from './views/bookSetupView.js';
 import { renderInspectionsView, unitChipTextColor } from './views/inspectionsView.js';
-import { renderReportsView, reportForStudent, reportForClass, reportForStudentImage } from './views/reportsView.js';
+// renderReportsView 삭제 - Reports.jsx React 컴포넌트로 대체됨
+import { reportForClass } from './views/reportsView.js';
 import { renderTeachersAdminView } from './views/teachersAdminView.js';
-import { renderStudentPortalView } from './views/studentPortalView.js'; // [NEW]
+import StudentPortal from '../components/StudentPortal.jsx';
+import Dashboard from '../components/Dashboard.jsx';
+import Reports from '../components/Reports.jsx';
 
 export async function mountLegacyApp(appRoot) {
   if (!appRoot) throw new Error('Legacy app root is required.');
 
+  const handleGlobalError = (event) => {
+    const msg = `OATIS Runtime Error: ${event.message}\nFile: ${event.filename}\nLine: ${event.lineno}:${event.colno}\nStack: ${event.error?.stack || ''}`;
+    window.alert(msg);
+  };
+  window.addEventListener('error', handleGlobalError);
+
   const { db, refs } = await getFirebaseService();
   let inspectionsReactRoot = null;
+  let studentPortalReactRoot = null;
+  let dashboardReactRoot = null;
+  let reportsReactRoot = null;
   let lastModalOpenState = false;
 
   const COLORS = ['#FDE68A','#BFDBFE','#DDD6FE','#A7F3D0','#FBCFE8','#FECACA','#C7D2FE','#BBF7D0'];
@@ -934,21 +948,35 @@ export async function mountLegacyApp(appRoot) {
   }
 
   let sessionChecked = false;
-  function subscribe() {
-    onSnapshot(refs.teachers, snap => { state.teachers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
-    onSnapshot(refs.classes, snap => { state.classes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); if (!state.selectedSetupClassId && state.classes.length) state.selectedSetupClassId = state.classes[0].id; if (!state.assigningClassId && state.classes.length) state.assigningClassId = state.classes[0].id; render(); });
-    onSnapshot(refs.students, snap => {
-      state.allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
-      state.students = state.allStudents.filter(x => x.active !== false && x.status !== 'withdrawn');
-      render();
-    });
-    onSnapshot(refs.studentRequests, snap => {
-      state.studentRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      render();
-    });
-    onSnapshot(refs.books, snap => { state.books = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
-    onSnapshot(refs.classBooks, snap => { state.classBooks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); });
-    onSnapshot(refs.inspections, snap => { 
+  let unsubscribes = [];
+  let inspectionsUnsubscribe = null;
+
+  function subscribeInspections() {
+    if (inspectionsUnsubscribe) {
+      try {
+        inspectionsUnsubscribe();
+      } catch (e) {}
+      unsubscribes = unsubscribes.filter(unsub => unsub !== inspectionsUnsubscribe);
+      inspectionsUnsubscribe = null;
+    }
+
+    let q = refs.inspections;
+    if (state.portal === 'student' && state.studentSession) {
+      const current = state.studentSession;
+      const profileId = current.studentProfileId || current.id;
+      const students = state.allStudents || [];
+      const linkedStudentIds = students
+        .filter(s => (s.studentProfileId || s.id) === profileId)
+        .map(s => s.id);
+      
+      if (!linkedStudentIds.includes(current.id)) {
+        linkedStudentIds.push(current.id);
+      }
+      
+      q = query(refs.inspections, where('studentId', 'in', linkedStudentIds));
+    }
+
+    inspectionsUnsubscribe = onSnapshot(q, snap => {
       state.inspections = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true); 
       state.loading = false; 
       if (!sessionChecked) {
@@ -957,7 +985,30 @@ export async function mountLegacyApp(appRoot) {
       }
       render(); 
     });
-    onSnapshot(refs.configs, snap => {
+    unsubscribes.push(inspectionsUnsubscribe);
+  }
+
+  function subscribe() {
+    unsubscribes.push(onSnapshot(refs.teachers, snap => { state.teachers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); }));
+    unsubscribes.push(onSnapshot(refs.classes, snap => { state.classes = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); if (!state.selectedSetupClassId && state.classes.length) state.selectedSetupClassId = state.classes[0].id; if (!state.assigningClassId && state.classes.length) state.assigningClassId = state.classes[0].id; render(); }));
+    unsubscribes.push(onSnapshot(refs.students, snap => {
+      state.allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+      state.students = state.allStudents.filter(x => x.active !== false && x.status !== 'withdrawn');
+      if (state.portal === 'student') {
+        subscribeInspections();
+      }
+      render();
+    }));
+    unsubscribes.push(onSnapshot(refs.studentRequests, snap => {
+      state.studentRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
+    }));
+    unsubscribes.push(onSnapshot(refs.books, snap => { state.books = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); }));
+    unsubscribes.push(onSnapshot(refs.classBooks, snap => { state.classBooks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.active !== false); render(); }));
+    
+    subscribeInspections();
+
+    unsubscribes.push(onSnapshot(refs.configs, snap => {
       const docLoginSplash = snap.docs.find(d => d.id === 'login_splash');
       if (docLoginSplash) {
         state.loginConfig = { ...state.loginConfig, ...docLoginSplash.data() };
@@ -972,7 +1023,7 @@ export async function mountLegacyApp(appRoot) {
       const docRemarkTemplates = snap.docs.find(d => d.id === 'remark_templates');
       state.remarkTemplates = normalizeRemarkTemplates(docRemarkTemplates?.data()?.templates);
       render();
-    });
+    }));
   }
 
   async function saveStandardUnitSubjects(message = '표준단원 설정 저장 완료') {
@@ -1067,6 +1118,7 @@ export async function mountLegacyApp(appRoot) {
       state.selectedInspectionClassId = firstClass?.id || '';
       state.quickClassId = firstClass?.id || '';
       state.reportClassId = '';
+      subscribeInspections();
       return;
     }
     
@@ -1083,6 +1135,7 @@ export async function mountLegacyApp(appRoot) {
       state.selectedInspectionClassId = firstClass?.id || '';
       state.quickClassId = firstClass?.id || '';
       state.reportClassId = '';
+      subscribeInspections();
       return;
     }
   }
@@ -1175,6 +1228,7 @@ export async function mountLegacyApp(appRoot) {
       state.view = 'inspections';
     }
     state.pin = '';
+    subscribeInspections();
     render();
   }
 
@@ -1222,6 +1276,7 @@ export async function mountLegacyApp(appRoot) {
     state.selectedStudentBookFilter = '';
     state.selectedStudentRubricBookId = '';
     state.studentLoginForm = rememberStudentLoginForm(student, form);
+    subscribeInspections();
     notify('학생 대시보드 로그인 성공!');
     render();
   }
@@ -2139,7 +2194,16 @@ export async function mountLegacyApp(appRoot) {
     }, safe);
   }
 
+  let renderTimeoutId = null;
   function render() {
+    if (renderTimeoutId) {
+      clearTimeout(renderTimeoutId);
+    }
+    renderTimeoutId = setTimeout(actualRender, 0);
+  }
+
+  function actualRender() {
+    renderTimeoutId = null;
     if (state.loading) {
       appRoot.innerHTML = `<div class="min-h-screen flex items-center justify-center text-cyan-500 font-bold text-xl">데이터 불러오는 중...</div>`;
       bind();
@@ -2156,24 +2220,68 @@ export async function mountLegacyApp(appRoot) {
     // 학생 단독 대시보드 포털 렌더링
     if (state.portal === 'student') {
       if (!state.studentSession) {
+        if (studentPortalReactRoot) {
+          try {
+            studentPortalReactRoot.unmount();
+          } catch (e) {}
+          studentPortalReactRoot = null;
+        }
         appRoot.innerHTML = loginModalMarkup() + loginScreen();
         bind();
         return;
       }
-      const content = renderStudentPortalView(state, {
-        inspectionsForStudent: inspectionsForStudentProfile,
-        bookById,
-        bookUnits,
-        averageCompletionRate,
-        groupInspectionsByBook,
-        fmtDate,
-        safe,
-        progressTone,
-        unitsForRange: unitsForRangeWithStandardNames,
-        assignedBooksForClass
-      });
-      appRoot.innerHTML = layout(content);
-      bind();
+
+      let container = document.getElementById('react-student-portal-root');
+      const modalStateChanged = lastModalOpenState !== !!state.customModal?.open;
+      lastModalOpenState = !!state.customModal?.open;
+
+      if (!container || modalStateChanged) {
+        if (studentPortalReactRoot) {
+          try {
+            studentPortalReactRoot.unmount();
+          } catch (e) {}
+          studentPortalReactRoot = null;
+        }
+        appRoot.innerHTML = layout('<div id="react-student-portal-root"></div>');
+        bind();
+        container = document.getElementById('react-student-portal-root');
+      }
+
+      if (container) {
+        if (!studentPortalReactRoot) {
+          studentPortalReactRoot = createRoot(container);
+        }
+
+        const props = {
+          state,
+          db,
+          refs,
+          inspectionsForStudent: inspectionsForStudentProfile,
+          bookById,
+          bookUnits,
+          averageCompletionRate,
+          groupInspectionsByBook,
+          fmtDate,
+          safe,
+          progressTone,
+          unitsForRange: unitsForRangeWithStandardNames,
+          assignedBooksForClass,
+          updateLegacyState: (updates) => {
+            Object.assign(state, updates);
+            render();
+          },
+          updateStudentPin,
+          showModalAlert
+        };
+
+        studentPortalReactRoot.render(
+          React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(StudentPortal, props)
+          )
+        );
+      }
       return;
     }
 
@@ -2257,11 +2365,223 @@ export async function mountLegacyApp(appRoot) {
       inspectionsReactRoot = null;
     }
 
-    if (state.view === 'reports') refreshReportRounds();
+    if (studentPortalReactRoot) {
+      try {
+        studentPortalReactRoot.unmount();
+      } catch (e) {}
+      studentPortalReactRoot = null;
+    }
 
-    const content = state.view === 'reports'
-      ? renderReportsView(state, { teacherClasses, classById, safe })
-      : state.view === 'setup'
+    // ── Reports 뷰: React 컴포넌트 마운트 ──
+    if (state.view === 'reports') {
+      refreshReportRounds();
+
+      let container = document.getElementById('react-reports-root');
+      const modalStateChanged = lastModalOpenState !== !!state.customModal?.open;
+      lastModalOpenState = !!state.customModal?.open;
+
+      if (!container || modalStateChanged) {
+        if (reportsReactRoot) {
+          try { reportsReactRoot.unmount(); } catch (e) {}
+          reportsReactRoot = null;
+        }
+        if (dashboardReactRoot) {
+          try { dashboardReactRoot.unmount(); } catch (e) {}
+          dashboardReactRoot = null;
+        }
+        appRoot.innerHTML = layout('<div id="react-reports-root"></div>');
+        bind();
+        container = document.getElementById('react-reports-root');
+      } else {
+        if (dashboardReactRoot) {
+          try { dashboardReactRoot.unmount(); } catch (e) {}
+          dashboardReactRoot = null;
+        }
+      }
+
+      if (container) {
+        if (!reportsReactRoot) {
+          reportsReactRoot = createRoot(container);
+        }
+
+        const reportsDeps = {
+          teacherClasses,
+          classById,
+          studentById,
+          teacherNameById,
+          inspectionsForStudent: inspectionsForSelectedReportRound,
+          groupInspectionsByBook,
+          bookById,
+          averageCompletionRate,
+          fmtDate,
+          classRubricAverage,
+          studentRubricAverage,
+          assignedBooksForClass,
+          studentsForClass,
+          unitsForRange: unitsForRangeWithStandardNames,
+          refreshReportRounds,
+          // 보고서 시기 관련 콜백
+          addReportPeriod: async () => {
+            const val = await showModalPrompt('새로운 보고서 시기(기간)를 입력하세요.', '', '시기 직접 입력');
+            const clean = String(val || '').trim();
+            if (!clean) return;
+            if (state.reportPeriods.includes(clean)) {
+              return showModalAlert('이미 존재하는 시기명입니다.');
+            }
+            state.reportPeriods.push(clean);
+            window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
+            state.selectedReportPeriod = clean;
+            window.localStorage?.setItem('oatis.selectedReportPeriod.v1', clean);
+            if (state.selectedReportRound) buildSelectedStudentWebReport();
+            render();
+          },
+          deleteReportPeriod: async (period) => {
+            const ok = await showModalConfirm(`"${period}" 시기를 삭제하시겠습니까?`, '시기 삭제');
+            if (!ok) return;
+            state.reportPeriods = state.reportPeriods.filter(p => p !== period);
+            window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
+            if (state.selectedReportPeriod === period) {
+              state.selectedReportPeriod = '';
+              window.localStorage?.removeItem('oatis.selectedReportPeriod.v1');
+              if (state.selectedReportRound) state.printHtml = '';
+            }
+            render();
+          },
+          moveReportPeriod: (period, direction) => {
+            const index = state.reportPeriods.indexOf(period);
+            if (index === -1) return;
+            const targetIndex = direction === 'left' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= state.reportPeriods.length) return;
+            const temp = state.reportPeriods[index];
+            state.reportPeriods[index] = state.reportPeriods[targetIndex];
+            state.reportPeriods[targetIndex] = temp;
+            window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
+            render();
+          },
+          // 반 전체 보고서 생성 함수
+          reportForClass: (classId) => {
+            return reportForClass(classId, state, {
+              classById,
+              studentsForClass,
+              inspectionsForStudent,
+              averageCompletionRate,
+              fmtDate,
+              teacherNameById,
+              safe: (v) => v,
+              classRubricAverage,
+              studentRubricAverage,
+              students: state.students,
+              inspections: state.inspections
+            });
+          }
+        };
+
+        reportsReactRoot.render(
+          React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(Reports, {
+              state,
+              deps: reportsDeps,
+              updateLegacyState: (updates) => {
+                Object.assign(state, updates);
+                render();
+              },
+              showModalAlert
+            })
+          )
+        );
+      }
+      return;
+    }
+
+    // ── Dashboard 뷰: React 컴포넌트 마운트 ──
+    if (state.view === 'dashboard') {
+      const teacherId = state.dashboardTeacherFilter === 'all' ? null : state.dashboardTeacherFilter;
+      const dashClasses = teacherId ? teacherClasses(teacherId) : state.classes;
+      const dashClassIds = new Set(dashClasses.map(c => c.id));
+      const dashStudents = state.students.filter(s => dashClassIds.has(s.classId));
+      const dashStudentIds = new Set(dashStudents.map(s => s.id));
+      const dashLogs = state.inspections.filter(i => dashStudentIds.has(i.studentId));
+      const dashOverall = averageCompletionRate(dashLogs);
+      const dashRecent = [...dashLogs].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+
+      let container = document.getElementById('react-dashboard-root');
+      const modalStateChanged = lastModalOpenState !== !!state.customModal?.open;
+      lastModalOpenState = !!state.customModal?.open;
+
+      if (!container || modalStateChanged) {
+        if (dashboardReactRoot) {
+          try { dashboardReactRoot.unmount(); } catch (e) {}
+          dashboardReactRoot = null;
+        }
+        if (reportsReactRoot) {
+          try { reportsReactRoot.unmount(); } catch (e) {}
+          reportsReactRoot = null;
+        }
+        appRoot.innerHTML = layout('<div id="react-dashboard-root"></div>');
+        bind();
+        container = document.getElementById('react-dashboard-root');
+      } else {
+        if (reportsReactRoot) {
+          try { reportsReactRoot.unmount(); } catch (e) {}
+          reportsReactRoot = null;
+        }
+      }
+
+      if (container) {
+        if (!dashboardReactRoot) {
+          dashboardReactRoot = createRoot(container);
+        }
+
+        dashboardReactRoot.render(
+          React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(Dashboard, {
+              state,
+              teachers: state.teachers,
+              classes: dashClasses,
+              students: dashStudents,
+              logs: dashLogs,
+              overall: dashOverall,
+              recent: dashRecent,
+              focus: state.dashboardMetricFocus || 'students',
+              books: state.books,
+              inspections: state.inspections,
+              deps: {
+                assignedBooksForClass,
+                bookById,
+                bookUnits,
+                classById,
+                classProgress,
+                progressTone,
+                studentById,
+                studentsForClass,
+                teacherNameById
+              },
+              updateLegacyState: (updates) => {
+                Object.assign(state, updates);
+                render();
+              }
+            })
+          )
+        );
+      }
+      return;
+    }
+
+    // ── 기타 레거시 뷰 정리 ──
+    if (reportsReactRoot) {
+      try { reportsReactRoot.unmount(); } catch (e) {}
+      reportsReactRoot = null;
+    }
+    if (dashboardReactRoot) {
+      try { dashboardReactRoot.unmount(); } catch (e) {}
+      dashboardReactRoot = null;
+    }
+
+    const content = state.view === 'setup'
       ? renderSetupView(state, { 
           teacherClasses, classById, studentsForClass, assignedBooksForClass, 
           bookUnits, teacherNameById, safe, filterByKeyword, 
@@ -2345,6 +2665,7 @@ export async function mountLegacyApp(appRoot) {
           state.reportClassId = '';
         }
       }
+      subscribeInspections();
       render();
     });
 
@@ -2357,6 +2678,7 @@ export async function mountLegacyApp(appRoot) {
       state.loginError = '';
       state.selectedTeacherName = '';
       state.studentLoginForm = readRememberedStudentLoginForm();
+      subscribeInspections();
       render();
     });
 
@@ -2419,6 +2741,7 @@ export async function mountLegacyApp(appRoot) {
       state.pin = ''; 
       state.loginError = '';
       state.selectedTeacherName = ''; 
+      subscribeInspections();
       render(); 
     }));
 
@@ -2875,18 +3198,6 @@ export async function mountLegacyApp(appRoot) {
       }
     });
 
-    appRoot.querySelectorAll('[data-action="select-report-period"]').forEach(el => {
-      el.onclick = () => {
-        const period = el.dataset.period;
-        state.selectedReportPeriod = period;
-        window.localStorage?.setItem('oatis.selectedReportPeriod.v1', period);
-        if (state.selectedReportRound) {
-          buildSelectedStudentWebReport();
-        }
-        render();
-      };
-    });
-
     appRoot.querySelector('[data-action="add-report-period"]')?.addEventListener('click', async () => {
       const val = await showModalPrompt('새로운 보고서 시기(기간)를 입력하세요.', '', '시기 직접 입력');
       const clean = String(val || '').trim();
@@ -2922,6 +3233,27 @@ export async function mountLegacyApp(appRoot) {
             state.printHtml = '';
           }
         }
+        render();
+      };
+    });
+
+    appRoot.querySelectorAll('[data-action="move-report-period"]').forEach(el => {
+      el.onclick = (event) => {
+        event.stopPropagation();
+        const period = el.dataset.period;
+        const direction = el.dataset.direction;
+        const index = state.reportPeriods.indexOf(period);
+        if (index === -1) return;
+        
+        let targetIndex = direction === 'left' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= state.reportPeriods.length) return;
+        
+        // Swap
+        const temp = state.reportPeriods[index];
+        state.reportPeriods[index] = state.reportPeriods[targetIndex];
+        state.reportPeriods[targetIndex] = temp;
+        
+        window.localStorage?.setItem('oatis.reportPeriods.v1', JSON.stringify(state.reportPeriods));
         render();
       };
     });
@@ -3004,11 +3336,21 @@ export async function mountLegacyApp(appRoot) {
           state.printHtml = '';
           refreshReportRounds();
         } else if (target === 'reportClassId') {
-          state.reportClassId = value;
+          if (state.reportClassId === value) {
+            state.reportClassId = '';
+          } else {
+            state.reportClassId = value;
+          }
           state.reportStudentId = '';
           state.selectedReportRound = '';
           state.printHtml = '';
           refreshReportRounds();
+        } else if (target === 'selectedReportPeriod') {
+          state.selectedReportPeriod = value;
+          window.localStorage?.setItem('oatis.selectedReportPeriod.v1', value);
+          if (state.selectedReportRound) {
+            buildSelectedStudentWebReport();
+          }
         } else {
           state[target] = value;
         }
@@ -3541,5 +3883,41 @@ export async function mountLegacyApp(appRoot) {
   render();
 
   // 화면 크기 변경 시 sticky 바 위치 재계산
-  window.addEventListener('resize', () => syncStickyBarPosition());
+  const handleResize = () => syncStickyBarPosition();
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    unsubscribes.forEach(unsub => {
+      try {
+        unsub();
+      } catch (e) {
+        console.error('Failed to unsubscribe:', e);
+      }
+    });
+    window.removeEventListener('resize', handleResize);
+    window.removeEventListener('error', handleGlobalError);
+    if (renderTimeoutId) {
+      clearTimeout(renderTimeoutId);
+    }
+    if (inspectionsReactRoot) {
+      try {
+        inspectionsReactRoot.unmount();
+      } catch (e) {}
+    }
+    if (studentPortalReactRoot) {
+      try {
+        studentPortalReactRoot.unmount();
+      } catch (e) {}
+    }
+    if (reportsReactRoot) {
+      try {
+        reportsReactRoot.unmount();
+      } catch (e) {}
+    }
+    if (dashboardReactRoot) {
+      try {
+        dashboardReactRoot.unmount();
+      } catch (e) {}
+    }
+  };
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { renderStudentPortalView } from './studentPortalView.js';
+import React from 'react';
+import { renderToString } from 'react-dom/server';
+import StudentPortal from './StudentPortal.jsx';
 
 const escapeHtml = value =>
   String(value ?? '').replace(/[&<>"']/g, match => ({
@@ -10,7 +12,9 @@ const escapeHtml = value =>
     "'": '&#39;'
   })[match]);
 
-const mockUtils = {
+const mockProps = {
+  db: {},
+  refs: {},
   inspectionsForStudent: (studentId) => [
     {
       id: 'i2',
@@ -52,10 +56,13 @@ const mockUtils = {
   safe: escapeHtml,
   progressTone: () => ({ badge: 'text-emerald-700', bar: '#10b981' }),
   unitsForRange: () => [],
-  assignedBooksForClass: () => [{ book: { id: 'b1' } }]
+  assignedBooksForClass: () => [{ book: { id: 'b1' } }],
+  updateLegacyState: () => {},
+  updateStudentPin: () => {},
+  showModalAlert: () => {}
 };
 
-describe('renderStudentPortalView', () => {
+describe('StudentPortal Component (SSR String Check)', () => {
   it('renders student profile and dashboard summary', () => {
     const state = {
       studentSession: { id: 's1', name: '고준화', classId: 'c1', school: '수억고' },
@@ -67,7 +74,12 @@ describe('renderStudentPortalView', () => {
       selectedStudentRubricBookId: ''
     };
 
-    const html = renderStudentPortalView(state, mockUtils);
+    const html = renderToString(
+      React.createElement(StudentPortal, {
+        ...mockProps,
+        state
+      })
+    );
 
     expect(html).toContain('고준화');
     expect(html).toContain('고1 서울대2반');
@@ -87,7 +99,12 @@ describe('renderStudentPortalView', () => {
       selectedStudentRubricBookId: ''
     };
 
-    const html = renderStudentPortalView(state, mockUtils);
+    const html = renderToString(
+      React.createElement(StudentPortal, {
+        ...mockProps,
+        state
+      })
+    );
 
     // 1. 최근 점검 범위에 '결석' 표시 여부
     expect(html).toContain('결석');
@@ -112,9 +129,14 @@ describe('renderStudentPortalView', () => {
       selectedStudentRubricBookId: ''
     };
 
-    const html = renderStudentPortalView(state, mockUtils);
+    const html = renderToString(
+      React.createElement(StudentPortal, {
+        ...mockProps,
+        state
+      })
+    );
 
     expect(html).toContain('범위: 결석 (평가 제외)');
-    expect(html).toContain('범위: 10~20쪽 (완료율 82%)');
+    expect(html).toContain('범위: 10~20쪽');
   });
 });

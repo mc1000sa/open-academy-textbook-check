@@ -115,3 +115,23 @@
 - **진행 중/남은 과제**:
   - 3) 레거시 뷰의 React 컴포넌트 이관.
 - **테스트 현황**: 총 82개의 단위 테스트 작동 및 100% 통과.
+
+## 6. 향후 권장 최적화 단계 및 방향 (2026-05-29 수립)
+
+사용자의 크레딧 소모 최소화 요구를 반영하여 수립한 가성비 최적화 단계 로드맵:
+1. **[1단계] 렌더링 호출 디바운스(Debounce) 적용**
+   - 내용: 여러 컬렉션의 동시 스냅샷(onSnapshot)에 의한 중복 render() 실행(DOM 전체 리빌드)을 requestAnimationFrame 등을 활용해 단일 프레임 1회 실행으로 병합하여 브라우저 부하 최소화.
+   - 크레딧 소모: 매우 낮음 (Very Low)
+2. **[2단계] Firestore 리스너 및 이벤트 누수(Memory Leak) 방지 클린업 최적화**
+   - 내용: LegacyAppHost의 unmount 시점에 legacyApp 내 등록된 onSnapshot 리스너 및 resize 이벤트 리스너가 살아있어 메모리/API 읽기 횟수가 누수되던 현상 방지. unsubscribe 및 cleanup 연동 처리.
+   - 크레딧 소모: 낮음 (Low)
+3. **[3단계] 학생 포털 진입 시 Firestore 읽기(Read) 비용 및 트래픽 최적화**
+   - 내용: 학생 포털 로그인 시 inspections 전체 구독 대신 query 및 where('studentId', '==', studentId) 필터를 걸어 본인 점검 데이터만 받아오도록 튜닝.
+   - 크레딧 소모: 보통 (Medium)
+4. **[4단계] Firebase SDK Dynamic Import를 적용한 스플래시 로딩 개선**
+   - 내용: 초기 로딩 시 무거운 Firebase SDK 패키지를 메인 번들에서 제외하고, 실제 필요한 로그인/API 시점에 비동기 import()로 호출하여 스플래시/게이트웨이 화면의 TTI 단축.
+   - 크레딧 소모: 보통 (Medium)
+5. **[5단계] CSS/마크업 정리 및 CDN 배제 (Tailwind & FontAwesome 로컬 이관)**
+   - 내용: 외부 CDN 스크립트 기반 Tailwind 및 FontAwesome 라이브러리를 로컬 패키지/CSS 빌드 파이프라인으로 흡수하여 외부 네트워크 의존성 차단 및 로딩 성능 최적화.
+   - 크레딧 소모: 높음 (High)
+

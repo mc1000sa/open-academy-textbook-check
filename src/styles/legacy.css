@@ -1456,3 +1456,15 @@ details.group[open] summary span {
     white-space: normal !important;
   }
 }
+
+/* 보고서 시기 선택 칩의 활성화 스타일 (Tailwind v4 유실 방지용 정적 클래스) */
+.selected-period {
+  border-color: #4169e1 !important;
+  background-color: rgba(65, 105, 225, 0.15) !important;
+  box-shadow: 0 0 12px rgba(65, 105, 225, 0.25);
+}
+.selected-period button[data-action="select-option"] {
+  color: #60a5fa !important;
+  font-weight: 800 !important;
+}
+

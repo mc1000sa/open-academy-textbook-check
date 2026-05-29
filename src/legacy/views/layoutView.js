@@ -1,4 +1,5 @@
 export const VIEW_TITLES = {
+  dashboard: '전체 대시보드',
   inspections: '학생별 교재점검',
   reports: '학생별 보고서 출력',
   setup: '반/학생 설정',
@@ -102,11 +103,13 @@ export function renderLayoutView({ content, currentView, currentTeacher, student
     menuHtml += renderMenuButton({ currentView, view: 'reports', label: '학생별 보고서 출력', icon: 'fa-file-pdf', portalTheme: 'teacher' });
     menuHtml += renderMenuButton({ currentView, view: 'setup', label: '반/학생 설정', icon: 'fa-users', portalTheme: 'teacher' });
     menuHtml += renderMenuButton({ currentView, view: 'bookSetup', label: '교재 관리', icon: 'fa-book', portalTheme: 'teacher' });
+    menuHtml += renderMenuButton({ currentView, view: 'dashboard', label: '전체 대시보드', icon: 'fa-chart-pie', portalTheme: 'teacher' });
     
     mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'inspections', label: '점검', portalTheme: 'teacher' });
     mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'reports', label: '보고서', portalTheme: 'teacher' });
     mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'setup', label: '반/학생 설정', portalTheme: 'teacher' });
     mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'bookSetup', label: '교재 관리', portalTheme: 'teacher' });
+    mobileMenuHtml += renderMobileMenuButton({ currentView, view: 'dashboard', label: '대시보드', portalTheme: 'teacher' });
   }
 
   // 테마 고유 지시색 (Mint vs Blue vs Purple)
