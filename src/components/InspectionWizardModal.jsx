@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { addDoc, updateDoc, doc, serverTimestamp, COLLECTION_NAMES } from '../services/firebaseService.js';
+import { addDoc, updateDoc, doc, serverTimestamp, COLLECTION_NAMES, getFirebaseService } from '../services/firebaseService.js';
 import {
   calculateCompletionRate,
   buildCarryoverResolutions,
@@ -280,6 +280,7 @@ export default function InspectionWizardModal({
     }
 
     setIsSaving(true);
+    const { db, refs } = await getFirebaseService();
 
     let payload = {
       teacherId: state.currentTeacher.id,

@@ -104,10 +104,37 @@ function rangeUnitSummary(book, rows, unitsForRange) {
   return results.length ? results.join(', ') : '';
 }
 
+function formatPageRanges(pages) {
+  if (!pages || pages.length === 0) return '없음';
+  const ranges = [];
+  let start = pages[0];
+  let end = pages[0];
+
+  for (let i = 1; i < pages.length; i++) {
+    if (pages[i] === end + 1) {
+      end = pages[i];
+    } else {
+      if (start === end) {
+        ranges.push(`${start}쪽`);
+      } else {
+        ranges.push(`${start}쪽~${end}쪽`);
+      }
+      start = pages[i];
+      end = pages[i];
+    }
+  }
+  if (start === end) {
+    ranges.push(`${start}쪽`);
+  } else {
+    ranges.push(`${start}쪽~${end}쪽`);
+  }
+  return ranges.join(', ');
+}
+
 function missedPagesSummary(rows) {
   const missed = [...new Set(rows.flatMap(row => Array.isArray(row.missedPages) ? row.missedPages : []))]
     .sort((a, b) => Number(a) - Number(b));
-  return missed.length ? missed.map(page => `${page}쪽`).join(', ') : '없음';
+  return formatPageRanges(missed);
 }
 
 // Static HTML report generation helper (specifically for html2canvas capturing)
@@ -134,17 +161,46 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
   const vector = averageRubricVector(rows);
   const roundLabel = round?.round ? `${round.round}회차` : '선택 회차';
 
+  const allStudents = state.students || [];
+  const allInspections = state.inspections || [];
+  const classComparison = rubricComparisonForStudentClass({
+    studentId,
+    classId: student.classId,
+    students: allStudents,
+    inspections: allInspections
+  });
+  const classVector = classComparison.classAverageVector || {};
+
   const bookSections = Object.entries(grouped).map(([bookId, items]) => {
     const book = bookById(bookId);
     const avg = Math.round(averageCompletionRate(items));
+
+    const latestItem = items[0];
+    const isAbsent = latestItem?.status === 'absent';
+    const isNoBook = latestItem?.status === 'no_book';
+
+    let rangeUnitHtml = '';
+    let missedPagesHtml = '';
+
+    if (isAbsent) {
+      rangeUnitHtml = `<span style="color: #ef4444; font-weight: bold;">- 결석</span>`;
+      missedPagesHtml = `<span style="color: #ef4444; font-weight: bold;">- 결석</span>`;
+    } else if (isNoBook) {
+      rangeUnitHtml = `<span style="color: #ef4444; font-weight: bold;">- 교재 미지참</span>`;
+      missedPagesHtml = `<span style="color: #ef4444; font-weight: bold;">- 교재 미지참</span>`;
+    } else {
+      rangeUnitHtml = rangeUnitSummary(book, items, unitsForRange);
+      missedPagesHtml = missedPagesSummary(items);
+    }
+
     return `
       <section class="parent-report-book">
         <div class="parent-report-book-head">
           <h3><span class="parent-report-pipe">|</span>${book?.title || '이름 없는 교재'}</h3>
-          <strong aria-label="완료율 ${avg}%"><span>완료율</span><b>${avg}%</b></strong>
+          <span class="parent-report-completion-text">이번 과제 완료율 : <span>${avg}%</span></span>
         </div>
-        <p><b>점검 중인 단원 :</b> ${rangeUnitSummary(book, items, unitsForRange)}</p>
-        <p><b>보완 필요 쪽수 :</b> ${missedPagesSummary(items)}</p>
+        <p><b>점검 중인 단원 :</b> ${rangeUnitHtml}</p>
+        <p><b>보완 필요 쪽수 :</b> ${missedPagesHtml}</p>
       </section>
     `;
   }).join('');
@@ -165,34 +221,66 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
   // Return full layout compatible with parents print area
   const axes = RUBRIC_KEYS.map((_, index) => {
     const point = rubricGridPoints(1).split(' ')[index];
-    return `<line x1="100" y1="100" x2="${point.split(',')[0]}" y2="${point.split(',')[1]}" stroke="#d7deea" stroke-width="1"></line>`;
+    return `<line x1="100" y1="100" x2="${point.split(',')[0]}" y2="${point.split(',')[1]}" stroke="#e2e8f0" stroke-width="0.8"></line>`;
   }).join('');
 
   const grid = [0.25, 0.5, 0.75, 1].map(scale => `
-    <polygon points="${rubricGridPoints(scale)}" fill="none" stroke="#d7deea" stroke-width="1"></polygon>
+    <polygon points="${rubricGridPoints(scale)}" fill="none" stroke="#e2e8f0" stroke-width="0.8"></polygon>
   `).join('');
 
   const labels = RUBRIC_KEYS.map((key, index) => {
     const pos = rubricLabelPosition(index, 92);
     const anchor = pos.x < 86 ? 'end' : pos.x > 114 ? 'start' : 'middle';
     const dy = index === 0 ? -4 : index === 3 ? 5 : 0;
-    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#3730a3" font-size="11" font-weight="800">${IMAGE_RUBRIC_LABELS[key]}</text>`;
+    return `<text x="${pos.x.toFixed(1)}" y="${(pos.y + dy).toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" fill="#312e81" font-size="11" font-weight="800">${IMAGE_RUBRIC_LABELS[key]}</text>`;
   }).join('');
 
   const scorePoints = rubricPoints(vector);
+  const classPoints = rubricPoints(classVector);
+
+  const classCircles = RUBRIC_KEYS.map((key, index) => {
+    const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
+    const scoreRadius = (rubricScore(classVector, key) / 10) * 68;
+    const x = 100 + Math.cos(angle) * scoreRadius;
+    const y = 100 + Math.sin(angle) * scoreRadius;
+    return `
+      <g>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#10b981" opacity="0.3"></circle>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.2" fill="#ffffff"></circle>
+      </g>
+    `;
+  }).join('');
+
   const circles = RUBRIC_KEYS.map((key, index) => {
     const angle = (Math.PI * 2 * index) / RUBRIC_KEYS.length - Math.PI / 2;
     const scoreRadius = (rubricScore(vector, key) / 10) * 68;
     const x = 100 + Math.cos(angle) * scoreRadius;
     const y = 100 + Math.sin(angle) * scoreRadius;
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.9" fill="#4169e1" stroke="#4169e1" stroke-width="1"></circle>`;
+    return `
+      <g>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#4f46e5" opacity="0.4"></circle>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.0" fill="#ffffff"></circle>
+      </g>
+    `;
   }).join('');
 
   const radarChart = `
     <svg class="parent-report-radar" viewBox="-30 -24 260 248" role="img" aria-label="교재 6요소 육각형 차트">
+      <defs>
+        <linearGradient id="image-student-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#818cf8" stop-opacity="0.45"></stop>
+          <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.45"></stop>
+        </linearGradient>
+        <linearGradient id="image-class-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#34d399" stop-opacity="0.15"></stop>
+          <stop offset="100%" stop-color="#10b981" stop-opacity="0.15"></stop>
+        </linearGradient>
+      </defs>
       ${grid}
       ${axes}
-      <polygon points="${scorePoints}" fill="rgba(65,105,225,0.18)" stroke="#4169e1" stroke-width="3" stroke-linejoin="round"></polygon>
+      <polygon points="${classPoints}" fill="url(#image-class-grad)" stroke="#10b981" stroke-width="1.8" stroke-dasharray="3 2" stroke-linejoin="round"></polygon>
+      <polygon points="${scorePoints}" fill="url(#image-student-grad)" stroke="#4f46e5" stroke-width="2.5" stroke-linejoin="round"></polygon>
+      ${classCircles}
       ${circles}
       ${labels}
     </svg>
@@ -228,7 +316,17 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
 
       <section class="parent-report-rubric">
         <div>
-          <h2><span class="parent-report-pipe">|</span>교재 6요소</h2>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h2><span class="parent-report-pipe">|</span>교재 6요소</h2>
+            <div style="display: flex; gap: 10px; font-size: 11px; font-weight: bold;">
+              <span style="display: flex; align-items: center; gap: 4px; color: #4f46e5;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4f46e5;"></span>학생 평균
+              </span>
+              <span style="display: flex; align-items: center; gap: 4px; color: #10b981;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>반 평균
+              </span>
+            </div>
+          </div>
           <ol>${rubricRows}</ol>
         </div>
         ${radarChart}
@@ -255,8 +353,8 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
       key={i}
       points={rubricGridPoints(scale)}
       fill="none"
-      stroke="rgba(148,163,184,0.22)"
-      strokeWidth="1"
+      stroke="rgba(148,163,184,0.15)"
+      strokeWidth="0.8"
     />
   ));
 
@@ -270,8 +368,8 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
         y1="100"
         x2={x2}
         y2={y2}
-        stroke="rgba(148,163,184,0.18)"
-        strokeWidth="1"
+        stroke="rgba(148,163,184,0.1)"
+        strokeWidth="0.8"
       />
     );
   });
@@ -287,9 +385,9 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
         y={(pos.y + dy).toFixed(1)}
         textAnchor={anchor}
         dominantBaseline="middle"
-        fill="#cbd5e1"
-        fontSize="7.2"
-        fontWeight="700"
+        fill="#94a3b8"
+        fontSize="7.5"
+        fontWeight="800"
       >
         {RUBRIC_LABELS[key]}
       </text>
@@ -305,15 +403,21 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
     const cx = 100 + Math.cos(angle) * scoreRadius;
     const cy = 100 + Math.sin(angle) * scoreRadius;
     return (
-      <circle
-        key={key}
-        cx={cx.toFixed(1)}
-        cy={cy.toFixed(1)}
-        r="2.9"
-        fill="#60a5fa"
-        stroke="#60a5fa"
-        strokeWidth="1"
-      />
+      <g key={key}>
+        <circle
+          cx={cx.toFixed(1)}
+          cy={cy.toFixed(1)}
+          r="4"
+          fill="#3b82f6"
+          opacity="0.4"
+        />
+        <circle
+          cx={cx.toFixed(1)}
+          cy={cy.toFixed(1)}
+          r="1.8"
+          fill="#ffffff"
+        />
+      </g>
     );
   });
 
@@ -323,15 +427,21 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
     const cx = 100 + Math.cos(angle) * scoreRadius;
     const cy = 100 + Math.sin(angle) * scoreRadius;
     return (
-      <circle
-        key={key}
-        cx={cx.toFixed(1)}
-        cy={cy.toFixed(1)}
-        r="2.7"
-        fill="#0f172a"
-        stroke="#34d399"
-        strokeWidth="2"
-      />
+      <g key={key}>
+        <circle
+          cx={cx.toFixed(1)}
+          cy={cy.toFixed(1)}
+          r="3"
+          fill="#10b981"
+          opacity="0.3"
+        />
+        <circle
+          cx={cx.toFixed(1)}
+          cy={cy.toFixed(1)}
+          r="1.2"
+          fill="#ffffff"
+        />
+      </g>
     );
   });
 
@@ -341,8 +451,12 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-black text-white mb-2">{title}</h3>
           <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold text-slate-300">
-            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-400"></span>학생</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-400"></span>{secondaryLabel || '비교 평균'}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>학생
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>{secondaryLabel || '비교 평균'}
+            </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 mt-3 text-[11px]">
             {RUBRIC_KEYS.map(key => (
@@ -354,10 +468,20 @@ function RubricRadarCompare({ title, primary, secondary, secondaryLabel }) {
           </div>
         </div>
         <svg className="shrink-0 w-full max-w-[300px] mx-auto md:mx-0 overflow-visible" viewBox="-28 -24 256 248">
+          <defs>
+            <linearGradient id="student-radar-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.35" />
+            </linearGradient>
+            <linearGradient id="average-radar-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#34d399" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0.1" />
+            </linearGradient>
+          </defs>
           {grid}
           {axes}
-          <polygon points={secondaryPoints} fill="rgba(52,211,153,0.08)" stroke="#34d399" strokeWidth="3" strokeDasharray="5 4" strokeLinejoin="round"></polygon>
-          <polygon points={primaryPoints} fill="rgba(96,165,250,0.24)" stroke="#60a5fa" strokeWidth="2.4" strokeLinejoin="round"></polygon>
+          <polygon points={secondaryPoints} fill="url(#average-radar-grad)" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3 2" strokeLinejoin="round"></polygon>
+          <polygon points={primaryPoints} fill="url(#student-radar-grad)" stroke="#3b82f6" strokeWidth="2.2" strokeLinejoin="round"></polygon>
           {secondaryCircles}
           {primaryCircles}
           {labels}
@@ -434,6 +558,22 @@ function StudentReportPreview({ studentId, state, deps }) {
         }).flatMap(row => row.missedPages));
         const missedSorted = Array.from(allMissed).sort((a, b) => a - b);
 
+        const pageRanges = [];
+        if (missedSorted.length > 0) {
+          let start = missedSorted[0];
+          let end = missedSorted[0];
+          for (let i = 1; i < missedSorted.length; i++) {
+            if (missedSorted[i] === end + 1) {
+              end = missedSorted[i];
+            } else {
+              pageRanges.push(start === end ? `${start}쪽` : `${start}쪽~${end}쪽`);
+              start = missedSorted[i];
+              end = missedSorted[i];
+            }
+          }
+          pageRanges.push(start === end ? `${start}쪽` : `${start}쪽~${end}쪽`);
+        }
+
         return (
           <div key={bookId} className="report-book-card p-5 mb-5 rounded-2xl border border-slate-700/50 bg-slate-900/30">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -450,12 +590,12 @@ function StudentReportPreview({ studentId, state, deps }) {
 
             <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 text-xs">
               <span className="font-bold text-slate-300 block mb-2">보완 필요 쪽수:</span>
-              {missedSorted.length === 0 ? (
+              {pageRanges.length === 0 ? (
                 <span className="text-emerald-400 font-bold">★ 완료율 100%! 모든 보완 학습이 완료되었습니다. ★</span>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {missedSorted.map(p => (
-                    <span key={p} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">{p}쪽</span>
+                  {pageRanges.map(range => (
+                    <span key={range} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">{range}</span>
                   ))}
                 </div>
               )}
@@ -466,7 +606,16 @@ function StudentReportPreview({ studentId, state, deps }) {
               {items.slice(0, 3).map((r, ri) => (
                 <div key={ri} className="p-3 rounded-lg bg-slate-900/40 border border-slate-800/80 text-xs flex justify-between items-start gap-4">
                   <div>
-                    <span className="font-bold text-slate-200">{fmtDate(r.date)} &middot; {r.rangeStart}~{r.rangeEnd}쪽</span>
+                    <span className="font-bold text-slate-200">
+                      {fmtDate(r.date)} &middot;{' '}
+                      {r.status === 'absent' ? (
+                        <span className="text-rose-400">결석</span>
+                      ) : r.status === 'no_book' ? (
+                        <span className="text-rose-400">교재 미지참</span>
+                      ) : (
+                        `${r.rangeStart}~${r.rangeEnd}쪽`
+                      )}
+                    </span>
                     {r.memo && <p className="text-slate-400 mt-1 italic">"{r.memo}"</p>}
                   </div>
                   <span className="font-extrabold text-slate-300">{r.completionRate}%</span>
@@ -872,7 +1021,7 @@ export default function Reports({
     }, 4000);
   };
 
-  // Export bulk reports for class as ZIP archive
+  // Export bulk reports for class as individual PNG images
   const handleExportClassImages = async () => {
     if (!activeReportClassId) {
       showModalAlert('반을 먼저 선택해 주세요.');
@@ -895,15 +1044,14 @@ export default function Reports({
       return;
     }
 
-    updateLegacyState({ saveMsg: `📦 반 일괄 이미지 압축 다운로드를 시작합니다 (총 ${activeStudents.length}명)...` });
+    updateLegacyState({ saveMsg: `🖼️ 반 일괄 이미지 다운로드를 시작합니다 (총 ${activeStudents.length}명)...` });
 
     try {
-      const zip = new JSZip();
       let captureCount = 0;
 
       for (let i = 0; i < activeStudents.length; i++) {
         const student = activeStudents[i];
-        updateLegacyState({ saveMsg: `🖼️ 이미지 생성 중... (${i + 1}/${activeStudents.length}) - ${student.name} 학생` });
+        updateLegacyState({ saveMsg: `🖼️ 이미지 저장 중... (${i + 1}/${activeStudents.length}) - ${student.name} 학생` });
 
         const startDate = reportRoundStartDate || klass.reportRoundStartDate || '';
         const studentRounds = buildReportRounds({
@@ -914,7 +1062,7 @@ export default function Reports({
         });
         const round = studentRounds.find(r => r.round === selectedReportRound);
         if (!round) {
-          console.log(`${student.name} 학생은 ${selectedReportRound}회차 점검 기록이 없어 스킵합니다.`);
+          console.log(`${student.name} student does not have inspection records for round ${selectedReportRound}, skipping.`);
           continue;
         }
 
@@ -957,8 +1105,13 @@ export default function Reports({
               logging: false
             });
 
-            const base64Data = canvas.toDataURL('image/png').replace(/^data:image\/(png|jpg);base64,/, "");
-            zip.file(fileName, base64Data, { base64: true });
+            const imageUri = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = imageUri;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
             captureCount++;
           }
         } catch (err) {
@@ -967,21 +1120,13 @@ export default function Reports({
           document.body.removeChild(captureHost);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 350));
       }
 
       if (captureCount > 0) {
-        updateLegacyState({ saveMsg: `📦 ZIP 파일 패키징 중...` });
-        const content = await zip.generateAsync({ type: "blob" });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(content);
-        link.download = `${klass.name}_${selectedReportRound}회차_교재분석보고서.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        updateLegacyState({ saveMsg: `🎉 반 전체 이미지 일괄 다운로드(ZIP)가 성공적으로 완료되었습니다! (총 ${captureCount}명)` });
+        updateLegacyState({ saveMsg: `🎉 반 전체 이미지 일괄 다운로드가 완료되었습니다! (총 ${captureCount}명)` });
       } else {
-        updateLegacyState({ saveMsg: '⚠️ 생성된 보고서가 없어 압축 다운로드를 중단합니다.' });
+        updateLegacyState({ saveMsg: '⚠️ 생성된 보고서가 없어 다운로드를 중단합니다.' });
       }
     } catch (err) {
       console.error(err);
@@ -1026,13 +1171,21 @@ export default function Reports({
             </h3>
             <p className="text-xs text-slate-500 mt-1">기준일, 반, 학생, 회차를 순서대로 선택하면 해당 회차 보고서가 실시간으로 표시됩니다.</p>
           </div>
-          <label className="report-date-control" data-action="open-report-date-picker">
+          <label
+            className="report-date-control"
+            data-action="open-report-date-picker"
+          >
             <span>보고서 회차 기준일</span>
             <input
               type="date"
               id="reportRoundStartDate"
               value={reportRoundStartDate}
               onChange={handleDateChange}
+              onClick={(e) => {
+                if (typeof e.currentTarget.showPicker === 'function') {
+                  e.currentTarget.showPicker();
+                }
+              }}
             />
           </label>
         </div>
@@ -1189,23 +1342,15 @@ export default function Reports({
                 className="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5"
                 style={{ cursor: 'pointer' }}
               >
-                <span>이미지 파일(PNG)로 저장</span>
+                <span>개인 이미지 저장</span>
               </button>
               <button
                 type="button"
                 onClick={handleExportClassImages}
-                className="btn-teacher px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5"
-                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%) !important', cursor: 'pointer' }}
-              >
-                <span>반 일괄 이미지 저장 (ZIP)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="ghost-button px-4 py-2 rounded-xl text-xs font-extrabold"
+                className="btn-teacher-green px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5"
                 style={{ cursor: 'pointer' }}
               >
-                인쇄 / PDF 저장
+                <span>반 일괄 이미지 저장</span>
               </button>
             </div>
           )}
@@ -1285,14 +1430,6 @@ export default function Reports({
               style={{ cursor: 'pointer' }}
             >
               반 전체표 생성
-            </button>
-            <button
-              type="button"
-              onClick={handlePrintClassReport}
-              className="ghost-button px-4 py-2.5 rounded-xl text-xs font-extrabold"
-              style={{ cursor: 'pointer' }}
-            >
-              인쇄 / PDF
             </button>
           </div>
 

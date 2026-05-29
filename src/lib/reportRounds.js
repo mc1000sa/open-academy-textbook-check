@@ -1,9 +1,18 @@
 const WEEKDAYS_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
 function normalizeDate(value) {
-  const text = String(value || '').trim();
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+  if (!value) return '';
+  // 마침표(.)나 슬래시(/)를 대시(-)로 통일하고 공백 제거
+  const text = String(value).trim().replace(/[\.\/]/g, '-');
+  // YYYY-MM-DD 또는 YYYY-M-D 등 유연하게 매칭 (월, 일의 글자 수 1~2개 허용)
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    const y = match[1];
+    const m = match[2].padStart(2, '0');
+    const d = match[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return '';
 }
 
 function dateForLocalDay(dateText) {
@@ -21,14 +30,28 @@ export function formatRoundDate(dateText) {
   return `${month}.${day}.${WEEKDAYS_KO[date.getDay()]}`;
 }
 
-export function buildReportRounds({ inspections = [], classId = '', studentId = '', startDate = '' } = {}) {
+export function buildReportRounds({ inspections = [], classId = '', studentId = '', startDate = '', allStudents = [] } = {}) {
   const normalizedStart = normalizeDate(startDate);
   if (!classId || !normalizedStart) return [];
 
+  // 학생별 classId 매핑 정보 캐시 구축
+  const studentClassMap = new Map();
+  allStudents.forEach(s => {
+    if (s.id && s.classId) {
+      studentClassMap.set(s.id, s.classId);
+    }
+  });
+
   const dates = new Map();
   inspections.forEach(inspection => {
-    if (inspection?.classId !== classId) return;
-    if (studentId && inspection?.studentId !== studentId) return;
+    if (!inspection) return;
+    
+    // classId가 없는 과거 데이터인 경우, 학생 목록 매핑을 활용해 보완
+    const inspClassId = inspection.classId || studentClassMap.get(inspection.studentId) || '';
+    if (inspClassId !== classId) return;
+    
+    if (studentId && inspection.studentId !== studentId) return;
+    
     const date = normalizeDate(inspection.date);
     if (!date || date < normalizedStart) return;
     dates.set(date, (dates.get(date) || 0) + 1);

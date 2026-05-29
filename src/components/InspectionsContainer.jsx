@@ -81,14 +81,35 @@ export default function InspectionsContainer(props) {
   const isBookSelected = selectedClassId && selectedStudentId && selectedBookId;
 
   // 우측 자동 분석 영역 계산 데이터
-  const selectedRangeStart = state.selectedRangeStart || '';
-  const selectedRangeEnd = state.selectedRangeEnd || '';
+  const isEditing = !!(state.editingInspectionId || state.selectedRangeStart || state.selectedRangeEnd);
+
+  const latestInspection = isBookSelected
+    ? [...state.inspections]
+        .filter(r => r.studentId === selectedStudentId && r.bookId === selectedBookId && (!r.attendanceStatus || r.attendanceStatus === 'normal'))
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]
+    : null;
+
+  const selectedRangeStart = isEditing
+    ? (state.selectedRangeStart || '')
+    : (latestInspection ? latestInspection.rangeStart || '' : '');
+
+  const selectedRangeEnd = isEditing
+    ? (state.selectedRangeEnd || '')
+    : (latestInspection ? latestInspection.rangeEnd || '' : '');
+
   const units = selectedBook && selectedRangeStart && selectedRangeEnd 
     ? unitsForRange(selectedBook, selectedRangeStart, selectedRangeEnd) 
     : [];
+
   const totalPages = pagesInRange(selectedRangeStart, selectedRangeEnd);
-  const missedPages = missedPagesArrayInCurrentRange();
-  const donePct = totalPages.length ? Math.round(((totalPages.length - missedPages.length) / totalPages.length) * 100) : 0;
+
+  const missedPages = isEditing
+    ? missedPagesArrayInCurrentRange()
+    : (latestInspection ? latestInspection.missedPages || [] : []);
+
+  const donePct = totalPages.length 
+    ? Math.round(((totalPages.length - missedPages.length) / totalPages.length) * 100) 
+    : 0;
 
   const carryoverRows = selectedStudentId && selectedBookId
     ? buildCarryoverRows({
@@ -250,7 +271,7 @@ export default function InspectionsContainer(props) {
       )}
 
       {/* 2. 메인 점검 뷰 */}
-      <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-6">
+      <div className="w-full">
         {/* 좌측 입력 설정 카드 */}
         <article className="card-3d rounded-2xl p-5 md:p-6 bg-slate-900/80 border border-slate-800">
           <div className="flex items-center justify-between gap-3 mb-5">
@@ -397,75 +418,6 @@ export default function InspectionsContainer(props) {
               {state.editingInspectionId ? '기존 점검 수정 계속하기 ➔' : '교재 점검 시작 ➔'}
             </button>
           </div>
-        </article>
-
-        {/* 우측 자동분석 카드 */}
-        <article className="card-3d rounded-2xl p-5 md:p-6 bg-slate-900/80 border border-slate-800">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-base font-extrabold text-white">자동 분석</h3>
-            <span className="text-[10px] text-slate-400 font-bold">선택 범위 기준</span>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-            <div className="text-xs font-bold text-slate-300">해당 대단원</div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {units.length ? units.map((u, i) => (
-                <span
-                  key={i}
-                  className="unit-chip text-[10px] py-1 px-2.5 font-bold rounded"
-                  style={{
-                    backgroundColor: u.color,
-                    color: unitColorText(u.color),
-                    border: '1px solid rgba(255,255,255,0.18)'
-                  }}
-                >
-                  {u.name} ({u.start}~{u.end}쪽)
-                </span>
-              )) : (
-                <span className="text-xs text-slate-500">단원이 아직 표시되지 않았습니다.</span>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-bold text-slate-300">이번 회차 완료율</div>
-              <div className="text-xs font-black text-blue-400">{donePct}%</div>
-            </div>
-            
-            <div className="book-track mt-3 w-full h-2 rounded-full overflow-hidden bg-slate-950">
-              <div className="completed-seg h-full bg-blue-500" style={{ width: `${donePct}%` }}></div>
-            </div>
-            
-            <div className="book-track mt-2 w-full h-2 rounded-full overflow-hidden bg-slate-950">
-              <div className="incomplete-seg h-full bg-rose-500/30" style={{ width: `${100 - donePct}%` }}></div>
-            </div>
-            
-            <div className="mt-3 text-[10px] text-slate-500 leading-normal">
-              이번 범위 {totalPages.length}쪽 중 미완료 {missedPages.length}쪽 &middot; 나머지는 자동 완료 처리됩니다.
-            </div>
-          </div>
-
-          {carryoverRecovery.totalPages > 0 && (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 mt-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-bold text-slate-300">지난 미완료 재검 완료율</div>
-                <div className="text-xs font-black text-emerald-400">{carryoverRecovery.recoveryRate}%</div>
-              </div>
-              
-              <div className="book-track mt-3 w-full h-2 rounded-full overflow-hidden bg-slate-950">
-                <div className="completed-seg h-full bg-emerald-500" style={{ width: `${carryoverRecovery.recoveryRate}%` }}></div>
-              </div>
-              
-              <div className="book-track mt-2 w-full h-2 rounded-full overflow-hidden bg-slate-950">
-                <div className="incomplete-seg h-full bg-rose-500/30" style={{ width: `${100 - carryoverRecovery.recoveryRate}%` }}></div>
-              </div>
-              
-              <div className="mt-3 text-[10px] text-slate-500 leading-normal">
-                지난 미완료 {carryoverRecovery.totalPages}쪽 중 {carryoverRecovery.resolvedPages}쪽 재검 완료
-              </div>
-            </div>
-          )}
         </article>
       </div>
 

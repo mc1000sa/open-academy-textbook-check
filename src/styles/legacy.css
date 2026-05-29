@@ -471,6 +471,20 @@ input:focus, select:focus, textarea:focus {
   filter: saturate(1.08) brightness(1.04);
 }
 
+.btn-teacher-green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800;
+  border: none;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+  transition: transform 0.2s var(--oatis-ease), box-shadow 0.2s var(--oatis-ease), filter 0.2s var(--oatis-ease);
+}
+.btn-teacher-green:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.4);
+  filter: saturate(1.08) brightness(1.04);
+}
+
 .btn-admin {
   background: linear-gradient(135deg, #8436ff 0%, #632cd6 100%) !important;
   color: #ffffff !important;
@@ -880,8 +894,7 @@ details.group[open] summary span {
 }
 
 .report-round-panel {
-  max-width: 64rem;
-  margin: 0 auto;
+  width: 100%;
   padding: 1rem;
   border: 1px solid rgba(30, 41, 59, 0.95);
   border-radius: 1rem;
@@ -1085,23 +1098,36 @@ details.group[open] summary span {
 
 .parent-report-books {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 26px;
+  grid-template-columns: 1fr;
+  gap: 20px 0;
 }
 
 .parent-report-book {
-  padding: 0 20px 0 0;
+  padding: 0;
 }
 
 .parent-report-book:nth-child(2n) {
-  padding-left: 26px;
-  border-left: 1px solid #d9dee8;
+  padding-left: 0;
+  border-left: none;
 }
 
-.parent-report-book:nth-child(n + 3) {
-  margin-top: 24px;
-  padding-top: 24px;
+.parent-report-book:nth-child(n + 2) {
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid #eef2f7;
+}
+
+.parent-report-completion-text {
+  font-size: 14px;
+  font-weight: 800;
+  color: #d84b76;
+  white-space: nowrap;
+}
+
+.parent-report-completion-text span {
+  font-size: 16px;
+  font-weight: 900;
+  color: #d84b76;
 }
 
 .parent-report-book-head {
