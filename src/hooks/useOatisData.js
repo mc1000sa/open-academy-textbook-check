@@ -389,14 +389,13 @@ export function useOatisData() {
 
   // Inspection Subscription mapping depending on Portal/Account details
   useEffect(() => {
-    let unsubInspections = null;
+    let unsubs = [];
     let active = true;
 
     async function setupInspectionsSubscription() {
       const { db, refs } = await getFirebaseService();
       if (!active) return;
 
-      let q = refs.inspections;
       if (portal === 'student' && studentSession) {
         const linkedStudentIds = [studentSession.id];
         const profileId = studentSession.studentProfileId || studentSession.id;
@@ -404,21 +403,49 @@ export function useOatisData() {
         linked.forEach(id => {
           if (!linkedStudentIds.includes(id)) linkedStudentIds.push(id);
         });
-        q = query(refs.inspections, where('studentId', 'in', linkedStudentIds));
-      }
 
-      unsubInspections = onSnapshot(q, snap => {
-        if (!active) return;
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
-        setInspections(list);
-      });
+        const qSelf = query(refs.inspections, where('studentId', 'in', linkedStudentIds));
+        const qClass = query(refs.inspections, where('classId', '==', studentSession.classId));
+
+        let listSelf = [];
+        let listClass = [];
+
+        const updateCombinedList = () => {
+          const combinedMap = new Map();
+          listSelf.forEach(item => combinedMap.set(item.id, item));
+          listClass.forEach(item => combinedMap.set(item.id, item));
+          setInspections(Array.from(combinedMap.values()));
+        };
+
+        const unsubSelf = onSnapshot(qSelf, snap => {
+          if (!active) return;
+          listSelf = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+          updateCombinedList();
+        });
+
+        const unsubClass = onSnapshot(qClass, snap => {
+          if (!active) return;
+          listClass = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+          updateCombinedList();
+        });
+
+        unsubs.push(unsubSelf, unsubClass);
+      } else {
+        const q = refs.inspections;
+        const unsub = onSnapshot(q, snap => {
+          if (!active) return;
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+          setInspections(list);
+        });
+        unsubs.push(unsub);
+      }
     }
 
     setupInspectionsSubscription();
 
     return () => {
       active = false;
-      if (unsubInspections) unsubInspections();
+      unsubs.forEach(unsub => unsub());
     };
   }, [portal, studentSession, allStudents]);
 

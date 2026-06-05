@@ -170,7 +170,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
         cy={cy.toFixed(1)}
         r="2.7"
         fill="#0f172a"
-        stroke="#4169e1"
+        stroke="#10b981"
         strokeWidth="2"
       />
     );
@@ -191,7 +191,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500 font-bold">
             <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full bg-[#00d6cd]"></b>나의 6요소</span>
-            <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full border border-[#4169e1] bg-[#0f172a]"></b>{secondaryLabel}</span>
+            <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full border border-[#10b981] bg-[#0f172a]"></b>{secondaryLabel}</span>
           </div>
         </div>
         <div className="w-full md:w-[200px] flex justify-center shrink-0">
@@ -199,7 +199,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
             {gridPolygons}
             {gridAxes}
             {gridLabels}
-            <polygon points={secondaryPoints} fill="rgba(65, 105, 225, 0.05)" stroke="#4169e1" strokeWidth="1.5" strokeDasharray="3,2"></polygon>
+            <polygon points={secondaryPoints} fill="rgba(16, 185, 129, 0.06)" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3,2"></polygon>
             <polygon points={primaryPoints} fill="rgba(0, 214, 205, 0.08)" stroke="#00d6cd" strokeWidth="2"></polygon>
             {secondaryCircles}
             {primaryCircles}
