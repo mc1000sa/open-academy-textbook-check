@@ -11,6 +11,10 @@ import BookSetup from './components/BookSetup.jsx';
 import AdminSetup from './components/AdminSetup.jsx';
 import StudentPortal from './components/StudentPortal.jsx';
 
+import { usePortalSession } from './portal/usePortalSession.js';
+import PortalGateway from './portal/PortalGateway.jsx';
+import PortalHome from './portal/PortalHome.jsx';
+
 import {
   sortBookUnits,
   unitsForRange,
@@ -51,6 +55,7 @@ export default function App() {
     loginStep,
     setLoginStep,
     currentTeacher,
+    setCurrentTeacher,
     view,
     setView,
     teachers,
@@ -62,6 +67,7 @@ export default function App() {
     classBooks,
     inspections,
     studentSession,
+    setStudentSession,
     saveMsg,
     customModal,
     setCustomModal,
@@ -78,6 +84,72 @@ export default function App() {
 
   const [promptVal, setPromptVal] = useState('');
   const modalInputRef = useRef(null);
+
+  // Portal session management
+  const portalSessionObj = usePortalSession();
+  const { session: portalSession, login: loginPortal, logout: logoutPortal } = portalSessionObj;
+  const [activeService, setActiveService] = useState(null);
+
+  // 1. Sync OATIS login success to Portal Session
+  useEffect(() => {
+    if (!portalSession) {
+      const savedCode = localStorage.getItem('eyap_saved_academy_code') || '111111';
+      if (portal === 'student' && studentSession) {
+        const studentClass = classes.find(c => c.id === studentSession.classId);
+        loginPortal({
+          academyCode: savedCode,
+          role: 'student',
+          teacherId: studentSession.teacherId || '',
+          studentId: studentSession.id,
+          name: studentSession.name,
+          grade: studentSession.grade || '',
+          className: studentClass?.name || '',
+          school: studentSession.school || '',
+          pin: studentSession.pin || ''
+        });
+        setActiveService(null);
+      } else if ((portal === 'teacher' || portal === 'admin') && currentTeacher) {
+        loginPortal({
+          academyCode: savedCode,
+          role: currentTeacher.role,
+          teacherId: currentTeacher.id,
+          name: currentTeacher.name,
+          pin: currentTeacher.pin || ''
+        });
+        setActiveService(null);
+      }
+    }
+  }, [portal, studentSession, currentTeacher, portalSession, classes, loginPortal]);
+
+  // 2. Hydrate OATIS session from Portal Session on load
+  useEffect(() => {
+    if (portalSession && loading === false) {
+      if (portalSession.role === 'student') {
+        if (!studentSession && allStudents.length > 0) {
+          const matched = allStudents.find(s => s.id === portalSession.studentId);
+          if (matched) {
+            setPortal('student');
+            setStudentSession(matched);
+          }
+        }
+      } else if (portalSession.role === 'teacher' || portalSession.role === 'admin') {
+        if (!currentTeacher && teachers.length > 0) {
+          const matched = teachers.find(t => t.id === portalSession.teacherId);
+          if (matched) {
+            setPortal(portalSession.role);
+            setCurrentTeacher(matched);
+            setView(portalSession.role === 'admin' ? 'teachersAdmin' : 'inspections');
+          }
+        }
+      }
+    }
+  }, [portalSession, loading, allStudents, teachers, studentSession, currentTeacher, setPortal, setView, setCurrentTeacher, setStudentSession]);
+
+  const handlePortalLogout = () => {
+    logoutPortal();
+    handleLogout();
+    setActiveService(null);
+  };
 
   // Sync prompt default value when modal opens
   useEffect(() => {
@@ -279,14 +351,25 @@ export default function App() {
     );
   }
 
-  // 1. Gateway & Login
-  const showLogin =
-    portal === 'gateway' ||
-    (portal === 'student' && !studentSession) ||
-    (portal === 'teacher' && !currentTeacher) ||
-    (portal === 'admin' && !currentTeacher);
+  // Modals element helper
+  const modalElement = customModal?.open ? renderModal() : null;
 
-  if (showLogin) {
+  // Render PortalGateway if not logged into portal and portal state is gateway
+  if (!portalSession) {
+    if (portal === 'gateway') {
+      return (
+        <>
+          <AuroraBackground />
+          <PortalGateway
+            onSelectRole={(role) => setPortal(role)}
+            loginConfig={loginConfig}
+          />
+          {modalElement}
+        </>
+      );
+    }
+    
+    // Otherwise show OATIS login (PIN input)
     return (
       <>
         <AuroraBackground />
@@ -305,13 +388,106 @@ export default function App() {
           handleStudentLogin={handleStudentLogin}
           handleStudentRegister={handleStudentRegister}
         />
-        {/* Central Modal handling */}
-        {customModal?.open && renderModal()}
+        {modalElement}
       </>
     );
   }
 
-  // 2. Student Portal Dashboard
+  // Logged in: check active service
+  if (activeService === null) {
+    return (
+      <>
+        <AuroraBackground />
+        <PortalHome
+          session={portalSession}
+          onLogout={handlePortalLogout}
+          onSelectService={(service) => {
+            setActiveService(service);
+            if (service === 'oatis') {
+              if (portalSession.role === 'student') setView('studentPortal');
+              else setView(portalSession.role === 'admin' ? 'teachersAdmin' : 'inspections');
+            }
+          }}
+        />
+        {modalElement}
+      </>
+    );
+  }
+
+  if (activeService === 'explorer') {
+    // Phase 2 placeholder / component
+    return (
+      <>
+        <AuroraBackground />
+        <div className="min-h-screen flex flex-col justify-center items-center text-white relative z-10">
+          <h2 className="text-2xl font-black text-cyan-400">수학자 탐험관</h2>
+          <p className="text-slate-400 mt-2">수학자 탐험관 서비스 이식 준비 중입니다 (Phase 2).</p>
+          <button
+            onClick={() => setActiveService(null)}
+            className="mt-6 px-5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-sm font-bold hover:bg-slate-800 cursor-pointer"
+          >
+            포털 홈으로 이동
+          </button>
+        </div>
+        {modalElement}
+      </>
+    );
+  }
+
+  if (activeService === 'omr') {
+    // Generate the OMR URL with auto-login query parameters depending on the session role
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const omrBaseUrl = isLocal ? 'http://127.0.0.1:5174/' : 'https://open-test-omr.web.app/';
+    let omrUrl = omrBaseUrl;
+    if (portalSession.role === 'student') {
+      const schoolName = portalSession.school || studentSession?.school || '';
+      omrUrl = `${omrBaseUrl}?mode=student&s_name=${encodeURIComponent(portalSession.name)}&s_school=${encodeURIComponent(schoolName)}&s_grade=${encodeURIComponent(portalSession.grade)}&s_class=${encodeURIComponent(portalSession.className)}&s_pin=${portalSession.pin}`;
+    } else if (portalSession.role === 'teacher') {
+      omrUrl = `${omrBaseUrl}?mode=teacher&t_code=${encodeURIComponent(portalSession.name)}&t_pin=${portalSession.pin}`;
+    } else if (portalSession.role === 'admin') {
+      omrUrl = `${omrBaseUrl}?mode=admin&token=oasis_master_2024_auth`;
+    }
+
+    return (
+      <>
+        <AuroraBackground />
+        <div className="min-h-screen flex flex-col relative z-10 text-white pb-6">
+          {/* Header */}
+          <header className="h-16 border-b border-white/5 bg-[#050507]/60 backdrop-blur-md flex items-center justify-between px-6 md:px-12 shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-black tracking-widest text-[#8436ff] bg-purple-950/30 px-2.5 py-1 rounded-lg border border-[#8436ff]/20">
+                OMR
+              </span>
+              <div className="h-4 w-[1px] bg-white/10" />
+              <h1 className="text-sm font-bold tracking-tight text-white/90 font-black">e-Yap OMR</h1>
+            </div>
+            
+            <button
+              onClick={() => setActiveService(null)}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-white border border-white/5 hover:border-white/10 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <i className="fas fa-home"></i>
+              포털 홈으로 이동
+            </button>
+          </header>
+
+          {/* Iframe container */}
+          <div className="flex-1 p-4 md:p-6 flex flex-col">
+            <div className="flex-1 bg-slate-950/40 backdrop-blur-md border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative h-[calc(100vh-7rem)] min-h-[620px]">
+              <iframe 
+                src={omrUrl} 
+                className="w-full h-full border-0 bg-transparent"
+                title="OMR System"
+              />
+            </div>
+          </div>
+        </div>
+        {modalElement}
+      </>
+    );
+  }
+
+  // Default: activeService === 'oatis'
   if (portal === 'student' && studentSession) {
     const studentPortalDeps = {
       state: oatisData,
@@ -352,258 +528,13 @@ export default function App() {
           studentSession={studentSession}
           portal={portal}
           saveMsg={saveMsg}
-          handleLogout={handleLogout}
+          handleLogout={handlePortalLogout}
+          onGoBack={() => setActiveService(null)}
         >
           <StudentPortal {...studentPortalDeps} />
         </Layout>
-        {customModal?.open && renderModal()}
+        {modalElement}
       </>
-    );
-  }
-
-  // 3. Teacher & Admin dashboard
-  const renderViewContent = () => {
-    switch (view) {
-      case 'dashboard': {
-        const teacherId = oatisData.dashboardTeacherFilter === 'all' ? null : oatisData.dashboardTeacherFilter;
-        const dashClasses = teacherId ? classes.filter(c => c.teacherId === teacherId) : classes;
-        const dashClassIds = new Set(dashClasses.map(c => c.id));
-        const dashStudents = students.filter(s => dashClassIds.has(s.classId));
-        const dashStudentIds = new Set(dashStudents.map(s => s.id));
-        const dashLogs = inspections.filter(i => dashStudentIds.has(i.studentId));
-        const dashOverall = averageCompletionRate(dashLogs);
-        const dashRecent = [...dashLogs].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
-
-        return (
-          <Dashboard
-            state={oatisData}
-            teachers={teachers}
-            classes={dashClasses}
-            students={dashStudents}
-            logs={dashLogs}
-            overall={dashOverall}
-            recent={dashRecent}
-            focus={oatisData.dashboardMetricFocus || 'students'}
-            books={books}
-            inspections={inspections}
-            deps={{
-              assignedBooksForClass,
-              bookById,
-              bookUnits,
-              classById,
-              classProgress,
-              progressTone,
-              studentById,
-              studentsForClass,
-              teacherNameById
-            }}
-            updateLegacyState={(updates) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-            }}
-          />
-        );
-      }
-      case 'inspections': {
-        return (
-          <InspectionsContainer
-            state={oatisData}
-            db={null}
-            refs={null}
-            teacherClasses={teacherClasses}
-            studentsForClass={studentsForClass}
-            assignedBooksForClass={assignedBooksForClass}
-            bookById={bookById}
-            unitsForRange={(book, start, end) => unitsForRange(book, start, end).map(unit => ({ ...unit, name: displayUnitName(unit, book) }))}
-            pagesInRange={pagesInRange}
-            missedPagesArrayInCurrentRange={() => filterMissedPagesToRange(oatisData.missedPages, oatisData.selectedRangeStart, oatisData.selectedRangeEnd)}
-            inspectionsForStudent={inspectionsForStudent}
-            fmtDate={fmtDate}
-            classById={classById}
-            studentById={studentById}
-            safe={safe}
-            bookUnits={bookUnits}
-            buildCarryoverRows={buildCarryoverRows}
-            calculateCarryoverRecoveryRate={calculateCarryoverRecoveryRate}
-            pageResolutionKey={pageResolutionKey}
-            RUBRIC_ITEMS={RUBRIC_ITEMS}
-            remarkTemplates={oatisData.remarkTemplates}
-            updateLegacyState={(updates) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-            }}
-            showModalAlert={showModalAlert}
-            showModalConfirm={showModalConfirm}
-            showModalPrompt={showModalPrompt}
-          />
-        );
-      }
-      case 'reports': {
-        const reportsDeps = {
-          teacherClasses,
-          classById,
-          studentById,
-          teacherNameById,
-          inspectionsForStudent: inspectionsForSelectedReportRound,
-          groupInspectionsByBook,
-          bookById,
-          averageCompletionRate,
-          fmtDate,
-          classRubricAverage,
-          studentRubricAverage,
-          assignedBooksForClass,
-          studentsForClass,
-          unitsForRange: (book, start, end) => unitsForRange(book, start, end).map(unit => ({ ...unit, name: displayUnitName(unit, book) })),
-          refreshReportRounds: () => {
-            if (!oatisData.reportStudentId) {
-              oatisData.setReportRounds([]);
-              oatisData.setSelectedReportRound('');
-              return;
-            }
-            const activeReportClassId = studentById(oatisData.reportStudentId)?.classId || oatisData.reportClassId || '';
-            const klass = classById(activeReportClassId);
-            const currentRoundStartDate = oatisData.reportRoundStartDate || klass?.reportRoundStartDate || '';
-            const rounds = buildReportRounds({
-              inspections,
-              classId: activeReportClassId,
-              studentId: oatisData.reportStudentId,
-              startDate: currentRoundStartDate,
-              allStudents
-            });
-            oatisData.setReportRounds(rounds);
-          }
-        };
-
-        return (
-          <Reports
-            state={oatisData}
-            deps={reportsDeps}
-            updateLegacyState={(updates) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-            }}
-            showModalAlert={showModalAlert}
-          />
-        );
-      }
-      case 'setup': {
-        return (
-          <ClassSetup
-            state={oatisData}
-            teachers={teachers}
-            classes={classes}
-            students={students}
-            allStudents={allStudents}
-            studentRequests={studentRequests}
-            updateLegacyState={(updates) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-            }}
-            deps={{
-              showModalAlert,
-              showModalConfirm,
-              showModalPrompt,
-              notify
-            }}
-          />
-        );
-      }
-      case 'bookSetup': {
-        return (
-          <BookSetup
-            state={oatisData}
-            teachers={teachers}
-            classes={classes}
-            students={students}
-            books={books}
-            classBooks={classBooks}
-            updateLegacyState={(updates, callback) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-              if (callback) callback();
-            }}
-            deps={{
-              showModalAlert,
-              showModalConfirm,
-              notify
-            }}
-          />
-        );
-      }
-      case 'teachersAdmin': {
-        return (
-          <AdminSetup
-            state={oatisData}
-            teachers={teachers}
-            classes={classes}
-            students={students}
-            allStudents={allStudents}
-            studentRequests={studentRequests}
-            books={books}
-            classBooks={classBooks}
-            updateLegacyState={(updates, callback) => {
-              Object.keys(updates).forEach(key => {
-                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
-                if (oatisData[setterName]) oatisData[setterName](updates[key]);
-              });
-              if (callback) callback();
-            }}
-            deps={{
-              showModalAlert,
-              showModalConfirm,
-              notify
-            }}
-          />
-        );
-      }
-      default:
-        return null;
-    }
-  };
-
-  // Set accent color dynamically depending on view mode
-  let accentColor = '#4169e1';
-  if (portal === 'admin') accentColor = '#8436ff';
-  else if (portal === 'student') accentColor = '#00d6cd';
-
-  function renderModal() {
-    return (
-      <div className="modal-overlay" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, zIndex: 99999, display: 'grid', placeItems: 'center', padding: '1rem', background: 'rgba(5, 5, 7, 0.75)', backdropFilter: 'blur(10px)' }}>
-        <div className="glass-card modal-content" style={{ maxWidth: '420px', width: '90%', textAlign: 'center', padding: '2.5rem 2rem', border: '1px solid rgba(255, 255, 255, 0.15)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)', margin: '0 auto' }}>
-          {customModal.title && <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: accentColor, fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.5px' }}>{customModal.title}</h3>}
-          <p style={{ marginBottom: '1.5rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'keep-all', fontSize: '0.95rem', color: 'rgba(255, 255, 255, 0.85)' }}>{customModal.message}</p>
-          {customModal.type === 'prompt' && (
-            <input
-              type="text"
-              ref={modalInputRef}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-center text-white mb-6 font-mono text-lg outline-none focus:border-cyan-400"
-              value={promptVal}
-              onChange={(e) => setPromptVal(e.target.value)}
-              autoComplete="off"
-            />
-          )}
-          <div className="submit-row" style={{ gap: '0.75rem', display: 'flex', justifyContent: 'center' }}>
-            {(customModal.type === 'confirm' || customModal.type === 'prompt') && (
-              <button type="button" onClick={onCancel} className="ghost-button" style={{ flex: 1, padding: '0.85rem', fontSize: '0.9rem', borderRadius: '12px', cursor: 'pointer' }}>
-                {customModal.cancelText || '취소'}
-              </button>
-            )}
-            <button type="button" onClick={onConfirm} className="primary-button" style={{ flex: 1, padding: '0.85rem', fontSize: '0.9rem', borderRadius: '12px', background: `linear-gradient(135deg, ${accentColor} 0%, #2f46ff 100%)`, cursor: 'pointer' }}>
-              {customModal.confirmText || '확인'}
-            </button>
-          </div>
-        </div>
-      </div>
     );
   }
 
@@ -617,12 +548,12 @@ export default function App() {
         studentSession={studentSession}
         portal={portal}
         saveMsg={saveMsg}
-        handleLogout={handleLogout}
+        handleLogout={handlePortalLogout}
+        onGoBack={() => setActiveService(null)}
       >
         {renderViewContent()}
       </Layout>
-      {/* Central Modal handling */}
-      {customModal?.open && renderModal()}
+      {modalElement}
     </>
   );
 }
