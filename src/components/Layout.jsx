@@ -18,7 +18,8 @@ export default function Layout({
   studentSession,
   portal,
   saveMsg,
-  handleLogout
+  handleLogout,
+  onGoBack
 }) {
   const currentTeacherName = currentTeacher?.name || '';
 
@@ -155,6 +156,19 @@ export default function Layout({
     return (
       <div className="app-shell min-h-screen bg-transparent relative">
         <main className="w-full p-4 sm:p-6 space-y-6">
+          {onGoBack && (
+            <div className="no-print max-w-4xl mx-auto flex justify-between items-center bg-slate-955/40 p-4 rounded-2xl border border-white/5">
+              <span className="text-xs font-bold text-slate-400">교재 점검 피드백</span>
+              <button
+                type="button"
+                onClick={onGoBack}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#00d6cd]/10 hover:bg-[#00d6cd]/20 text-[#00d6cd] border border-[#00d6cd]/20 hover:border-[#00d6cd]/40 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <i className="fas fa-home"></i>
+                포털 홈으로 이동
+              </button>
+            </div>
+          )}
           {saveMsg && (
             <div className="no-print max-w-4xl mx-auto rounded-2xl border border-cyan-500/30 bg-cyan-950/20 px-4 py-3 text-sm font-black text-cyan-400">
               {saveMsg}
@@ -187,6 +201,16 @@ export default function Layout({
         
         {/* Sidebar Menu items */}
         <div className="mt-6 space-y-2 flex-1">
+          {onGoBack && (
+            <button
+              type="button"
+              onClick={onGoBack}
+              className="w-full flex items-center gap-3 px-4 py-2.5 font-bold text-sm rounded-xl transition-all duration-205 text-cyan-400 hover:text-white bg-slate-900/40 hover:bg-slate-900 border border-white/5 hover:border-cyan-500/30 mb-4 cursor-pointer"
+            >
+              <i className="fas fa-home w-5"></i>
+              포털 홈으로 이동
+            </button>
+          )}
           {renderMenuItems()}
         </div>
         
@@ -226,7 +250,16 @@ export default function Layout({
           </div>
           
           {/* Mobile responsive navigation tabs */}
-          <div className="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print">
+          <div className="xl:hidden mt-4 flex gap-2 overflow-x-auto pb-1 no-print animate-fadeIn">
+            {onGoBack && (
+              <button
+                type="button"
+                onClick={onGoBack}
+                className="rounded-full px-4 py-2 text-xs font-bold border border-[#00d6cd]/30 bg-[#00d6cd]/10 text-[#00d6cd] whitespace-nowrap cursor-pointer"
+              >
+                포털 홈
+              </button>
+            )}
             {renderMobileMenuItems()}
             <button
               type="button"
