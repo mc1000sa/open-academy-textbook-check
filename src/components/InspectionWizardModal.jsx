@@ -795,6 +795,8 @@ export default function InspectionWizardModal({
                                   className={`min-w-[44px] h-9 rounded-lg border text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer ${isResolved ? 'bg-emerald-500/80 border-emerald-500 text-white shadow-sm font-black' : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-emerald-500/50 hover:bg-emerald-950/20 hover:text-emerald-300'}`}
                                 >
                                   <span>{page}</span>
+                                  {row.sourceStatus === 'absent' && <span className="text-[8px] text-rose-300">결석</span>}
+                                  {row.sourceStatus === 'no_book' && <span className="text-[8px] text-amber-300">미지참</span>}
                                   {isResolved && (
                                     <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
