@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildReportRounds,
   formatRoundFileName,
-  selectedRoundDate
+  selectedRoundDate,
+  getInspectionRoundsMap
+
 } from './reportRounds.js';
 
 describe('reportRounds', () => {
@@ -62,5 +64,16 @@ describe('reportRounds', () => {
       studentName: '고준화',
       round: rounds[0]
     })).toBe('[수최t] 고1 서울대2반 - 고준화 (1회차-05.02.토).png');
+  });
+
+  it('builds a date-to-round mapping Map from student inspections', () => {
+    const studentInsps = [
+      { date: '2026-05-02' },
+      { date: '2026-05-11' },
+      { date: '2026-05-02' }
+    ];
+    const map = getInspectionRoundsMap(studentInsps);
+    expect(map.get('2026-05-02')).toBe(1);
+    expect(map.get('2026-05-11')).toBe(2);
   });
 });

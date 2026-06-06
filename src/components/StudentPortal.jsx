@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { averageRubricVector, bookRubricAverageForActiveStudents } from '../lib/reportMetrics.js';
 import { buildCarryoverRows, buildResolvedCarryoverRows } from '../lib/textbookProgress.js';
+import { getInspectionRoundsMap } from '../lib/reportRounds.js';
+
 
 // Rubric label config
 const RUBRIC_LABELS = {
@@ -59,6 +61,15 @@ function pagesInSimpleRange(start, end) {
 function unitCompletionRows(book, logs, bookUnits) {
   const units = (typeof bookUnits === 'function' ? bookUnits(book) : [...(book?.units || [])])
     .filter(unit => unit.visibleToStudent !== false);
+
+  // 이 책의 모든 점검 로그에서 해결 완료된(Resolved) carryover 미완료 페이지 번호들을 수집
+  const resolvedPages = new Set();
+  (logs || []).forEach(log => {
+    (log.carryoverResolutions || []).forEach(res => {
+      (res.resolvedPages || []).map(Number).forEach(p => resolvedPages.add(p));
+    });
+  });
+
   return units.map(unit => {
     const unitPages = new Set(pagesInSimpleRange(unit.start, unit.end));
     const checkedPages = new Set();
@@ -71,6 +82,13 @@ function unitCompletionRows(book, logs, bookUnits) {
       (log.missedPages || []).map(Number).forEach(page => {
         if (unitPages.has(page)) missedPages.add(page);
       });
+    });
+
+    // 해결 완료된 페이지는 미완료 목록에서 제거
+    resolvedPages.forEach(page => {
+      if (unitPages.has(page)) {
+        missedPages.delete(page);
+      }
     });
 
     const checkedCount = checkedPages.size;
@@ -237,12 +255,31 @@ export default function StudentPortal({
   // Local state management
   const [selectedBookFilter, setSelectedBookFilter] = useState('');
   const [selectedRubricBookId, setSelectedRubricBookId] = useState('');
+  const [selectedRoundFilter, setSelectedRoundFilter] = useState('');
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmNewPin, setConfirmNewPin] = useState('');
 
+
   const myInspections = useMemo(() => inspectionsForStudent(student.id), [student.id, state.inspections]);
   const myClass = useMemo(() => state.classes.find(c => c.id === student.classId), [student.classId, state.classes]);
+
+  const dateToRoundMap = useMemo(() => {
+    return getInspectionRoundsMap(myInspections);
+  }, [myInspections]);
+
+  const roundsList = useMemo(() => {
+    const uniqueDates = Array.from(new Set(
+      myInspections.map(log => log.date).filter(Boolean)
+    )).sort((a, b) => b.localeCompare(a));
+
+    return uniqueDates.map(date => ({
+      date,
+      round: dateToRoundMap.get(date) || 1,
+      displayDate: fmtDate(date)
+    }));
+  }, [myInspections, dateToRoundMap, fmtDate]);
+
   const teacherName = useMemo(() => {
     return state.teachers.find(t => t.id === myClass?.teacherId)?.name || '담당 교사 없음';
   }, [myClass, state.teachers]);
@@ -262,15 +299,24 @@ export default function StudentPortal({
     const grouped = groupInspectionsByBook(myInspections);
     const list = Object.keys(grouped).map(bookId => {
       const book = bookById(bookId);
-      const bookLogs = grouped[bookId];
+      let bookLogs = grouped[bookId];
+
+      if (selectedRoundFilter) {
+        bookLogs = bookLogs.filter(log => log.date === selectedRoundFilter);
+      }
+
+      if (bookLogs.length === 0) return null;
+
       const lastActiveLog = bookLogs.find(log => log.attendanceStatus !== 'absent' && log.attendanceStatus !== 'no_book');
       const completionRate = lastActiveLog ? (lastActiveLog.completionRate ?? 0) : 0;
 
-      const missedSorted = buildCarryoverRows({
-        inspections: myInspections,
-        studentId: student.id,
-        bookId
-      }).flatMap(row => row.missedPages).sort((a, b) => a - b);
+      const missedSorted = selectedRoundFilter
+        ? (bookLogs[0]?.missedPages || []).map(Number).sort((a, b) => a - b)
+        : buildCarryoverRows({
+            inspections: myInspections,
+            studentId: student.id,
+            bookId
+          }).flatMap(row => row.missedPages).sort((a, b) => a - b);
       const resolvedCarryoverRows = buildResolvedCarryoverRows(bookLogs);
 
       const firstLog = bookLogs[bookLogs.length - 1];
@@ -288,7 +334,7 @@ export default function StudentPortal({
         resolvedCarryoverRows,
         dateRangeText
       };
-    }).filter(item => item.book && (!visibleBookIds || visibleBookIds.has(item.book.id)));
+    }).filter(Boolean).filter(item => item.book && (!visibleBookIds || visibleBookIds.has(item.book.id)));
 
     // Sort by recent active use
     return list.sort((a, b) => {
@@ -296,7 +342,8 @@ export default function StudentPortal({
       const bTime = b.latestLog ? new Date(b.latestLog.date).getTime() : 0;
       return bTime - aTime;
     });
-  }, [myInspections, student.id, bookById, groupInspectionsByBook, visibleBookIds, fmtDate]);
+  }, [myInspections, student.id, bookById, groupInspectionsByBook, visibleBookIds, fmtDate, selectedRoundFilter]);
+
 
   const totalAvg = useMemo(() => Math.round(averageCompletionRate(myInspections)), [myInspections, averageCompletionRate]);
 
@@ -423,6 +470,38 @@ export default function StudentPortal({
           <h2 className="text-lg font-bold text-slate-100">교재 학습 점검 현황</h2>
         </div>
 
+        {roundsList.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center mb-6 bg-slate-950/40 p-3.5 rounded-2xl border border-slate-800/80">
+            <span className="text-xs font-bold text-slate-550 mr-2 select-none">회차 선택:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedRoundFilter('')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border ${
+                !selectedRoundFilter
+                  ? 'bg-[#00d6cd] text-slate-950 border-[#00d6cd]'
+                  : 'bg-slate-900 border-slate-850 text-slate-400 hover:text-white'
+              }`}
+            >
+              전체(누적)
+            </button>
+            {roundsList.map(item => (
+              <button
+                key={item.date}
+                type="button"
+                onClick={() => setSelectedRoundFilter(item.date)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border ${
+                  selectedRoundFilter === item.date
+                    ? 'bg-[#00d6cd] text-slate-950 border-[#00d6cd]'
+                    : 'bg-slate-900 border-slate-850 text-slate-400 hover:text-white'
+                }`}
+              >
+                {item.round}회차 ({item.displayDate})
+              </button>
+            ))}
+          </div>
+        )}
+
+
         {bookList.length === 0 ? (
           <div className="empty-state">배정되어 점검된 교재 기록이 아직 없습니다.</div>
         ) : (
@@ -435,6 +514,35 @@ export default function StudentPortal({
                 else if (item.latestLog.attendanceStatus === 'no_book') rangeText = '교재 미지참';
                 else rangeText = `${item.latestLog.rangeStart} ~ ${item.latestLog.rangeEnd}쪽`;
               }
+
+              // 지난과제 완료율 계산
+              let totalPrevMissed = 0;
+              let resolvedCount = 0;
+              let recoveryRate = 0;
+              if (item.latestLog) {
+                const prevCarryoverRows = buildCarryoverRows({
+                  inspections: myInspections,
+                  studentId: student.id,
+                  bookId: item.book.id,
+                  currentInspectionDate: item.latestLog.date,
+                  editingInspectionId: item.latestLog.id
+                });
+                totalPrevMissed = prevCarryoverRows.reduce((sum, r) => sum + r.missedPages.length, 0);
+                resolvedCount = item.latestLog.carryoverResolutions
+                  ? item.latestLog.carryoverResolutions.reduce((sum, res) => sum + (res.resolvedPages?.length || 0), 0)
+                  : 0;
+                recoveryRate = totalPrevMissed ? Math.round((resolvedCount / totalPrevMissed) * 105 / 1.05) : 0; // 복구율 계산 (백분율)
+                recoveryRate = Math.min(100, Math.max(0, recoveryRate));
+              }
+
+              // 보완 필요 이번 과제 vs 아직 해결 안 된 지난 과제 분리 계산
+              const latestMissedSet = new Set(
+                item.latestLog && item.latestLog.attendanceStatus !== 'absent' && item.latestLog.attendanceStatus !== 'no_book'
+                  ? (item.latestLog.missedPages || []).map(Number)
+                  : []
+              );
+              const currentRoundMissed = item.missedPages.filter(page => latestMissedSet.has(page));
+              const unresolvedPrevMissed = item.missedPages.filter(page => !latestMissedSet.has(page));
 
               // Build instruction comment string
               let memoContent = '';
@@ -466,6 +574,19 @@ export default function StudentPortal({
                     </div>
                   </div>
 
+                  {/* 지난과제 완료율 게이지 바 */}
+                  {totalPrevMissed > 0 && (
+                    <div className="mb-3">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-400 mb-1.5">
+                        <span className="text-emerald-450 font-black flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />지난과제 완료율</span>
+                        <span className="text-emerald-300 font-extrabold">{recoveryRate}% ({resolvedCount}/{totalPrevMissed}쪽 완료)</span>
+                      </div>
+                      <div className="book-track w-full bg-slate-900 border border-slate-850 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${recoveryRate}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mb-4">
                     <div className="flex justify-between items-center text-xs font-bold text-slate-400 mb-1.5">
                       <span>학습 완료율</span>
@@ -476,17 +597,33 @@ export default function StudentPortal({
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/40 p-4 rounded-xl soft-border">
-                    <span className="text-xs font-bold text-slate-400 block mb-2">🚨 보완이 필요한 쪽수 (미완료)</span>
-                    {item.missedPages.length === 0 ? (
-                      <span className="text-xs text-emerald-400 font-extrabold">모든 범위가 완벽하게 학습 완료되었습니다! 🎉</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {item.missedPages.map(page => (
-                          <span key={page} className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                            {page}쪽
-                          </span>
-                        ))}
+
+                  <div className="bg-slate-900/40 p-4 rounded-xl soft-border space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 block mb-2">🚨 보완이 필요한 이번 과제 (미완료)</span>
+                      {currentRoundMissed.length === 0 ? (
+                        <span className="text-xs text-emerald-400 font-extrabold">이번 과제는 완벽하게 완료되었습니다! 🎉</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {currentRoundMissed.map(page => (
+                            <span key={page} className="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              {page}쪽
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {unresolvedPrevMissed.length > 0 && (
+                      <div className="pt-2.5 border-t border-slate-850">
+                        <span className="text-xs font-bold text-amber-400 block mb-2">⚠️ 아직 해결하지 못한 지난 미완료 (이월)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {unresolvedPrevMissed.map(page => (
+                            <span key={page} className="px-2.5 py-1 rounded-lg text-xs font-black bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              {page}쪽
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -563,8 +700,7 @@ export default function StudentPortal({
 
               return filteredInspections.slice(0, 5).map(log => {
                 const book = bookById(log.bookId);
-                const originalIndex = myInspections.indexOf(log);
-                const round = originalIndex !== -1 ? myInspections.length - originalIndex : 1;
+                const round = dateToRoundMap.get(log.date) || 1;
 
                 const units = (book && unitsForRange) ? unitsForRange(book, log.rangeStart, log.rangeEnd) : [];
                 const unitNames = units.map(u => u.name).join(', ');

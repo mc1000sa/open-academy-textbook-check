@@ -946,7 +946,7 @@ export default function InspectionWizardModal({
                           <div className="grid md:grid-cols-3 gap-3">
                             {/* Positive */}
                             <div className="space-y-1.5">
-                              <div className="text-[7.2px] font-black text-emerald-500 uppercase tracking-wider pl-1">우수 (Positive)</div>
+                              <div className="text-[5px] font-black text-emerald-500 uppercase tracking-wider pl-1">우수 (Positive)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.positive || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -955,26 +955,26 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[7.2px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20' 
                                           : 'border-emerald-500/20 bg-emerald-950/10 text-emerald-450 hover:bg-emerald-950/30 hover:border-emerald-500/40 hover:text-emerald-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.positive || row.positive.length === 0) && (
-                                  <span className="text-[7.2px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>
 
                             {/* Neutral */}
                             <div className="space-y-1.5">
-                              <div className="text-[7.2px] font-black text-sky-500 uppercase tracking-wider pl-1">보통 (Neutral)</div>
+                              <div className="text-[5px] font-black text-sky-500 uppercase tracking-wider pl-1">보통 (Neutral)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.neutral || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -983,26 +983,26 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[7.2px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-sky-500 border-sky-400 text-white shadow-sm shadow-sky-500/20' 
                                           : 'border-sky-500/20 bg-sky-950/10 text-sky-450 hover:bg-sky-950/30 hover:border-sky-500/40 hover:text-sky-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.neutral || row.neutral.length === 0) && (
-                                  <span className="text-[7.2px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>
 
                             {/* Negative */}
                             <div className="space-y-1.5">
-                              <div className="text-[7.2px] font-black text-rose-500 uppercase tracking-wider pl-1">노력 (Negative)</div>
+                              <div className="text-[5px] font-black text-rose-500 uppercase tracking-wider pl-1">노력 (Negative)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.negative || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -1011,19 +1011,19 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[7.2px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20' 
                                           : 'border-rose-500/20 bg-rose-950/10 text-rose-450 hover:bg-rose-950/30 hover:border-rose-500/40 hover:text-rose-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.negative || row.negative.length === 0) && (
-                                  <span className="text-[7.2px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>

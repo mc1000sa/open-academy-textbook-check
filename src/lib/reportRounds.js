@@ -87,3 +87,20 @@ export function formatRoundFileName({ teacherName = '', className = '', studentN
   const fileDate = round?.fileDate ? `-${round.fileDate}` : '';
   return `[${teacherFileLabel(teacherName)}] ${className || '반명'} - ${studentName || '학생명'} (${roundLabel}${fileDate}).png`;
 }
+
+export function getInspectionRoundsMap(inspections = []) {
+  const uniqueDates = Array.from(
+    new Set(
+      inspections
+        .map(ins => normalizeDate(ins?.date))
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const dateToRoundMap = new Map();
+  uniqueDates.forEach((date, index) => {
+    dateToRoundMap.set(date, index + 1);
+  });
+  return dateToRoundMap;
+}
+
