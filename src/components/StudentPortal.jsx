@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { averageRubricVector, bookRubricAverageForActiveStudents } from '../lib/reportMetrics.js';
+import { buildCarryoverRows, buildResolvedCarryoverRows } from '../lib/textbookProgress.js';
 
 // Rubric label config
 const RUBRIC_LABELS = {
@@ -170,7 +171,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
         cy={cy.toFixed(1)}
         r="2.7"
         fill="#0f172a"
-        stroke="#4169e1"
+        stroke="#10b981"
         strokeWidth="2"
       />
     );
@@ -191,7 +192,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
           </div>
           <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500 font-bold">
             <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full bg-[#00d6cd]"></b>나의 6요소</span>
-            <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full border border-[#4169e1] bg-[#0f172a]"></b>{secondaryLabel}</span>
+            <span className="flex items-center gap-1.5"><b className="w-2.5 h-2.5 rounded-full border border-[#10b981] bg-[#0f172a]"></b>{secondaryLabel}</span>
           </div>
         </div>
         <div className="w-full md:w-[200px] flex justify-center shrink-0">
@@ -199,7 +200,7 @@ function StudentRubricRadarCompare({ primary, secondary, secondaryLabel }) {
             {gridPolygons}
             {gridAxes}
             {gridLabels}
-            <polygon points={secondaryPoints} fill="rgba(65, 105, 225, 0.05)" stroke="#4169e1" strokeWidth="1.5" strokeDasharray="3,2"></polygon>
+            <polygon points={secondaryPoints} fill="rgba(16, 185, 129, 0.06)" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3,2"></polygon>
             <polygon points={primaryPoints} fill="rgba(0, 214, 205, 0.08)" stroke="#00d6cd" strokeWidth="2"></polygon>
             {secondaryCircles}
             {primaryCircles}
@@ -265,11 +266,12 @@ export default function StudentPortal({
       const lastActiveLog = bookLogs.find(log => log.attendanceStatus !== 'absent' && log.attendanceStatus !== 'no_book');
       const completionRate = lastActiveLog ? (lastActiveLog.completionRate ?? 0) : 0;
 
-      const allMissed = new Set();
-      bookLogs.forEach(log => {
-        (log.missedPages || []).forEach(p => allMissed.add(p));
-      });
-      const missedSorted = Array.from(allMissed).sort((a, b) => a - b);
+      const missedSorted = buildCarryoverRows({
+        inspections: myInspections,
+        studentId: student.id,
+        bookId
+      }).flatMap(row => row.missedPages).sort((a, b) => a - b);
+      const resolvedCarryoverRows = buildResolvedCarryoverRows(bookLogs);
 
       const firstLog = bookLogs[bookLogs.length - 1];
       const latestLog = bookLogs[0];
@@ -283,6 +285,7 @@ export default function StudentPortal({
         latestLog,
         completionRate,
         missedPages: missedSorted,
+        resolvedCarryoverRows,
         dateRangeText
       };
     }).filter(item => item.book && (!visibleBookIds || visibleBookIds.has(item.book.id)));
@@ -293,7 +296,7 @@ export default function StudentPortal({
       const bTime = b.latestLog ? new Date(b.latestLog.date).getTime() : 0;
       return bTime - aTime;
     });
-  }, [myInspections, bookById, groupInspectionsByBook, visibleBookIds, fmtDate]);
+  }, [myInspections, student.id, bookById, groupInspectionsByBook, visibleBookIds, fmtDate]);
 
   const totalAvg = useMemo(() => Math.round(averageCompletionRate(myInspections)), [myInspections, averageCompletionRate]);
 
@@ -487,6 +490,19 @@ export default function StudentPortal({
                       </div>
                     )}
                   </div>
+
+                  {item.resolvedCarryoverRows.length > 0 && (
+                    <div className="mt-4 bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/20">
+                      <span className="text-xs font-bold text-emerald-300 block mb-2">이번 회차에 완료한 지난 미완료</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.resolvedCarryoverRows.flatMap(row => row.resolvedPages.map(page => (
+                          <span key={`${row.sourceInspectionId}-${page}`} className="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                            {page}쪽 완료
+                          </span>
+                        )))}
+                      </div>
+                    </div>
+                  )}
 
                   {memoContent && (
                     <div className="mt-4 pt-3 border-t border-slate-800/80">

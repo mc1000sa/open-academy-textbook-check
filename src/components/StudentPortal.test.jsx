@@ -139,4 +139,86 @@ describe('StudentPortal Component (SSR String Check)', () => {
     expect(html).toContain('범위: 결석 (평가 제외)');
     expect(html).toContain('범위: 10~20쪽');
   });
+  it('renders the comparison radar average with a distinct green stroke', () => {
+    const state = {
+      studentSession: { id: 's1', name: 'student', classId: 'c1', school: 'school' },
+      classes: [{ id: 'c1', name: 'class', teacherId: 't1' }],
+      teachers: [{ id: 't1', name: 'teacher' }],
+      students: [
+        { id: 's1', name: 'student', classId: 'c1' },
+        { id: 's2', name: 'classmate', classId: 'c1' }
+      ],
+      inspections: [
+        {
+          id: 'peer-1',
+          studentId: 's2',
+          classId: 'c1',
+          bookId: 'b1',
+          completionRate: 40,
+          rubricScores: { expression: 4, grading: 4, attitude: 4, understanding: 4, application: 4 }
+        }
+      ],
+      selectedStudentBookFilter: '',
+      selectedStudentRubricBookId: ''
+    };
+
+    const html = renderToString(
+      React.createElement(StudentPortal, {
+        ...mockProps,
+        state
+      })
+    );
+
+    expect(html).toContain('stroke="#10b981"');
+  });
+
+  it('shows resolved carryover pages as completed instead of remaining missed pages', () => {
+    const state = {
+      studentSession: { id: 's1', name: 'student', classId: 'c1', school: 'school' },
+      classes: [{ id: 'c1', name: 'class', teacherId: 't1' }],
+      teachers: [{ id: 't1', name: 'teacher' }],
+      students: [{ id: 's1', name: 'student', classId: 'c1' }],
+      inspections: [],
+      selectedStudentBookFilter: '',
+      selectedStudentRubricBookId: ''
+    };
+    const logs = [
+      {
+        id: 'current',
+        studentId: 's1',
+        bookId: 'b1',
+        rangeStart: 20,
+        rangeEnd: 25,
+        completionRate: 100,
+        attendanceStatus: 'present',
+        date: '2026-05-27',
+        carryoverResolutions: [
+          { sourceInspectionId: 'old', sourceDate: '2026-05-20', resolvedPages: [10] }
+        ]
+      },
+      {
+        id: 'old',
+        studentId: 's1',
+        bookId: 'b1',
+        rangeStart: 10,
+        rangeEnd: 12,
+        completionRate: 67,
+        attendanceStatus: 'present',
+        date: '2026-05-20',
+        missedPages: [10, 11]
+      }
+    ];
+
+    const html = renderToString(
+      React.createElement(StudentPortal, {
+        ...mockProps,
+        inspectionsForStudent: () => logs,
+        groupInspectionsByBook: () => ({ b1: logs }),
+        state
+      })
+    );
+
+    expect(html).toContain('10<!-- -->쪽 완료');
+    expect(html).toContain('11<!-- -->쪽');
+  });
 });

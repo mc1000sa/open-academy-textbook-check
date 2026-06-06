@@ -32,8 +32,12 @@ export function averageRubricVector(inspections) {
   const counts = Object.fromEntries(RUBRIC_VECTOR_KEYS.map(key => [key, 0]));
 
   rows.forEach(inspection => {
+    const explicitAssignment = toValidNumber(inspection?.rubricScores?.assignment);
     const completionRate = toValidNumber(inspection?.completionRate);
-    if (completionRate !== null) {
+    if (explicitAssignment !== null) {
+      totals.assignment += explicitAssignment;
+      counts.assignment += 1;
+    } else if (completionRate !== null) {
       totals.assignment += completionRate / 10;
       counts.assignment += 1;
     }

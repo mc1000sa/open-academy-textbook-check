@@ -6,7 +6,7 @@ import {
   rubricComparisonForStudentClass,
   rubricComparisonForStudentBook
 } from '../lib/reportMetrics.js';
-import { buildCarryoverRows } from '../lib/textbookProgress.js';
+import { buildCarryoverRows, buildResolvedCarryoverRows } from '../lib/textbookProgress.js';
 import { buildReportRounds, formatRoundFileName } from '../lib/reportRounds.js';
 
 const RUBRIC_LABELS = {
@@ -176,11 +176,16 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
     const avg = Math.round(averageCompletionRate(items));
 
     const latestItem = items[0];
-    const isAbsent = latestItem?.status === 'absent';
-    const isNoBook = latestItem?.status === 'no_book';
+    const latestStatus = latestItem?.attendanceStatus || latestItem?.status;
+    const isAbsent = latestStatus === 'absent';
+    const isNoBook = latestStatus === 'no_book';
 
     let rangeUnitHtml = '';
     let missedPagesHtml = '';
+    const resolvedRows = buildResolvedCarryoverRows(items);
+    const resolvedPagesHtml = resolvedRows.length
+      ? `<p><b>이번 회차 완료한 지난 미완료 :</b> <span style="color: #059669; font-weight: bold;">${formatPageRanges([...new Set(resolvedRows.flatMap(row => row.resolvedPages))].sort((a, b) => Number(a) - Number(b)))} 완료</span></p>`
+      : '';
 
     if (isAbsent) {
       rangeUnitHtml = `<span style="color: #ef4444; font-weight: bold;">- 결석</span>`;
@@ -552,11 +557,12 @@ function StudentReportPreview({ studentId, state, deps }) {
         const studentBookVector = comparison.studentVector || averageRubricVector(items) || studentOverallVector;
 
         const allMissed = new Set(buildCarryoverRows({
-          inspections: items,
+          inspections: allInspections,
           studentId,
           bookId
         }).flatMap(row => row.missedPages));
         const missedSorted = Array.from(allMissed).sort((a, b) => a - b);
+        const resolvedCarryoverRows = buildResolvedCarryoverRows(items);
 
         const pageRanges = [];
         if (missedSorted.length > 0) {
@@ -600,6 +606,19 @@ function StudentReportPreview({ studentId, state, deps }) {
                 </div>
               )}
             </div>
+
+            {resolvedCarryoverRows.length > 0 && (
+              <div className="mt-3 p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs">
+                <span className="font-bold text-emerald-300 block mb-2">이번 회차 완료한 지난 미완료:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {resolvedCarryoverRows.flatMap(row => row.resolvedPages.map(page => (
+                    <span key={`${row.sourceInspectionId}-${page}`} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-bold">
+                      {page}쪽 완료
+                    </span>
+                  )))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 space-y-2">
               <span className="text-[11px] font-bold text-slate-400 block">최근 3회 교재 세부 점검내역:</span>

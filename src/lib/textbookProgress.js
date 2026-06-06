@@ -160,6 +160,7 @@ export function buildCarryoverRows({
       return {
         sourceInspectionId: source.id,
         sourceDate: source.date || '',
+        sourceStatus: source.attendanceStatus || source.status || 'normal',
         rangeStart: source.rangeStart || '',
         rangeEnd: source.rangeEnd || '',
         completionRate: source.completionRate ?? 0,
@@ -205,6 +206,62 @@ export function buildCarryoverResolutions(carryoverRows, selectedKeys) {
       };
     })
     .filter(resolution => resolution.resolvedPages.length > 0);
+}
+
+export function buildResolvedCarryoverRows(inspections) {
+  const sourceById = new Map((inspections || []).map(inspection => [inspection.id, inspection]));
+
+  return (inspections || [])
+    .flatMap(inspection => (inspection.carryoverResolutions || []).map(resolution => {
+      const source = sourceById.get(resolution.sourceInspectionId) || {};
+      return {
+        inspectionId: inspection.id,
+        date: inspection.date || '',
+        bookId: inspection.bookId || source.bookId || '',
+        sourceInspectionId: resolution.sourceInspectionId,
+        sourceDate: resolution.sourceDate || source.date || '',
+        sourceStatus: source.attendanceStatus || 'normal',
+        resolvedPages: normalizePageList(resolution.resolvedPages)
+      };
+    }))
+    .filter(row => row.resolvedPages.length > 0);
+}
+
+export function buildSpecialAttendanceInspectionFields({
+  attendanceStatus,
+  rangeStart,
+  rangeEnd,
+  memo
+} = {}) {
+  const status = attendanceStatus === 'absent' || attendanceStatus === 'no_book'
+    ? attendanceStatus
+    : 'normal';
+  const start = Number(rangeStart);
+  const end = Number(rangeEnd);
+  const rangePages = pagesInRange(start, end);
+  const defaultMemo = status === 'no_book'
+    ? '교재 미지참으로 검사 못함.'
+    : '결석 - 사유 입력';
+  const cleanMemo = String(memo || '').trim();
+  const nextMemo = status === 'absent' && cleanMemo && !cleanMemo.startsWith('결석')
+    ? `결석 - ${cleanMemo}`
+    : cleanMemo || defaultMemo;
+
+  return {
+    rangeStart: rangePages.length ? start : null,
+    rangeEnd: rangePages.length ? end : null,
+    missedPages: rangePages,
+    completionRate: rangePages.length ? 0 : null,
+    memo: nextMemo,
+    rubricScores: {
+      assignment: 1,
+      expression: 1,
+      grading: 1,
+      attitude: 1,
+      understanding: 1,
+      application: 1
+    }
+  };
 }
 
 export function normalizeRubricScores(scores = {}) {

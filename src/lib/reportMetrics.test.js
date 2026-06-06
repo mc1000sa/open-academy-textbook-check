@@ -85,6 +85,30 @@ describe('reportMetrics', () => {
     });
   });
 
+  it('uses an explicit assignment rubric score for special attendance records', () => {
+    expect(averageRubricVector([
+      {
+        attendanceStatus: 'absent',
+        completionRate: 0,
+        rubricScores: {
+          assignment: 1,
+          expression: 1,
+          grading: 1,
+          attitude: 1,
+          understanding: 1,
+          application: 1
+        }
+      }
+    ])).toEqual({
+      assignment: 1,
+      expression: 1,
+      grading: 1,
+      attitude: 1,
+      understanding: 1,
+      application: 1
+    });
+  });
+
   it('returns 0 for rubric factors that have no values', () => {
     const emptyVector = {
       assignment: 0,
