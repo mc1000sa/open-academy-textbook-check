@@ -3,6 +3,7 @@ import { addDoc, updateDoc, doc, serverTimestamp, COLLECTION_NAMES, getFirebaseS
 import {
   calculateCompletionRate,
   buildCarryoverResolutions,
+  buildSpecialAttendanceInspectionFields,
   normalizeRubricScores,
   pageResolutionKey,
   pagesInRange,
@@ -302,6 +303,8 @@ export default function InspectionWizardModal({
     let units = [];
     let standardUnitIds = [];
     let duplicate = null;
+    let payloadMemo = memo;
+    let payloadRubricScores = rubricScores;
 
     if (attendanceStatus === 'absent') {
       // 결석일 때는 중복체크 기준을 날짜/학생/교재로만 검사
@@ -311,6 +314,16 @@ export default function InspectionWizardModal({
         r.bookId === currentBook.id && 
         r.date === selectedDate
       );
+      const specialFields = buildSpecialAttendanceInspectionFields({ attendanceStatus, rangeStart, rangeEnd, memo });
+      start = specialFields.rangeStart;
+      end = specialFields.rangeEnd;
+      missedPages = specialFields.missedPages;
+      completionRate = specialFields.completionRate;
+      payloadMemo = specialFields.memo;
+      payloadRubricScores = specialFields.rubricScores;
+      const rangeUnits = start && end ? unitsForRange(currentBook, start, end) : [];
+      units = rangeUnits.map(u => displayUnitName(u, currentBook));
+      standardUnitIds = [...new Set(rangeUnits.flatMap(u => u.standardUnitIds || []))];
     } else if (attendanceStatus === 'no_book') {
       // 교재 미지참일 때도 날짜/학생/교재로 검사
       duplicate = (state.inspections || []).find(r => 
@@ -319,6 +332,16 @@ export default function InspectionWizardModal({
         r.bookId === currentBook.id && 
         r.date === selectedDate
       );
+      const specialFields = buildSpecialAttendanceInspectionFields({ attendanceStatus, rangeStart, rangeEnd, memo });
+      start = specialFields.rangeStart;
+      end = specialFields.rangeEnd;
+      missedPages = specialFields.missedPages;
+      completionRate = specialFields.completionRate;
+      payloadMemo = specialFields.memo;
+      payloadRubricScores = specialFields.rubricScores;
+      const rangeUnits = start && end ? unitsForRange(currentBook, start, end) : [];
+      units = rangeUnits.map(u => displayUnitName(u, currentBook));
+      standardUnitIds = [...new Set(rangeUnits.flatMap(u => u.standardUnitIds || []))];
     } else {
       const startText = String(rangeStart || '').trim();
       const endText = String(rangeEnd || '').trim();
@@ -385,10 +408,10 @@ export default function InspectionWizardModal({
       completionRate,
       units,
       standardUnitIds,
-      memo,
-      rubricScores: attendanceStatus === 'absent'
-        ? { expression: null, grading: null, attitude: null, understanding: null, application: null }
-        : normalizeRubricScores(rubricScores)
+      memo: payloadMemo,
+      rubricScores: attendanceStatus === 'absent' || attendanceStatus === 'no_book'
+        ? payloadRubricScores
+        : normalizeRubricScores(payloadRubricScores)
     };
 
     try {
@@ -772,6 +795,8 @@ export default function InspectionWizardModal({
                                   className={`min-w-[44px] h-9 rounded-lg border text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer ${isResolved ? 'bg-emerald-500/80 border-emerald-500 text-white shadow-sm font-black' : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-emerald-500/50 hover:bg-emerald-950/20 hover:text-emerald-300'}`}
                                 >
                                   <span>{page}</span>
+                                  {row.sourceStatus === 'absent' && <span className="text-[8px] text-rose-300">결석</span>}
+                                  {row.sourceStatus === 'no_book' && <span className="text-[8px] text-amber-300">미지참</span>}
                                   {isResolved && (
                                     <svg className="w-3.5 h-3.5 text-white shrink-0" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -899,6 +924,13 @@ export default function InspectionWizardModal({
                     placeholder="직접 특이사항을 입력하거나 아래의 대표 문구 칩을 탭하여 추가하세요."
                   ></textarea>
 
+                  {lastInspection?.memo && (
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                      <div className="text-[10px] font-black text-slate-500 mb-1">직전 특이사항 참고</div>
+                      <p className="text-[11px] leading-relaxed text-slate-300">{lastInspection.memo}</p>
+                    </div>
+                  )}
+
                   <div className="mt-4 border border-slate-850 bg-slate-950/20 p-4 rounded-2xl">
                     <div className="text-xs font-extrabold text-slate-400 mb-3">6요소 대표 특이사항 문구 선택</div>
                     <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1 mini-scroll">
@@ -914,7 +946,7 @@ export default function InspectionWizardModal({
                           <div className="grid md:grid-cols-3 gap-3">
                             {/* Positive */}
                             <div className="space-y-1.5">
-                              <div className="text-[9px] font-black text-emerald-500 uppercase tracking-wider pl-1">우수 (Positive)</div>
+                              <div className="text-[5px] font-black text-emerald-500 uppercase tracking-wider pl-1">우수 (Positive)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.positive || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -923,26 +955,26 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[9px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm shadow-emerald-500/20' 
                                           : 'border-emerald-500/20 bg-emerald-950/10 text-emerald-450 hover:bg-emerald-950/30 hover:border-emerald-500/40 hover:text-emerald-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.positive || row.positive.length === 0) && (
-                                  <span className="text-[9px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>
 
                             {/* Neutral */}
                             <div className="space-y-1.5">
-                              <div className="text-[9px] font-black text-sky-500 uppercase tracking-wider pl-1">보통 (Neutral)</div>
+                              <div className="text-[5px] font-black text-sky-500 uppercase tracking-wider pl-1">보통 (Neutral)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.neutral || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -951,26 +983,26 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[9px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-sky-500 border-sky-400 text-white shadow-sm shadow-sky-500/20' 
                                           : 'border-sky-500/20 bg-sky-950/10 text-sky-450 hover:bg-sky-950/30 hover:border-sky-500/40 hover:text-sky-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.neutral || row.neutral.length === 0) && (
-                                  <span className="text-[9px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>
 
                             {/* Negative */}
                             <div className="space-y-1.5">
-                              <div className="text-[9px] font-black text-rose-500 uppercase tracking-wider pl-1">노력 (Negative)</div>
+                              <div className="text-[5px] font-black text-rose-500 uppercase tracking-wider pl-1">노력 (Negative)</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(row.negative || []).map((item, idx) => {
                                   const isSelected = memo.includes(item);
@@ -979,19 +1011,19 @@ export default function InspectionWizardModal({
                                       key={idx}
                                       type="button"
                                       onClick={() => toggleRemarkTemplate(item)}
-                                      className={`px-2.5 py-1.5 rounded-xl border text-[9px] font-black transition-all cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-1 rounded-xl border text-[5px] font-black transition-all cursor-pointer flex items-center gap-1 ${
                                         isSelected 
                                           ? 'bg-rose-500 border-rose-400 text-white shadow-sm shadow-rose-500/20' 
                                           : 'border-rose-500/20 bg-rose-950/10 text-rose-450 hover:bg-rose-950/30 hover:border-rose-500/40 hover:text-rose-300'
                                       }`}
                                     >
-                                      {isSelected && <span className="text-[8px]">✓</span>}
+                                      {isSelected && <span className="text-[6px]">✓</span>}
                                       {item}
                                     </button>
                                   );
                                 })}
                                 {(!row.negative || row.negative.length === 0) && (
-                                  <span className="text-[9px] text-slate-600 italic pl-1">없음</span>
+                                  <span className="text-[5px] text-slate-600 italic pl-1">없음</span>
                                 )}
                               </div>
                             </div>
@@ -1092,6 +1124,14 @@ export default function InspectionWizardModal({
                     className="rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-850 px-5 py-2.5 text-xs font-black text-slate-300 transition-all cursor-pointer"
                   >
                     취소
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={handleSaveAndNext}
+                    className={`rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-5 py-3 text-xs font-black text-white shadow-lg transition-all active:scale-[0.98] cursor-pointer ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isSaving ? '저장 중...' : '저장 후 다음 학생'}
                   </button>
                   <button
                     type="button"

@@ -81,6 +81,15 @@ function rememberStudentLoginForm(student, form) {
   }
 }
 
+export function mergeInspectionLists(...inspectionLists) {
+  const combinedMap = new Map();
+  inspectionLists.flat().forEach(item => {
+    if (!item?.id) return;
+    combinedMap.set(item.id, item);
+  });
+  return Array.from(combinedMap.values());
+}
+
 export function useOatisData() {
   const [loading, setLoading] = useState(true);
   const [portal, setPortal] = useState('gateway'); // 'gateway' | 'student' | 'teacher' | 'admin'
@@ -405,34 +414,32 @@ export function useOatisData() {
         });
 
         const qSelf = query(refs.inspections, where('studentId', 'in', linkedStudentIds));
-        const qClass = query(refs.inspections, where('classId', '==', studentSession.classId));
+        const qClass = studentSession.classId
+          ? query(refs.inspections, where('classId', '==', studentSession.classId))
+          : null;
 
         let listSelf = [];
         let listClass = [];
-
-        const updateCombinedList = () => {
-          const combinedMap = new Map();
-          listSelf.forEach(item => combinedMap.set(item.id, item));
-          listClass.forEach(item => combinedMap.set(item.id, item));
-          setInspections(Array.from(combinedMap.values()));
-        };
+        const toRows = snap => snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+        const updateCombinedList = () => setInspections(mergeInspectionLists(listSelf, listClass));
 
         const unsubSelf = onSnapshot(qSelf, snap => {
           if (!active) return;
-          listSelf = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
+          listSelf = toRows(snap);
           updateCombinedList();
         });
+        unsubs.push(unsubSelf);
 
-        const unsubClass = onSnapshot(qClass, snap => {
-          if (!active) return;
-          listClass = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
-          updateCombinedList();
-        });
-
-        unsubs.push(unsubSelf, unsubClass);
+        if (qClass) {
+          const unsubClass = onSnapshot(qClass, snap => {
+            if (!active) return;
+            listClass = toRows(snap);
+            updateCombinedList();
+          });
+          unsubs.push(unsubClass);
+        }
       } else {
-        const q = refs.inspections;
-        const unsub = onSnapshot(q, snap => {
+        const unsub = onSnapshot(refs.inspections, snap => {
           if (!active) return;
           const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.deleted !== true);
           setInspections(list);

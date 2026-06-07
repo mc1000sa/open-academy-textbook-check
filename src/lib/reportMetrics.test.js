@@ -85,6 +85,30 @@ describe('reportMetrics', () => {
     });
   });
 
+  it('uses an explicit assignment rubric score for special attendance records', () => {
+    expect(averageRubricVector([
+      {
+        attendanceStatus: 'absent',
+        completionRate: 0,
+        rubricScores: {
+          assignment: 1,
+          expression: 1,
+          grading: 1,
+          attitude: 1,
+          understanding: 1,
+          application: 1
+        }
+      }
+    ])).toEqual({
+      assignment: 1,
+      expression: 1,
+      grading: 1,
+      attitude: 1,
+      understanding: 1,
+      application: 1
+    });
+  });
+
   it('returns 0 for rubric factors that have no values', () => {
     const emptyVector = {
       assignment: 0,
@@ -226,5 +250,55 @@ describe('reportMetrics', () => {
       studentVector: { assignment: 10, expression: 10 },
       classAverageVector: { assignment: 9, expression: 9 }
     });
+  });
+
+  it('calculates cumulative completion rates as assignment scores over multiple rounds', () => {
+    const inspections = [
+      {
+        id: 'i1',
+        studentId: 's1',
+        bookId: 'b1',
+        date: '2026-05-20',
+        rangeStart: 10,
+        rangeEnd: 20,
+        completionRate: 82, // 11쪽 중 2쪽 미완료 -> 9쪽 완료 (81.8%)
+        missedPages: [10, 11],
+        rubricScores: {}
+      },
+      {
+        id: 'i2',
+        studentId: 's1',
+        bookId: 'b1',
+        date: '2026-05-27',
+        rangeStart: 21,
+        rangeEnd: 30,
+        completionRate: 90, // 10쪽 중 1쪽 미완료 -> 9쪽 완료 (90.0%)
+        missedPages: [21],
+        carryoverResolutions: [
+          { sourceInspectionId: 'i1', sourceDate: '2026-05-20', resolvedPages: [10] }
+        ],
+        rubricScores: {}
+      }
+    ];
+
+    // i1 시점(2026-05-20)의 누적 완료율:
+    // 누적 점검: 10~20 (11쪽)
+    // 최종 미완료: 10, 11 (2쪽)
+    // 완료율: (11 - 2)/11 = 81.8% -> 8.2점
+    const vec1 = averageRubricVector([inspections[0]]);
+    expect(vec1.assignment).toBe(8.2);
+
+    // i2 시점(2026-05-27)의 누적 완료율:
+    // 누적 점검: 10~30 (21쪽)
+    // 이월된 미완료 중 해결 안 된 것: 11 (1쪽)
+    // 이번 미완료: 21 (1쪽)
+    // 최종 미완료: 11, 21 (2쪽)
+    // 완료율: (21 - 2)/21 = 90.5% -> 9.0점
+    const vec2 = averageRubricVector(inspections);
+    // 두 점검 기록의 평균 assignment를 계산하므로:
+    // i1 시점의 assignment: 8.2
+    // i2 시점의 assignment: 9.0 (누적 반영)
+    // 평균 assignment = (8.2 + 9.0) / 2 = 8.6
+    expect(vec2.assignment).toBe(8.6);
   });
 });

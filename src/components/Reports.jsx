@@ -6,8 +6,9 @@ import {
   rubricComparisonForStudentClass,
   rubricComparisonForStudentBook
 } from '../lib/reportMetrics.js';
-import { buildCarryoverRows } from '../lib/textbookProgress.js';
-import { buildReportRounds, formatRoundFileName } from '../lib/reportRounds.js';
+import { buildCarryoverRows, buildResolvedCarryoverRows } from '../lib/textbookProgress.js';
+import { buildReportRounds, formatRoundFileName, getInspectionRoundsMap } from '../lib/reportRounds.js';
+
 
 const RUBRIC_LABELS = {
   assignment: '과제 수행률',
@@ -176,11 +177,47 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
     const avg = Math.round(averageCompletionRate(items));
 
     const latestItem = items[0];
-    const isAbsent = latestItem?.status === 'absent';
-    const isNoBook = latestItem?.status === 'no_book';
+    const latestStatus = latestItem?.attendanceStatus || latestItem?.status;
+    const isAbsent = latestStatus === 'absent';
+    const isNoBook = latestStatus === 'no_book';
 
     let rangeUnitHtml = '';
     let missedPagesHtml = '';
+    const resolvedRows = buildResolvedCarryoverRows(items);
+
+    let carryoverBarHtml = '';
+    if (latestItem) {
+      const prevCarryoverRows = buildCarryoverRows({
+        inspections: allRows,
+        studentId,
+        bookId,
+        currentInspectionDate: latestItem.date,
+        editingInspectionId: latestItem.id
+      });
+      const totalPrevMissed = prevCarryoverRows.reduce((sum, r) => sum + r.missedPages.length, 0);
+      const resolvedCount = latestItem.carryoverResolutions
+        ? latestItem.carryoverResolutions.reduce((sum, res) => sum + (res.resolvedPages?.length || 0), 0)
+        : 0;
+      const recoveryRate = totalPrevMissed ? Math.round((resolvedCount / totalPrevMissed) * 100) : 0;
+
+      if (totalPrevMissed > 0) {
+        carryoverBarHtml = `
+          <div style="margin: 6px 0 10px 0; padding: 6px 10px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.1); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #059669; margin-bottom: 3px;">
+              <span>지난과제 완료율</span>
+              <span>\${recoveryRate}% (\${resolvedCount}/\${totalPrevMissed}쪽 완료)</span>
+            </div>
+            <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+              <div style="width: \${recoveryRate}%; height: 100%; background: #10b981; border-radius: 3px;"></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    const resolvedPagesHtml = resolvedRows.length
+      ? `<p><b>이번 회차 완료한 지난 미완료 :</b> <span style="color: #059669; font-weight: bold;">${formatPageRanges([...new Set(resolvedRows.flatMap(row => row.resolvedPages))].sort((a, b) => Number(a) - Number(b)))} 완료</span></p>`
+      : '';
 
     if (isAbsent) {
       rangeUnitHtml = `<span style="color: #ef4444; font-weight: bold;">- 결석</span>`;
@@ -190,7 +227,26 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
       missedPagesHtml = `<span style="color: #ef4444; font-weight: bold;">- 교재 미지참</span>`;
     } else {
       rangeUnitHtml = rangeUnitSummary(book, items, unitsForRange);
-      missedPagesHtml = missedPagesSummary(items);
+      
+      const latestMissedSet = new Set((latestItem.missedPages || []).map(Number));
+      const allMissed = [...new Set(items.flatMap(row => Array.isArray(row.missedPages) ? row.missedPages : []))]
+        .map(Number)
+        .sort((a, b) => a - b);
+      const currentRoundMissed = allMissed.filter(p => latestMissedSet.has(p));
+      const unresolvedPrevMissed = allMissed.filter(p => !latestMissedSet.has(p));
+
+      let missedHtml = '';
+      if (currentRoundMissed.length > 0) {
+        missedHtml += `<span style="color: #ef4444; font-weight: bold;">${formatPageRanges(currentRoundMissed)}</span>`;
+      } else {
+        missedHtml += `<span style="color: #10b981; font-weight: bold;">없음 (완료)</span>`;
+      }
+      if (unresolvedPrevMissed.length > 0) {
+        missedHtml += `<div style="margin-top: 4px; border-top: 1px dashed rgba(148,163,184,0.2); padding-top: 4px;">
+          <b>미해결 지난 미완료 (이월) :</b> <span style="color: #d97706; font-weight: bold;">${formatPageRanges(unresolvedPrevMissed)}</span>
+        </div>`;
+      }
+      missedPagesHtml = missedHtml;
     }
 
     return `
@@ -199,6 +255,7 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
           <h3><span class="parent-report-pipe">|</span>${book?.title || '이름 없는 교재'}</h3>
           <span class="parent-report-completion-text">이번 과제 완료율 : <span>${avg}%</span></span>
         </div>
+        \${carryoverBarHtml}
         <p><b>점검 중인 단원 :</b> ${rangeUnitHtml}</p>
         <p><b>보완 필요 쪽수 :</b> ${missedPagesHtml}</p>
       </section>
@@ -552,27 +609,45 @@ function StudentReportPreview({ studentId, state, deps }) {
         const studentBookVector = comparison.studentVector || averageRubricVector(items) || studentOverallVector;
 
         const allMissed = new Set(buildCarryoverRows({
-          inspections: items,
+          inspections: allInspections,
           studentId,
           bookId
         }).flatMap(row => row.missedPages));
         const missedSorted = Array.from(allMissed).sort((a, b) => a - b);
+        const resolvedCarryoverRows = buildResolvedCarryoverRows(items);
 
-        const pageRanges = [];
-        if (missedSorted.length > 0) {
-          let start = missedSorted[0];
-          let end = missedSorted[0];
-          for (let i = 1; i < missedSorted.length; i++) {
-            if (missedSorted[i] === end + 1) {
-              end = missedSorted[i];
-            } else {
-              pageRanges.push(start === end ? `${start}쪽` : `${start}쪽~${end}쪽`);
-              start = missedSorted[i];
-              end = missedSorted[i];
-            }
-          }
-          pageRanges.push(start === end ? `${start}쪽` : `${start}쪽~${end}쪽`);
+        let totalPrevMissed = 0;
+        let resolvedCount = 0;
+        let recoveryRate = 0;
+        if (latest) {
+          const prevCarryoverRows = buildCarryoverRows({
+            inspections: allInspections,
+            studentId,
+            bookId,
+            currentInspectionDate: latest.date,
+            editingInspectionId: latest.id
+          });
+          totalPrevMissed = prevCarryoverRows.reduce((sum, r) => sum + r.missedPages.length, 0);
+          resolvedCount = latest.carryoverResolutions
+            ? latest.carryoverResolutions.reduce((sum, res) => sum + (res.resolvedPages?.length || 0), 0)
+            : 0;
+          recoveryRate = totalPrevMissed ? Math.round((resolvedCount / totalPrevMissed) * 100) : 0;
         }
+
+        const latestMissedSet = new Set(
+          latest && latest.status !== 'absent' && latest.status !== 'no_book'
+            ? (latest.missedPages || []).map(Number)
+            : []
+        );
+        const currentRoundMissed = missedSorted.filter(p => latestMissedSet.has(p));
+        const unresolvedPrevMissed = missedSorted.filter(p => !latestMissedSet.has(p));
+
+        const currentRoundRanges = currentRoundMissed.length > 0
+          ? formatPageRanges(currentRoundMissed).split(', ')
+          : [];
+        const unresolvedPrevRanges = unresolvedPrevMissed.length > 0
+          ? formatPageRanges(unresolvedPrevMissed).split(', ')
+          : [];
 
         return (
           <div key={bookId} className="report-book-card p-5 mb-5 rounded-2xl border border-slate-700/50 bg-slate-900/30">
@@ -588,18 +663,59 @@ function StudentReportPreview({ studentId, state, deps }) {
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 text-xs">
-              <span className="font-bold text-slate-300 block mb-2">보완 필요 쪽수:</span>
-              {pageRanges.length === 0 ? (
-                <span className="text-emerald-400 font-bold">★ 완료율 100%! 모든 보완 학습이 완료되었습니다. ★</span>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {pageRanges.map(range => (
-                    <span key={range} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">{range}</span>
-                  ))}
+            {/* 지난과제 완료율 게이지 바 */}
+            {totalPrevMissed > 0 && (
+              <div className="mb-3.5">
+                <div className="flex justify-between items-center text-xs font-bold text-slate-400 mb-1.5">
+                  <span className="text-emerald-450 font-black flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />지난과제 완료율
+                  </span>
+                  <span className="text-emerald-300 font-extrabold">{recoveryRate}% ({resolvedCount}/{totalPrevMissed}쪽 완료)</span>
+                </div>
+                <div className="book-track w-full bg-slate-950 border border-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${recoveryRate}%` }}></div>
+                </div>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 text-xs space-y-2.5">
+              <div>
+                <span className="font-bold text-slate-300 block mb-2">보완 필요 이번 과제:</span>
+                {currentRoundRanges.length === 0 ? (
+                  <span className="text-emerald-450 font-bold">★ 이번 학습 과제는 완벽하게 완료되었습니다! ★</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentRoundRanges.map(range => (
+                      <span key={range} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold">{range}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {unresolvedPrevRanges.length > 0 && (
+                <div className="pt-2 border-t border-slate-850">
+                  <span className="font-bold text-amber-400 block mb-2">미해결 지난 미완료 (이월):</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {unresolvedPrevRanges.map(range => (
+                      <span key={range} className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">{range}</span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
+
+            {resolvedCarryoverRows.length > 0 && (
+              <div className="mt-3 p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs">
+                <span className="font-bold text-emerald-300 block mb-2">이번 회차 완료한 지난 미완료:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {resolvedCarryoverRows.flatMap(row => row.resolvedPages.map(page => (
+                    <span key={`${row.sourceInspectionId}-${page}`} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-bold">
+                      {page}쪽 완료
+                    </span>
+                  )))}
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 space-y-2">
               <span className="text-[11px] font-bold text-slate-400 block">최근 3회 교재 세부 점검내역:</span>

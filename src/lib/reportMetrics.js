@@ -1,4 +1,4 @@
-import { RUBRIC_ITEMS, normalizeRubricScores } from './textbookProgress.js';
+import { RUBRIC_ITEMS, normalizeRubricScores, pagesInRange, buildCarryoverRows } from './textbookProgress.js';
 
 const RUBRIC_VECTOR_KEYS = RUBRIC_ITEMS.map(item => item.key);
 const MANUAL_RUBRIC_KEYS = RUBRIC_ITEMS.filter(item => !item.automatic).map(item => item.key);
@@ -32,9 +32,63 @@ export function averageRubricVector(inspections) {
   const counts = Object.fromEntries(RUBRIC_VECTOR_KEYS.map(key => [key, 0]));
 
   rows.forEach(inspection => {
+    const explicitAssignment = toValidNumber(inspection?.rubricScores?.assignment);
     const completionRate = toValidNumber(inspection?.completionRate);
-    if (completionRate !== null) {
-      totals.assignment += completionRate / 10;
+    if (explicitAssignment !== null) {
+      totals.assignment += explicitAssignment;
+      counts.assignment += 1;
+    } else if (completionRate !== null) {
+      // 누적 완료율 계산 시도 (해당 시점까지의 점검 이력을 역추적)
+      let computedAssignment = null;
+      if (inspection.studentId && inspection.bookId) {
+        const sameBookLogs = rows.filter(
+          r => r.studentId === inspection.studentId && r.bookId === inspection.bookId
+        );
+        const getMillis = (item) => item?.date ? new Date(item.date).getTime() : 0;
+        const targetTime = getMillis(inspection);
+
+        const historyLogs = sameBookLogs.filter(log => {
+          const logTime = getMillis(log);
+          if (logTime < targetTime) return true;
+          if (logTime > targetTime) return false;
+          // 동일 날짜인 경우 고유 ID 비교로 선후관계 보장
+          return (log.id || '') <= (inspection.id || '');
+        });
+
+        const totalPageSet = new Set();
+        historyLogs.forEach(log => {
+          pagesInRange(log.rangeStart, log.rangeEnd).forEach(p => totalPageSet.add(p));
+        });
+
+        const carryoverRows = buildCarryoverRows({
+          inspections: sameBookLogs,
+          studentId: inspection.studentId,
+          bookId: inspection.bookId,
+          currentInspectionDate: inspection.date,
+          editingInspectionId: inspection.id
+        });
+        const unresolvedCarryoverPages = carryoverRows.flatMap(row => row.missedPages);
+        const currentResolvedPages = new Set(
+          (inspection.carryoverResolutions || [])
+            .flatMap(res => (res.resolvedPages || []).map(Number))
+        );
+        const remainingCarryoverPages = unresolvedCarryoverPages.filter(p => !currentResolvedPages.has(p));
+        const currentMissedPages = (inspection.missedPages || []).map(Number);
+        const missedPageSet = new Set([...remainingCarryoverPages, ...currentMissedPages]);
+
+        const totalPagesCount = totalPageSet.size;
+        const missedPagesCount = missedPageSet.size;
+        if (totalPagesCount > 0) {
+          const cumulativeCompletionRate = Math.round(((totalPagesCount - missedPagesCount) / totalPagesCount) * 100);
+          computedAssignment = cumulativeCompletionRate / 10;
+        }
+      }
+
+      if (computedAssignment !== null) {
+        totals.assignment += computedAssignment;
+      } else {
+        totals.assignment += completionRate / 10;
+      }
       counts.assignment += 1;
     }
 

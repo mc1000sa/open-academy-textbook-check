@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCarryoverResolutions,
+  buildResolvedCarryoverRows,
+  buildSpecialAttendanceInspectionFields,
   buildCarryoverRows,
   calculateCompletionRate,
   calculateCarryoverRecoveryRate,
@@ -146,6 +148,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'newer',
         sourceDate: '2026-05-10',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -155,6 +158,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'old-a',
         sourceDate: '2026-05-01',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -206,6 +210,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'late',
         sourceDate: '2026-05-01',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -215,6 +220,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'middle',
         sourceDate: '2026-05-01',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -224,6 +230,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'early',
         sourceDate: '2026-05-01',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -267,6 +274,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'later',
         sourceDate: '2026-05-01',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -305,6 +313,7 @@ describe('textbookProgress', () => {
       {
         sourceInspectionId: 'past',
         sourceDate: '2026-05-10',
+        sourceStatus: 'normal',
         rangeStart: '',
         rangeEnd: '',
         completionRate: 0,
@@ -358,6 +367,69 @@ describe('textbookProgress', () => {
   it('builds a stable carryover page resolution key', () => {
     expect(pageResolutionKey('old-1', 12)).toBe('old-1:12');
     expect(pageResolutionKey('old-1', '012')).toBe('old-1:12');
+  });
+
+  it('builds resolved carryover rows for report display', () => {
+    const inspections = [
+      {
+        id: 'old-absent',
+        studentId: 'student-1',
+        bookId: 'book-1',
+        date: '2026-05-01',
+        attendanceStatus: 'absent',
+        missedPages: [10, 11]
+      },
+      {
+        id: 'current',
+        studentId: 'student-1',
+        bookId: 'book-1',
+        date: '2026-05-08',
+        carryoverResolutions: [
+          { sourceInspectionId: 'old-absent', resolvedPages: [10] }
+        ]
+      }
+    ];
+
+    expect(buildResolvedCarryoverRows(inspections)).toEqual([
+      {
+        inspectionId: 'current',
+        date: '2026-05-08',
+        bookId: 'book-1',
+        sourceInspectionId: 'old-absent',
+        sourceDate: '2026-05-01',
+        sourceStatus: 'absent',
+        resolvedPages: [10]
+      }
+    ]);
+  });
+
+  it('builds absent and no-book fields that carry the whole range forward', () => {
+    expect(buildSpecialAttendanceInspectionFields({
+      attendanceStatus: 'no_book',
+      rangeStart: 3,
+      rangeEnd: 5
+    })).toEqual({
+      rangeStart: 3,
+      rangeEnd: 5,
+      missedPages: [3, 4, 5],
+      completionRate: 0,
+      memo: '교재 미지참으로 검사 못함.',
+      rubricScores: {
+        assignment: 1,
+        expression: 1,
+        grading: 1,
+        attitude: 1,
+        understanding: 1,
+        application: 1
+      }
+    });
+
+    expect(buildSpecialAttendanceInspectionFields({
+      attendanceStatus: 'absent',
+      rangeStart: 8,
+      rangeEnd: 9,
+      memo: '독감'
+    }).memo).toBe('결석 - 독감');
   });
 
   it('normalizes legacy rubric score keys and clamps values to half-point steps', () => {
