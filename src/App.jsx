@@ -10,6 +10,7 @@ import ClassSetup from './components/ClassSetup.jsx';
 import BookSetup from './components/BookSetup.jsx';
 import AdminSetup from './components/AdminSetup.jsx';
 import StudentPortal from './components/StudentPortal.jsx';
+import AttendanceManager from './components/Attendance/AttendanceManager.jsx';
 
 import {
   sortBookUnits,
@@ -438,6 +439,25 @@ export default function App() {
             showModalAlert={showModalAlert}
             showModalConfirm={showModalConfirm}
             showModalPrompt={showModalPrompt}
+          />
+        );
+      }
+      case 'attendance': {
+        return (
+          <AttendanceManager
+            state={oatisData}
+            updateLegacyState={(updates) => {
+              Object.keys(updates).forEach(key => {
+                const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
+                if (oatisData[setterName]) oatisData[setterName](updates[key]);
+              });
+            }}
+            deps={{
+              showModalAlert,
+              showModalConfirm,
+              showModalPrompt,
+              notify
+            }}
           />
         );
       }

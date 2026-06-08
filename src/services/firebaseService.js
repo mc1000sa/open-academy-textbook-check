@@ -19,6 +19,7 @@ import {
 
 export {
   addDoc,
+  collection,
   deleteDoc,
   doc,
   getDoc,
@@ -49,7 +50,9 @@ export const COLLECTION_NAMES = Object.freeze({
   books: 'openacademy_textbook_books',
   classBooks: 'openacademy_textbook_class_books',
   inspections: 'openacademy_textbook_inspections',
-  configs: 'openacademy_textbook_configs'
+  configs: 'openacademy_textbook_configs',
+  attendance: 'attendance',
+  consulting: 'consulting'
 });
 
 let firebaseServicePromise;
@@ -63,7 +66,9 @@ export function createRefs(db) {
     books: collection(db, COLLECTION_NAMES.books),
     classBooks: collection(db, COLLECTION_NAMES.classBooks),
     inspections: collection(db, COLLECTION_NAMES.inspections),
-    configs: collection(db, COLLECTION_NAMES.configs)
+    configs: collection(db, COLLECTION_NAMES.configs),
+    attendance: collection(db, COLLECTION_NAMES.attendance),
+    consulting: collection(db, COLLECTION_NAMES.consulting)
   };
 }
 

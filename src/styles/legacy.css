@@ -1481,6 +1481,12 @@ details.group[open] summary span {
     padding: 5px 4px !important;
     white-space: normal !important;
   }
+  
+  /* 출석부 인쇄 시 가운데 정렬 보장 */
+  .print-full-width table th,
+  .print-full-width table td {
+    text-align: center !important;
+  }
 }
 
 /* 보고서 시기 선택 칩의 활성화 스타일 (Tailwind v4 유실 방지용 정적 클래스) */
@@ -1493,4 +1499,19 @@ details.group[open] summary span {
   color: #60a5fa !important;
   font-weight: 800 !important;
 }
+
+/* OATIS 출석부 화면 & 인쇄 시 모든 표 정보(헤더, 넘버링 포함) 강제 가운데 정렬 */
+.print-full-width table th,
+.print-full-width table td {
+  text-align: center !important;
+}
+
+/* OATIS 출석부 화면 표 높이 초압축 튜닝 */
+.print-full-width table th {
+  padding: 4px 6px !important;
+}
+.print-full-width table td {
+  padding: 2px 4px !important;
+}
+
 

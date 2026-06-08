@@ -11,7 +11,9 @@ describe('firebaseService', () => {
       books: 'openacademy_textbook_books',
       classBooks: 'openacademy_textbook_class_books',
       inspections: 'openacademy_textbook_inspections',
-      configs: 'openacademy_textbook_configs'
+      configs: 'openacademy_textbook_configs',
+      attendance: 'attendance',
+      consulting: 'consulting'
     });
   });
 });

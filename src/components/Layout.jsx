@@ -3,6 +3,7 @@ import React from 'react';
 const VIEW_TITLES = {
   dashboard: '전체 대시보드',
   inspections: '학생별 교재점검',
+  attendance: '출석부 및 상담 관리',
   reports: '학생별 보고서 출력',
   setup: '반/학생 설정',
   bookSetup: '교재 관리',
@@ -76,6 +77,7 @@ export default function Layout({
     // teacher portal
     const menuList = [
       { view: 'inspections', label: '학생별 교재점검', icon: 'fa-clipboard-check' },
+      { view: 'attendance', label: '출석부 및 상담 관리', icon: 'fa-calendar-check' },
       { view: 'reports', label: '학생별 보고서 출력', icon: 'fa-file-pdf' },
       { view: 'setup', label: '반/학생 설정', icon: 'fa-users' },
       { view: 'bookSetup', label: '교재 관리', icon: 'fa-book' },
@@ -127,6 +129,7 @@ export default function Layout({
 
     const menuList = [
       { view: 'inspections', label: '점검' },
+      { view: 'attendance', label: '출석/상담' },
       { view: 'reports', label: '보고서' },
       { view: 'setup', label: '반/학생 설정' },
       { view: 'bookSetup', label: '교재 관리' },

@@ -459,6 +459,7 @@ export function useOatisData() {
   // Session Restore on initial Load once teachers is ready
   useEffect(() => {
     if (teachers.length === 0) return;
+    if (currentTeacher || studentSession) return;
     
     // 1. Admin session restoration
     const savedAdmin = window.localStorage?.getItem(ADMIN_SESSION_KEY);
