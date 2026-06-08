@@ -12,6 +12,11 @@ import {
   onSnapshot,
   collection
 } from '../../services/firebaseService.js';
+import {
+  buildWithdrawalLog,
+  copyTextSafely,
+  sortStudentsByPrintPin
+} from '../../lib/attendancePrint.js';
 
 // 날짜 범위 생성 유틸 (YYYY-MM-DD 형태의 배열 반환, 최대 31일 제한)
 const getDateRange = (start, end) => {
@@ -124,6 +129,9 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
   const [outputStartDate, setOutputStartDate] = useState(getThisWeekRange().start);
   const [outputEndDate, setOutputEndDate] = useState(getThisWeekRange().end);
   const [outputMode, setOutputMode] = useState('class'); // 'class' | 'student'
+  const [printScale, setPrintScale] = useState('100');
+  const [withdrawalReportMode, setWithdrawalReportMode] = useState('lastClass');
+  const printScaleValue = Number(printScale) / 100;
 
   // Firebase DB 인스턴스 획득
   useEffect(() => {
@@ -263,9 +271,10 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
   // 출력 탭에서 해당 반의 학생 목록 (퇴원자 및 전반자 모두 포함)
   const outputStudents = useMemo(() => {
     if (!outputClassId) return [];
-    return (state.allStudents || [])
-      .filter(s => s.deleted !== true && (s.classId === outputClassId || s.previousClassId === outputClassId))
-      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'));
+    return sortStudentsByPrintPin(
+      (state.allStudents || [])
+        .filter(s => s.deleted !== true && (s.classId === outputClassId || s.previousClassId === outputClassId))
+    );
   }, [state.allStudents, outputClassId]);
 
   // 출력 탭 학생 자동 선택
@@ -758,7 +767,14 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
         updatedBy: state.currentTeacher?.name || '시스템'
       });
 
-      const formattedLog = `[퇴원 보고서]\n■ 학생명: ${dischargeStudent.name}\n■ 소속반: ${selectedClass?.name || '미지정'}\n■ 퇴원일자: ${dischargeDate}\n■ 퇴원사유 및 상담내용:\n${modalContent.trim()}\n-----------------\n* 원내 시스템 일괄 반영 완료.`;
+      const formattedLog = buildWithdrawalLog({
+        teacherName: state.currentTeacher?.name || '해당강사',
+        student: dischargeStudent,
+        className: selectedClass?.name || '미지정',
+        dischargeDate,
+        reason: modalContent,
+        mode: withdrawalReportMode
+      });
       setCopiedText(formattedLog);
 
       notify(`${dischargeStudent.name} 학생의 퇴원 처리가 반영되고 서식이 생성되었습니다.`);
@@ -770,7 +786,32 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
 
   // 🖨️ 인쇄 실행
   const handlePrint = () => {
-    window.print();
+    window.setTimeout(() => window.print(), 80);
+  };
+
+  const handleToggleAttendancePrintPin = async (student) => {
+    if (!db || !student?.id) return;
+    const nextPinned = !student.attendancePrintPinned;
+    try {
+      const studentRef = doc(db, 'openacademy_textbook_students', student.id);
+      await updateDoc(studentRef, {
+        attendancePrintPinned: nextPinned,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error('Failed to update attendance print pin:', err);
+      showModalAlert('출석부 출력 고정 상태를 저장하는 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleCopyWithdrawalLog = async () => {
+    if (!copiedText) return;
+    const copied = await copyTextSafely(copiedText);
+    if (copied) {
+      notify('퇴원일지 서식을 클립보드에 복사했습니다.');
+    } else {
+      showModalAlert('클립보드 복사 권한이 없어 자동 복사에 실패했습니다. 표시된 서식을 직접 선택해 복사해 주세요.');
+    }
   };
 
   // 출력 탭 실시간 상담 데이터 연동
@@ -866,7 +907,10 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
   }, [outputStudentId, outputStartDate, outputEndDate, outputAttendanceData, outputClassId, state.allStudents]);
 
   return (
-    <div className="space-y-6 w-full px-4 pb-20 pt-4 print-full-width">
+    <div
+      className={`space-y-6 w-full px-4 pb-20 pt-4 print-full-width ${activeTab === 'output' ? 'attendance-print-root' : ''}`}
+      style={{ '--attendance-print-scale': printScaleValue }}
+    >
       
       {/* 상단 통합 탭 네비게이션 */}
       <div className="flex justify-between items-center bg-slate-900/60 p-1.5 rounded-2xl border border-slate-800/80 no-print tab-btn-row">
@@ -1349,12 +1393,26 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               </button>
             </div>
 
-            <button 
-              onClick={handlePrint}
-              className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-            >
-              🖨️ 인쇄하기
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 bg-slate-950/60 border border-slate-800 px-3 py-2 rounded-xl">
+                <span className="text-[10px] font-black text-slate-400">인쇄 글자 크기</span>
+                <select
+                  value={printScale}
+                  onChange={e => setPrintScale(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-black text-slate-200 outline-none"
+                >
+                  <option value="100">100%</option>
+                  <option value="85">85%</option>
+                  <option value="70">70%</option>
+                </select>
+              </label>
+              <button 
+                onClick={handlePrint}
+                className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                🖨️ 인쇄하기
+              </button>
+            </div>
           </div>
 
           {/* 출력 설정 도구들 (no-print) */}
@@ -1434,7 +1492,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
           {/* 출력 뷰 A: 반별 기록된 날짜 출석부 표 */}
           {/* ----------------------------------------------------------------- */}
           {outputMode === 'class' && (
-            <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-6 print-full-width">
+            <div className="attendance-print-sheet bg-slate-950/40 rounded-2xl border border-slate-850 p-6 print-full-width">
               <div className="text-center mb-6">
                 <h2 className="text-xl font-black text-slate-100">{outputSelectedClass?.name || '선택반'} 출석부</h2>
                 <p className="text-xs text-slate-500 mt-1 font-mono">{outputStartDate} ~ {outputEndDate} (기록된 날짜만 출력됨)</p>
@@ -1460,7 +1518,21 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                       outputStudents.map((student, idx) => (
                         <tr key={student.id} className="border-b border-slate-800">
                           <td className="p-3 text-center text-xs font-bold text-slate-500 border border-slate-800">
-                            {idx + 1}
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAttendancePrintPin(student)}
+                                className={`no-print h-6 w-6 rounded-lg border text-[10px] transition-colors ${
+                                  student.attendancePrintPinned
+                                    ? 'bg-amber-500 text-white border-transparent'
+                                    : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-amber-300 hover:border-amber-500/40'
+                                }`}
+                                title={student.attendancePrintPinned ? '출력 상단 고정 해제' : '출력 상단 고정'}
+                              >
+                                <i className="fas fa-thumbtack"></i>
+                              </button>
+                              <span>{idx + 1}</span>
+                            </div>
                           </td>
                           <td className="p-3 font-bold border border-slate-800 text-center">
                             <div className="text-center">{student.name}</div>
@@ -1874,6 +1946,33 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                   <label className="block text-[10px] font-black text-slate-400 mb-1.5">퇴원 사유 및 상담 상세기록</label>
                   <textarea value={modalContent} onChange={e => setModalContent(e.target.value)} placeholder="구체적인 퇴원 사유를 입력하세요." className="w-full border border-slate-800 p-3 rounded-xl text-xs h-40 bg-slate-950 focus:border-rose-500 outline-none text-slate-300 leading-relaxed resize-none"></textarea>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 mb-1.5">퇴원일지 모드</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawalReportMode('lastClass')}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-black transition-colors ${
+                        withdrawalReportMode === 'lastClass'
+                          ? 'bg-rose-600 text-white border-transparent'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                      }`}
+                    >
+                      마지막 수업일 보고
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawalReportMode('detail')}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-black transition-colors ${
+                        withdrawalReportMode === 'detail'
+                          ? 'bg-rose-600 text-white border-transparent'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                      }`}
+                    >
+                      출결 상세 보고
+                    </button>
+                  </div>
+                </div>
                 <button onClick={handleDischargeSubmit} className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl text-xs shadow-sm transition">⚙️ 퇴원 처리 및 서식 생성</button>
               </div>
 
@@ -1882,7 +1981,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 {copiedText ? (
                   <div className="flex-1 flex flex-col">
                     <pre className="bg-slate-900 p-3 rounded-xl text-xs font-mono text-slate-300 whitespace-pre-wrap flex-1 overflow-y-auto border border-slate-800">{copiedText}</pre>
-                    <button onClick={() => { navigator.clipboard.writeText(copiedText); alert('클립보드에 복사되었습니다!'); }} className="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 rounded-xl transition">텍스트 복사하기</button>
+                    <button onClick={handleCopyWithdrawalLog} className="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 rounded-xl transition">텍스트 복사하기</button>
                   </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-xs text-slate-500 text-center">사유 입력 후 생성 버튼을 누르면 복사 양식이 활성화됩니다.</div>

@@ -1514,4 +1514,89 @@ details.group[open] summary span {
   padding: 2px 4px !important;
 }
 
+@media print {
+  .attendance-print-root,
+  .attendance-print-root * {
+    visibility: visible !important;
+  }
+
+  .attendance-print-root {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+  }
+
+  .attendance-print-root > * {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    padding: 8px !important;
+    color: #111827 !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet,
+  .attendance-print-root .attendance-print-sheet * {
+    color: #111827 !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    font-size: calc(10px * var(--attendance-print-scale, 1)) !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet th,
+  .attendance-print-root .attendance-print-sheet td {
+    border: 1px solid #111827 !important;
+    background: #ffffff !important;
+    padding: calc(5px * var(--attendance-print-scale, 1)) calc(4px * var(--attendance-print-scale, 1)) !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    white-space: normal !important;
+    word-break: keep-all !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet th:first-child,
+  .attendance-print-root .attendance-print-sheet td:first-child {
+    width: 36px !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet th:nth-child(2),
+  .attendance-print-root .attendance-print-sheet td:nth-child(2) {
+    width: 92px !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet h2 {
+    font-size: calc(18px * var(--attendance-print-scale, 1)) !important;
+    color: #111827 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .attendance-print-root .attendance-print-sheet p,
+  .attendance-print-root .attendance-print-sheet div {
+    text-shadow: none !important;
+  }
+}
+
 
