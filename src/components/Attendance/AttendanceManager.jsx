@@ -472,6 +472,24 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     }
   };
 
+  // 출석부 결석/지각 버튼 클릭 시 모달 열기 (학생 선택 + 날짜 지정)
+  const openAttendanceModal = (student, date, type) => {
+    setSelectedStudent(student);
+    setActiveModal(type);
+    setEditingLogId(null);
+    setModalContent('');
+    setModalExtraContent('');
+    setModalDate(date);
+    setCopiedText('');
+    setBookPrice('');
+    setApplyToAll(false);
+    if (type === 'absent_reason') {
+      setModalTag('병결');
+    } else if (type === 'late_reason') {
+      setModalTag('늦잠');
+    }
+  };
+
   // 신규 모달 열기 헬퍼
   const openActionModal = (type) => {
     if (!selectedStudent) {
@@ -1335,21 +1353,35 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                     >
                                       출석
                                     </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); saveAttendanceStatus(student, date, '결석'); }}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (status === '결석') {
+                                          saveAttendanceStatus(student, date, '결석'); // 토글 해제
+                                        } else {
+                                          openAttendanceModal(student, date, 'absent_reason');
+                                        }
+                                      }}
                                       className={`px-1 py-0.5 rounded-md text-[8.5px] font-black transition-all ${
-                                        status === '결석' 
-                                          ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/20' 
+                                        status === '결석'
+                                          ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/20'
                                           : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                                       }`}
                                     >
                                       결석
                                     </button>
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); saveAttendanceStatus(student, date, '지각'); }}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (status === '지각') {
+                                          saveAttendanceStatus(student, date, '지각'); // 토글 해제
+                                        } else {
+                                          openAttendanceModal(student, date, 'late_reason');
+                                        }
+                                      }}
                                       className={`px-1 py-0.5 rounded-md text-[8.5px] font-black transition-all ${
-                                        status === '지각' 
-                                          ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/20' 
+                                        status === '지각'
+                                          ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/20'
                                           : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
                                       }`}
                                     >
@@ -1357,14 +1389,6 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                     </button>
                                   </div>
 
-                                  {/* 결석 사유 노출 및 교재 배부 표시 */}
-                                  {status === '결석' && note && (
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <span className="text-[8px] bg-rose-955/40 text-rose-350 px-1 py-0.2 rounded border border-rose-900/30 font-bold max-w-[120px] truncate" title={note}>
-                                        {note.replace(/^\[.*?\]\s*/, '')}
-                                      </span>
-                                    </div>
-                                  )}
                                 </div>
 
                                 {/* 인쇄 모드 시 텍스트만 노출 */}
