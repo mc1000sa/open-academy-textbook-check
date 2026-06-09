@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import {
@@ -255,7 +255,7 @@ function getStudentImageReportHtml(studentId, state, deps, options = {}) {
           <h3><span class="parent-report-pipe">|</span>${book?.title || '이름 없는 교재'}</h3>
           <span class="parent-report-completion-text">이번 과제 완료율 : <span>${avg}%</span></span>
         </div>
-        \${carryoverBarHtml}
+        ${carryoverBarHtml}
         <p><b>점검 중인 단원 :</b> ${rangeUnitHtml}</p>
         <p><b>보완 필요 쪽수 :</b> ${missedPagesHtml}</p>
       </section>
@@ -804,6 +804,11 @@ function ClassReportPreview({ classId, state, deps }) {
     studentRubricAverage,
   } = deps;
 
+  const [sortKey, setSortKey] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+
+  const RUBRIC_SHORT = { assignment: '과제', expression: '풀이', grading: '채점', attitude: '태도', understanding: '개념', application: '응용' };
+
   const klass = classById(classId);
   if (!klass) return null;
   const students = studentsForClass(classId);
@@ -814,26 +819,47 @@ function ClassReportPreview({ classId, state, deps }) {
     typeof classRubricAverage === 'function' ? classRubricAverage(classId, allStudents, allInspections) : {}
   ), [classId, allStudents, allInspections, classRubricAverage]);
 
-  const rows = useMemo(() => (
+  const studentRows = useMemo(() => (
     students.map(s => {
       const logs = inspectionsForStudent(s.id);
       const avg = Math.round(averageCompletionRate(logs));
       const latest = logs[0]?.date || '';
       const vector = typeof studentRubricAverage === 'function' ? studentRubricAverage(s.id, allInspections) : {};
-
-      return (
-        <tr key={s.id} className="border-b border-slate-800/80 hover:bg-slate-900/30 text-xs">
-          <td className="px-4 py-3 text-slate-200 font-bold">{s.name}</td>
-          <td className="px-4 py-3 text-slate-400">{s.school || '-'}</td>
-          <td className="px-4 py-3 text-right font-black text-blue-400">{avg}%</td>
-          <td className="px-4 py-3 text-slate-400 text-center">{fmtDate(latest) || '-'}</td>
-          {RUBRIC_KEYS.map(key => (
-            <td key={key} className="px-3 py-3 text-center font-bold text-slate-200">{rubricScore(vector, key).toFixed(1)}</td>
-          ))}
-        </tr>
-      );
+      return { s, avg, latest, vector };
     })
-  ), [students, inspectionsForStudent, averageCompletionRate, studentRubricAverage, allInspections, fmtDate]);
+  ), [students, inspectionsForStudent, averageCompletionRate, studentRubricAverage, allInspections]);
+
+  const sortedRows = useMemo(() => {
+    const arr = [...studentRows];
+    arr.sort((a, b) => {
+      let va, vb;
+      if (sortKey === 'name') { va = a.s.name || ''; vb = b.s.name || ''; return sortDir === 'asc' ? va.localeCompare(vb, 'ko') : vb.localeCompare(va, 'ko'); }
+      if (sortKey === 'school') { va = a.s.school || ''; vb = b.s.school || ''; return sortDir === 'asc' ? va.localeCompare(vb, 'ko') : vb.localeCompare(va, 'ko'); }
+      if (sortKey === 'avg') { va = a.avg; vb = b.avg; }
+      else if (sortKey === 'latest') { va = a.latest; vb = b.latest; return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va); }
+      else { va = rubricScore(a.vector, sortKey); vb = rubricScore(b.vector, sortKey); }
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+    return arr;
+  }, [studentRows, sortKey, sortDir]);
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const SortTh = ({ colKey, children, className = '' }) => {
+    const active = sortKey === colKey;
+    const arrow = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+    return (
+      <th
+        className={`px-3 py-3 text-center whitespace-nowrap cursor-pointer select-none hover:text-slate-200 transition-colors ${active ? 'text-cyan-400' : ''} ${className}`}
+        onClick={() => handleSort(colKey)}
+      >
+        {children}<span className="text-[9px] opacity-60">{arrow}</span>
+      </th>
+    );
+  };
 
   return (
     <div className="print-report rounded-[28px] p-6 md:p-8 bg-slate-950 border border-slate-800 text-white" id="reportCaptureArea">
@@ -844,31 +870,45 @@ function ClassReportPreview({ classId, state, deps }) {
       </div>
 
       <div className="class-rubric-table overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-slate-800 bg-slate-900/40 text-[11px] font-bold text-slate-400">
-              <th class="px-4 py-3">학생 이름</th>
-              <th class="px-4 py-3">학교</th>
-              <th class="px-4 py-3 text-right">평균 완료율</th>
-              <th class="px-4 py-3 text-center">최근 점검일</th>
+              <th className="px-3 py-3 text-center whitespace-nowrap w-10">#</th>
+              <SortTh colKey="name">학생 이름</SortTh>
+              <SortTh colKey="school">학교</SortTh>
+              <SortTh colKey="avg">평균 완료율</SortTh>
+              <SortTh colKey="latest">최근 점검일</SortTh>
               {RUBRIC_KEYS.map(key => (
-                <th key={key} className="px-3 py-3 text-center whitespace-nowrap">{RUBRIC_LABELS[key]}</th>
+                <SortTh key={key} colKey={key}>{RUBRIC_SHORT[key]}</SortTh>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
+            {sortedRows.length ? (
               <>
-                <tr className="border-b border-emerald-500/20 bg-emerald-500/5 text-xs">
-                  <td className="px-4 py-3 text-emerald-200 font-black" colSpan="4">반 평균</td>
+                {sortedRows.map(({ s, avg, latest, vector }, idx) => (
+                  <tr key={s.id} className="border-b border-slate-800/80 hover:bg-slate-900/30 text-xs">
+                    <td className="px-3 py-3 text-center text-slate-500 font-bold">{idx + 1}</td>
+                    <td className="px-4 py-3 text-center text-slate-200 font-bold whitespace-nowrap">{s.name}</td>
+                    <td className="px-4 py-3 text-center text-slate-400 whitespace-nowrap">{s.school || '-'}</td>
+                    <td className="px-4 py-3 text-center font-black text-blue-400">{avg}%</td>
+                    <td className="px-4 py-3 text-center text-slate-400 whitespace-nowrap">{fmtDate(latest) || '-'}</td>
+                    {RUBRIC_KEYS.map(key => (
+                      <td key={key} className="px-3 py-3 text-center font-bold text-slate-200">{rubricScore(vector, key).toFixed(1)}</td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-amber-500/40 bg-amber-500/5 text-[13px]">
+                  <td className="px-3 py-3 text-center text-amber-400 font-black">—</td>
+                  <td className="px-4 py-3 text-center text-amber-400 font-black" colSpan="3">반 평균</td>
+                  <td className="px-4 py-3 text-center text-amber-400 font-black">—</td>
                   {RUBRIC_KEYS.map(key => (
-                    <td key={key} className="px-3 py-3 text-center font-black text-emerald-300">{rubricScore(classVector, key).toFixed(1)}</td>
+                    <td key={key} className="px-3 py-3 text-center font-black text-amber-400">{rubricScore(classVector, key).toFixed(1)}</td>
                   ))}
                 </tr>
-                {rows}
               </>
             ) : (
-              <tr><td colSpan="10" className="px-4 py-10 text-center text-slate-500">등록된 학생이 존재하지 않습니다.</td></tr>
+              <tr><td colSpan="11" className="px-4 py-10 text-center text-slate-500">등록된 학생이 존재하지 않습니다.</td></tr>
             )}
           </tbody>
         </table>
@@ -1501,52 +1541,35 @@ export default function Reports({
 
         <div className="space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="report-flow-label">반 선택</span>
-              <div className="filter-switch">
-                <span
-                  onClick={() => handleSetClassSort('name')}
-                  className={`filter-switch-item ${(!state.classSortType || state.classSortType === 'name') ? 'active' : ''}`}
-                >
-                  이름순
-                </span>
-                <span
-                  onClick={() => handleSetClassSort('grade')}
-                  className={`filter-switch-item ${state.classSortType === 'grade' ? 'active' : ''}`}
-                >
-                  학년별
-                </span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="report-flow-label shrink-0">반 선택</span>
+              <div className="flex items-center gap-2 flex-wrap flex-1">
+                {teacherClassesList.length ? (
+                  teacherClassesList.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleClassSelect(c.id)}
+                      className={`choice-button btn-choice-teacher ${activeReportClassId === c.id ? 'selected' : ''}`}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {c.name}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-500 font-bold">개설된 반이 없습니다.</span>
+                )}
               </div>
+              <button
+                type="button"
+                onClick={handleBuildClassReport}
+                className="shrink-0 px-4 py-2 rounded-xl text-xs font-extrabold bg-cyan-500 hover:bg-cyan-400 text-white transition-colors"
+                style={{ cursor: 'pointer' }}
+              >
+                반 전체표 생성
+              </button>
             </div>
 
-            <div className="choice-grid" id="reportClassSortId">
-              {teacherClassesList.length ? (
-                teacherClassesList.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => handleClassSelect(c.id)}
-                    className={`choice-button btn-choice-teacher ${activeReportClassId === c.id ? 'selected' : ''}`}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {c.name}
-                  </button>
-                ))
-              ) : (
-                <div className="text-xs text-slate-500 p-2 font-bold">개설된 반이 없습니다.</div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleBuildClassReport}
-              className="btn-teacher px-4 py-2.5 rounded-xl text-xs font-extrabold"
-              style={{ cursor: 'pointer' }}
-            >
-              반 전체표 생성
-            </button>
           </div>
 
           {state.classReportHtml && (

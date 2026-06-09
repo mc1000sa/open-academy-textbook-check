@@ -34,12 +34,12 @@ export {
 };
 
 export const firebaseConfig = {
-  apiKey: 'AIzaSyDe6YKpOHsnoTtUWi1wjbQSSaDbG5pWIt0',
-  authDomain: 'open-academy-textbook.firebaseapp.com',
-  projectId: 'open-academy-textbook',
-  storageBucket: 'open-academy-textbook.firebasestorage.app',
-  messagingSenderId: '143926809598',
-  appId: '1:143926809598:web:ac97b94f798df982c866af'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 export const COLLECTION_NAMES = Object.freeze({

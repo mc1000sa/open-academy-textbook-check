@@ -150,6 +150,7 @@ export function useOatisData() {
   const [selectedReportRound, setSelectedReportRoundState] = useState('');
   const [reportRounds, setReportRounds] = useState([]);
   const [printHtml, setPrintHtml] = useState('');
+  const [classReportHtml, setClassReportHtml] = useState('');
   const [reportPeriods] = useState(() => {
     try {
       const stored = window.localStorage?.getItem('oatis.reportPeriods.v1');
@@ -900,6 +901,8 @@ export function useOatisData() {
     setReportRounds,
     printHtml,
     setPrintHtml,
+    classReportHtml,
+    setClassReportHtml,
     reportPeriods,
     selectedReportPeriod,
     updateSelectedReportPeriod,

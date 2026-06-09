@@ -76,15 +76,28 @@ export default function Layout({
 
     // teacher portal
     const menuList = [
-      { view: 'inspections', label: '학생별 교재점검', icon: 'fa-clipboard-check' },
       { view: 'attendance', label: '출석부 및 상담 관리', icon: 'fa-calendar-check' },
+      { view: 'inspections', label: '학생별 교재점검', icon: 'fa-clipboard-check' },
       { view: 'reports', label: '학생별 보고서 출력', icon: 'fa-file-pdf' },
+      { divider: true },
       { view: 'setup', label: '반/학생 설정', icon: 'fa-users' },
       { view: 'bookSetup', label: '교재 관리', icon: 'fa-book' },
       { view: 'dashboard', label: '전체 대시보드', icon: 'fa-chart-pie' }
     ];
 
-    return menuList.map(item => {
+    return menuList.map((item, idx) => {
+      if (item.divider) {
+        return (
+          <div key={`divider-${idx}`} className="my-2 px-2">
+            <div style={{
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent 0%, #67e8f9 30%, #a5f3fc 50%, #67e8f9 70%, transparent 100%)',
+              boxShadow: '0 0 6px 1px rgba(103,232,249,0.5)',
+              borderRadius: '999px'
+            }} />
+          </div>
+        );
+      }
       const active = currentView === item.view;
       return (
         <button
@@ -128,8 +141,8 @@ export default function Layout({
     }
 
     const menuList = [
-      { view: 'inspections', label: '점검' },
       { view: 'attendance', label: '출석/상담' },
+      { view: 'inspections', label: '점검' },
       { view: 'reports', label: '보고서' },
       { view: 'setup', label: '반/학생 설정' },
       { view: 'bookSetup', label: '교재 관리' },

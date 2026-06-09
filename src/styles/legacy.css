@@ -1293,6 +1293,11 @@ details.group[open] summary span {
   page-break-inside: avoid;
 }
 
+.class-rubric-table th,
+.class-rubric-table td {
+  text-align: center !important;
+}
+
 /* 모바일에서도 표와 6요소 입력이 줄바꿈으로 자연스럽게 정리되도록 보정 */
 .rubric-score-row {
   padding: 0.65rem;
@@ -1506,97 +1511,155 @@ details.group[open] summary span {
   text-align: center !important;
 }
 
-/* OATIS 출석부 화면 표 높이 초압축 튜닝 */
+/* OATIS 출석부 화면 표 높이 — cellPadding 슬라이더로 조절 */
 .print-full-width table th {
-  padding: 4px 6px !important;
+  padding-top: var(--cell-padding-y, 4px) !important;
+  padding-bottom: var(--cell-padding-y, 4px) !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
 }
 .print-full-width table td {
-  padding: 2px 4px !important;
+  padding-top: var(--cell-padding-y, 2px) !important;
+  padding-bottom: var(--cell-padding-y, 2px) !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
 }
 
 @media print {
-  .attendance-print-root,
-  .attendance-print-root * {
+  body:has(.attendance-print-root) * {
+    visibility: hidden !important;
+  }
+
+  body:has(.attendance-print-root) .attendance-print-root,
+  body:has(.attendance-print-root) .attendance-print-root * {
     visibility: visible !important;
   }
 
+  body:has(.attendance-print-root) #printArea {
+    display: none !important;
+  }
+
   .attendance-print-root {
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 100% !important;
     max-width: none !important;
     min-height: auto !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #ffffff !important;
-    color: #111827 !important;
     box-shadow: none !important;
+    /* 기본 텍스트를 진한 색으로 — 자식 전체에 상속 */
+    color: #0f172a !important;
+  }
+
+  /* 모든 자식 요소 배경 흰색, 텍스트 진한 색으로 기본 설정 */
+  .attendance-print-root * {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-color: #cbd5e1 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  /* 흰 배경이 필요한 영역 */
+  .attendance-print-root,
+  .attendance-print-root .attendance-print-sheet {
+    background-color: #ffffff !important;
   }
 
   .attendance-print-root > * {
     border: 0 !important;
     border-radius: 0 !important;
-    box-shadow: none !important;
-    background: #ffffff !important;
     padding: 0 !important;
   }
 
   .attendance-print-root .attendance-print-sheet {
     border: 0 !important;
     border-radius: 0 !important;
-    box-shadow: none !important;
-    background: #ffffff !important;
     padding: 8px !important;
-    color: #111827 !important;
-  }
-
-  .attendance-print-root .attendance-print-sheet,
-  .attendance-print-root .attendance-print-sheet * {
-    color: #111827 !important;
   }
 
   .attendance-print-root .attendance-print-sheet .overflow-x-auto {
     overflow: visible !important;
   }
 
+  /* 표 스타일 */
   .attendance-print-root .attendance-print-sheet table {
     width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
     font-size: calc(10px * var(--attendance-print-scale, 1)) !important;
+    color: #0f172a !important;
   }
 
   .attendance-print-root .attendance-print-sheet th,
   .attendance-print-root .attendance-print-sheet td {
-    border: 1px solid #111827 !important;
-    background: #ffffff !important;
+    border: 1px solid #334155 !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
     padding: calc(5px * var(--attendance-print-scale, 1)) calc(4px * var(--attendance-print-scale, 1)) !important;
     text-align: center !important;
     vertical-align: middle !important;
-    white-space: normal !important;
     word-break: keep-all !important;
   }
 
-  .attendance-print-root .attendance-print-sheet th:first-child,
-  .attendance-print-root .attendance-print-sheet td:first-child {
-    width: 36px !important;
+  .attendance-print-root .attendance-print-sheet th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 800 !important;
   }
 
-  .attendance-print-root .attendance-print-sheet th:nth-child(2),
-  .attendance-print-root .attendance-print-sheet td:nth-child(2) {
-    width: 92px !important;
-  }
 
   .attendance-print-root .attendance-print-sheet h2 {
     font-size: calc(18px * var(--attendance-print-scale, 1)) !important;
-    color: #111827 !important;
+    color: #0f172a !important;
     margin-bottom: 4px !important;
   }
 
-  .attendance-print-root .attendance-print-sheet p,
-  .attendance-print-root .attendance-print-sheet div {
-    text-shadow: none !important;
-  }
+  /* 컬러 유지 — 출석/결석/지각/배지 (td/th 안에 있어도 적용되도록 specificity 높임) */
+  .attendance-print-root .attendance-print-sheet .text-emerald-400,
+  .attendance-print-root .attendance-print-sheet .text-emerald-300,
+  .attendance-print-root .text-emerald-400,
+  .attendance-print-root .text-emerald-300 { color: #059669 !important; }
+  .attendance-print-root .attendance-print-sheet .text-rose-400,
+  .attendance-print-root .attendance-print-sheet .text-rose-300,
+  .attendance-print-root .text-rose-400,
+  .attendance-print-root .text-rose-300 { color: #dc2626 !important; }
+  .attendance-print-root .attendance-print-sheet .text-amber-400,
+  .attendance-print-root .attendance-print-sheet .text-amber-300,
+  .attendance-print-root .text-amber-400,
+  .attendance-print-root .text-amber-300 { color: #d97706 !important; }
+  .attendance-print-root .attendance-print-sheet .text-cyan-300,
+  .attendance-print-root .attendance-print-sheet .text-cyan-400,
+  .attendance-print-root .text-cyan-300,
+  .attendance-print-root .text-cyan-400 { color: #0891b2 !important; }
+  .attendance-print-root .attendance-print-sheet .text-blue-400,
+  .attendance-print-root .attendance-print-sheet .text-blue-300,
+  .attendance-print-root .text-blue-400,
+  .attendance-print-root .text-blue-300 { color: #2563eb !important; }
+  .attendance-print-root .attendance-print-sheet .text-purple-400,
+  .attendance-print-root .attendance-print-sheet .text-purple-300,
+  .attendance-print-root .text-purple-400,
+  .attendance-print-root .text-purple-300 { color: #7c3aed !important; }
+
+  /* 컬러 배지 배경 유지 — 진한 배지 클래스만 (500/600/700 계열, /5 같은 투명 배경은 제외) */
+  .attendance-print-root .bg-emerald-500,
+  .attendance-print-root .bg-emerald-600,
+  .attendance-print-root .bg-emerald-700 { background-color: #059669 !important; color: #ffffff !important; }
+  .attendance-print-root .bg-rose-500,
+  .attendance-print-root .bg-rose-600,
+  .attendance-print-root .bg-rose-700 { background-color: #dc2626 !important; color: #ffffff !important; }
+  .attendance-print-root .bg-amber-500,
+  .attendance-print-root .bg-amber-600,
+  .attendance-print-root .bg-amber-700 { background-color: #d97706 !important; color: #ffffff !important; }
+  .attendance-print-root .bg-blue-500,
+  .attendance-print-root .bg-blue-600,
+  .attendance-print-root .bg-indigo-500,
+  .attendance-print-root .bg-indigo-600 { background-color: #2563eb !important; color: #ffffff !important; }
+  .attendance-print-root .bg-purple-500,
+  .attendance-print-root .bg-purple-600 { background-color: #7c3aed !important; color: #ffffff !important; }
 }
 
 

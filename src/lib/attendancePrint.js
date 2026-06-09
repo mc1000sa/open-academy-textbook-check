@@ -8,11 +8,23 @@ export function sortStudentsByPrintPin(students = []) {
 
 function formatStudentLabel(student = {}) {
   const name = student.name || '학생 미선택';
-  const schoolGrade = [student.school, student.grade]
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-    .join(' ');
-  return schoolGrade ? `${name} (${schoolGrade})` : name;
+  const school = String(student.school || '').trim();
+  const grade = String(student.grade || '').trim();
+
+  let combined = '';
+  if (school && grade) {
+    // 학교 끝글자(고/중/초)와 학년 시작글자가 같으면 붙여서 표현 (수억고 + 고1 → 수억고1)
+    const schoolType = school.slice(-1);
+    if (grade.startsWith(schoolType)) {
+      combined = school + grade.slice(1);
+    } else {
+      combined = school + ' ' + grade;
+    }
+  } else {
+    combined = school || grade;
+  }
+
+  return combined ? `${name} (${combined})` : name;
 }
 
 function buildBookBlock(lines = []) {
@@ -29,28 +41,71 @@ export function buildWithdrawalLog({
   dischargeDate = '',
   reason = '',
   bookLines = [],
-  mode = 'lastClass'
+  mode = 'lastClass',
+  attendanceStats = null,
+  dateRange = null,
+  lastClassDate = ''
 } = {}) {
-  const title = mode === 'detail' ? '출결 상세 보고' : '마지막 수업일 보고';
   const trimmedReason = String(reason || '').trim();
+  const studentLabel = formatStudentLabel(student);
 
-  return [
-    `#퇴원일지_${teacherName}`,
-    '',
-    `■ ${className} : ${formatStudentLabel(student)}`,
-    `■ 보고모드 : ${title}`,
-    `■ 퇴원일자 : ${dischargeDate || '-'}`,
-    '',
-    '● 퇴원과목 : 수학',
-    '',
-    '● 당월 교재 배부 내역',
-    buildBookBlock(bookLines),
-    '',
-    '● 퇴원 사유 및 상담내용',
-    trimmedReason || '- 상담 내용 미입력',
-    '',
-    '#원카반영 해주세요.'
-  ].join('\n');
+  // 출결 통계 라인
+  const buildAttendanceLine = () => {
+    if (!attendanceStats) return '- 기간 내 출결 기록 없음';
+    const { total, attend, absent, late } = attendanceStats;
+    return `- 기간 내 출결 통계: 총 수업 ${total}회 중 출석 ${attend}회, 결석 ${absent}회, 지각 ${late}회`;
+  };
+
+  // 마지막 수업일 포맷
+  const buildLastClassLine = () => {
+    if (!lastClassDate) return '- 마지막 수업일 : 기록 없음';
+    const d = new Date(lastClassDate);
+    if (isNaN(d)) return `- 마지막 수업일 : ${lastClassDate}`;
+    const mm = d.getMonth() + 1;
+    const dd = d.getDate();
+    const dayNames = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    return `- 마지막 수업일 : ${mm}월 ${dd}일 ${dayNames[d.getDay()]}`;
+  };
+
+  // 조회 기간 라인
+  const buildDateRangeLine = () => {
+    if (!dateRange) return '';
+    const { start, end, totalDays } = dateRange;
+    return `- 조회 기간: ${start} ~ ${end} (총 ${totalDays}일간)`;
+  };
+
+  if (mode === 'detail') {
+    return [
+      `#퇴원일지_${teacherName}`,
+      `■ ${studentLabel} : ${className}`,
+      '■ 퇴원과목 : 수학',
+      '■ 최근 수업 현황',
+      buildDateRangeLine(),
+      buildAttendanceLine(),
+      buildLastClassLine(),
+      '',
+      '■ 기간내 교재 배부',
+      buildBookBlock(bookLines),
+      '',
+      `■ 퇴원 사유 : ${trimmedReason || '상담 기록내용'}`,
+      '',
+      '#아카반영 해주세요.'
+    ].join('\n');
+  } else {
+    return [
+      `#퇴원일지_${teacherName}`,
+      `■ ${studentLabel} : ${className}`,
+      '■ 퇴원과목 : 수학',
+      buildLastClassLine(),
+      '',
+      '■ 기간내 교재 배부',
+      buildBookBlock(bookLines),
+      '',
+      `■ 퇴원 사유 : ${trimmedReason || '상담 기록내용'}`,
+      '',
+      '#아카반영 해주세요.'
+    ].join('\n');
+  }
 }
 
 export function fallbackCopyText(text, doc = document) {
