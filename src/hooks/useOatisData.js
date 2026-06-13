@@ -15,6 +15,7 @@ import {
   query,
   where
 } from '../services/firebaseService.js';
+import { getDefaultStaffView } from '../lib/staffNavigation.js';
 import {
   normalizeStandardUnitSubjects,
   DEFAULT_STANDARD_UNIT_SUBJECTS
@@ -98,7 +99,7 @@ export function useOatisData() {
   const [selectedTeacherName, setSelectedTeacherName] = useState('');
   const [pin, setPin] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [view, setView] = useState('inspections'); // inspections, reports, setup, bookSetup, teachersAdmin, dashboard
+  const [view, setView] = useState(getDefaultStaffView('teacher')); // attendance, inspections, reports, setup, bookSetup, teachersAdmin, dashboard
   
   // DB Collections
   const [teachers, setTeachers] = useState([]);
@@ -471,7 +472,7 @@ export function useOatisData() {
         if (matched) {
           setCurrentTeacher(matched);
           setPortal('admin');
-          setView('teachersAdmin');
+          setView(getDefaultStaffView(matched.role));
           return;
         }
       } catch (e) {}
@@ -486,7 +487,7 @@ export function useOatisData() {
         if (matched) {
           setCurrentTeacher(matched);
           setPortal('teacher');
-          setView('inspections');
+          setView(getDefaultStaffView(matched.role));
           
           const teacherClasses = classes.filter(c => c.teacherId === matched.id);
           const firstClass = teacherClasses[0];
@@ -668,12 +669,12 @@ export function useOatisData() {
     if (teacher.role === 'admin') {
       window.localStorage?.setItem(ADMIN_SESSION_KEY, JSON.stringify(teacher));
       setPortal('admin');
-      setView('teachersAdmin');
+      setView(getDefaultStaffView(teacher.role));
     } else {
       window.localStorage?.setItem(TEACHER_SESSION_KEY, JSON.stringify(teacher));
       window.localStorage?.setItem(LAST_TEACHER_ID_KEY, teacher.id);
       setPortal('teacher');
-      setView('inspections');
+      setView(getDefaultStaffView(teacher.role));
     }
     notify('로그인 성공!');
     return true;

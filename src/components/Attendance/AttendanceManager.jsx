@@ -17,6 +17,13 @@ import {
   copyTextSafely,
   sortStudentsByPrintPin
 } from '../../lib/attendancePrint.js';
+import { getAttendancePresetRange } from '../../lib/attendanceDates.js';
+import { buildStudentHistoryItems } from '../../lib/attendanceHistory.js';
+import {
+  DEFAULT_PARENT_CONSULT_TAG,
+  PARENT_CONSULT_TAGS,
+  normalizeParentConsultTag
+} from '../../lib/attendanceConsultation.js';
 
 // 날짜 범위 생성 유틸 (YYYY-MM-DD 형태의 배열 반환, 최대 31일 제한)
 const getDateRange = (start, end) => {
@@ -219,6 +226,12 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     }
   };
 
+  const handlePresetRange = (preset) => {
+    const range = getAttendancePresetRange(preset);
+    setStartDate(range.start);
+    setEndDate(range.end);
+  };
+
   // 날짜 컬럼 생성 (체크된 요일에 해당하는 날짜만 필터링)
   const dateColumns = useMemo(() => {
     if (!startDate || !endDate) return [];
@@ -394,6 +407,14 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     };
   }, [db, selectedStudent]);
 
+  const historyItems = useMemo(() => {
+    return buildStudentHistoryItems({
+      studentId: selectedStudent?.id || '',
+      attendanceData,
+      consultingList
+    });
+  }, [selectedStudent?.id, attendanceData, consultingList]);
+
   // 출석 상태 클릭 저장
   const saveAttendanceStatus = async (student, date, statusValue) => {
     if (!db) return;
@@ -412,7 +433,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
       ...prev,
       [key]: {
         status: finalStatus,
-        note: finalStatus === '미체크' ? '' : (prev[key]?.note || '')
+        note: ''
       }
     }));
 
@@ -424,7 +445,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
         classId: selectedClassId,
         className: selectedClass?.name || '',
         status: finalStatus,
-        note: finalStatus === '미체크' ? '' : (attendanceData[key]?.note || ''),
+        note: '',
         updatedAt: serverTimestamp(),
         updatedBy: state.currentTeacher?.name || '시스템'
       });
@@ -472,22 +493,10 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     }
   };
 
-  // 출석부 결석/지각 버튼 클릭 시 모달 열기 (학생 선택 + 날짜 지정)
-  const openAttendanceModal = (student, date, type) => {
+  // 출석 버튼을 누른 학생으로 우측 상세 패널을 전환하고 상태만 저장합니다.
+  const handleAttendanceStatusClick = (student, date, status) => {
     setSelectedStudent(student);
-    setActiveModal(type);
-    setEditingLogId(null);
-    setModalContent('');
-    setModalExtraContent('');
-    setModalDate(date);
-    setCopiedText('');
-    setBookPrice('');
-    setApplyToAll(false);
-    if (type === 'absent_reason') {
-      setModalTag('병결');
-    } else if (type === 'late_reason') {
-      setModalTag('늦잠');
-    }
+    saveAttendanceStatus(student, date, status);
   };
 
   // 신규 모달 열기 헬퍼
@@ -505,7 +514,9 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     setBookPrice('');
     setApplyToAll(false);
 
-    if (type === 'parent_consult' || type === 'student_consult') {
+    if (type === 'parent_consult') {
+      setModalTag(DEFAULT_PARENT_CONSULT_TAG);
+    } else if (type === 'student_consult') {
       setModalTag('정기상담');
     } else if (type === 'discharge_consult') {
       setModalTag('학부모 상담');
@@ -537,17 +548,28 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     if (item.category === '상담') {
       if (rawContent.includes('[학부모 상담')) {
         setActiveModal('parent_consult');
-        setModalTag(tag || '정기상담');
+        setModalTag(normalizeParentConsultTag(tag));
       } else {
         setActiveModal('student_consult');
         setModalTag(tag || '정기상담');
       }
-    } else if (item.category === '퇴원상담') {
+    } else if (
+      item.category === '진로상담'
+      || (item.category === '퇴원상담' && rawContent.startsWith('[퇴원 상담 -'))
+    ) {
       setActiveModal('discharge_consult');
       setModalTag(tag || '학부모 상담');
     } else if (item.category === '출결') {
-      setActiveModal('absent_reason');
-      setModalTag(tag || '병결');
+      const isLate = item.attendanceStatus === '지각' || rawContent.includes('지각');
+      setActiveModal(isLate ? 'late_reason' : 'absent_reason');
+      setModalTag(tag || (isLate ? '늦잠' : '병결'));
+
+      if (isLate) {
+        const timeMatch = rawContent.match(/\((\d+)분 지각\)/);
+        const detail = cleanContent.replace(/^\(\d+분 지각\)\s*/, '');
+        setModalContent(timeMatch?.[1] || '');
+        setModalExtraContent(detail);
+      }
     } else if (item.category === '교재배부') {
       setActiveModal('book_dist');
       // 교재명 파싱 (기존 포맷과 신규 포맷 모두 지원)
@@ -620,8 +642,8 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
       } 
       
       else if (activeModal === 'discharge_consult') {
-        if (!modalContent.trim()) return showModalAlert("퇴원 상담 내용을 입력해주세요.");
-        const formattedContent = `[퇴원 상담 - ${modalTag}] ${modalContent.trim()}`;
+        if (!modalContent.trim()) return showModalAlert("진로 상담 내용을 입력해주세요.");
+        const formattedContent = `[진로 상담 - ${modalTag}] ${modalContent.trim()}`;
 
         if (editingLogId) {
           await updateDoc(doc(db, 'consulting', editingLogId), {
@@ -630,18 +652,18 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
             updatedAt: serverTimestamp(),
             updatedBy: state.currentTeacher?.name || '시스템'
           });
-          notify("퇴원상담 기록이 수정되었습니다.");
+          notify("진로상담 기록이 수정되었습니다.");
         } else {
           await addDoc(collection(db, 'consulting'), {
             studentId: selectedStudent.id,
             studentName: selectedStudent.name,
             date: modalDate,
-            category: '퇴원상담',
+            category: '진로상담',
             content: formattedContent,
             updatedAt: serverTimestamp(),
             updatedBy: state.currentTeacher?.name || '시스템'
           });
-          notify("퇴원상담 기록이 저장되었습니다.");
+          notify("진로상담 기록이 저장되었습니다.");
         }
         setActiveModal(null);
       } 
@@ -1215,6 +1237,23 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                   </div>
                 </div>
 
+                <div className="flex items-center gap-1.5 border-l border-slate-800 pl-4">
+                  {[
+                    { key: '2weeks', label: '2주 조회' },
+                    { key: '3weeks', label: '3주 조회' },
+                    { key: 'month', label: '한달 조회' }
+                  ].map(option => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => handlePresetRange(option.key)}
+                      className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1.5 text-[9px] font-black text-cyan-300 transition-colors hover:bg-cyan-500/20"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+
                 {/* 반별 출석 요일 지정 체크박스 */}
                 <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
                   <span className="text-[10px] font-black text-slate-400 tracking-wider">출석부 요일 지정:</span>
@@ -1344,7 +1383,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                   {/* 가독성 높은 3단 출석/결석/지각 텍스트 버튼 */}
                                   <div className="flex gap-0.5 bg-slate-900 p-[1px] rounded-lg border border-slate-850 w-full justify-center max-w-[130px] mx-auto">
                                     <button 
-                                      onClick={(e) => { e.stopPropagation(); saveAttendanceStatus(student, date, '출석'); }}
+                                      onClick={(e) => { e.stopPropagation(); handleAttendanceStatusClick(student, date, '출석'); }}
                                       className={`px-1 py-0.5 rounded-md text-[8.5px] font-black transition-all ${
                                         status === '출석' 
                                           ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20' 
@@ -1356,11 +1395,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (status === '결석') {
-                                          saveAttendanceStatus(student, date, '결석'); // 토글 해제
-                                        } else {
-                                          openAttendanceModal(student, date, 'absent_reason');
-                                        }
+                                        handleAttendanceStatusClick(student, date, '결석');
                                       }}
                                       className={`px-1 py-0.5 rounded-md text-[8.5px] font-black transition-all ${
                                         status === '결석'
@@ -1373,11 +1408,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (status === '지각') {
-                                          saveAttendanceStatus(student, date, '지각'); // 토글 해제
-                                        } else {
-                                          openAttendanceModal(student, date, 'late_reason');
-                                        }
+                                        handleAttendanceStatusClick(student, date, '지각');
                                       }}
                                       className={`px-1 py-0.5 rounded-md text-[8.5px] font-black transition-all ${
                                         status === '지각'
@@ -1502,7 +1533,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                         onClick={() => openActionModal('discharge_consult')}
                         className="py-1.5 rounded-xl text-[9px] font-extrabold bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 transition-all text-center whitespace-nowrap"
                       >
-                        퇴원 상담
+                        진로 상담
                       </button>
                     </div>
                     {/* 2행 버튼 */}
@@ -1536,12 +1567,13 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 </h3>
                 
                 <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 max-h-[360px] xl:max-h-none mini-scroll">
-                  {consultingList.length > 0 ? (
-                    consultingList.map(item => {
+                  {historyItems.length > 0 ? (
+                    historyItems.map(item => {
                       let catBadgeColor = 'bg-teal-500/10 text-teal-400 border border-teal-500/20';
-                      if (item.category === '상담') catBadgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
-                      else if (item.category === '출결') catBadgeColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-                      else if (item.category === '퇴원상담') catBadgeColor = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                      if (item.displayCategory === '상담') catBadgeColor = 'bg-purple-500/10 text-purple-400 border border-purple-500/20';
+                      else if (item.displayCategory === '결석') catBadgeColor = 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                      else if (item.displayCategory === '지각') catBadgeColor = 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+                      else if (item.displayCategory === '진로상담') catBadgeColor = 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
 
                       return (
                         <div key={item.id} className="flex gap-3 items-start border-l-2 border-slate-800 pl-4 py-1.5 relative group/item">
@@ -1550,28 +1582,34 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                             <div className="flex justify-between items-center">
                               <div className="flex items-center gap-1.5">
                                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${catBadgeColor}`}>
-                                  {item.category}
+                                  {item.displayCategory}
                                 </span>
                                 <span className="text-[10px] text-slate-550 font-mono">{item.date}</span>
                               </div>
                               
                               {/* 수정 / 삭제 상시 제어 버튼 그룹 */}
-                              <div className="flex gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => openEditConsultingModal(item)}
-                                  className="text-[9px] text-slate-400 hover:text-cyan-400 transition-colors"
-                                >
-                                  수정
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteConsulting(item.id)}
-                                  className="text-[9px] text-slate-400 hover:text-rose-400 transition-colors"
-                                >
-                                  삭제
-                                </button>
-                              </div>
+                              {item.source === 'consulting' && (
+                                <div className="flex gap-1.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                  {item.canEdit !== false && (
+                                    <button
+                                      onClick={() => openEditConsultingModal(item)}
+                                      className="text-[9px] text-slate-400 hover:text-cyan-400 transition-colors"
+                                    >
+                                      수정
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeleteConsulting(item.id)}
+                                    className="text-[9px] text-slate-400 hover:text-rose-400 transition-colors"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-xs text-slate-300 mt-2.5 leading-relaxed whitespace-pre-wrap">{item.content}</p>
+                            {item.displayContent && (
+                              <p className="text-xs text-slate-300 mt-2.5 leading-relaxed whitespace-pre-wrap">{item.displayContent}</p>
+                            )}
 
                           </div>
                         </div>
@@ -1986,13 +2024,13 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               {activeModal === 'parent_consult' && (
                 <div>
                   <span className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">상담 태그</span>
-                  <div className="flex gap-1.5">
-                    {['정기상담', '성적상담', '학습상담'].map(tag => (
+                  <div className="grid grid-cols-4 gap-1">
+                    {PARENT_CONSULT_TAGS.map(tag => (
                       <button
                         key={tag}
                         type="button"
                         onClick={() => setModalTag(tag)}
-                        className={`flex-1 py-2 rounded-xl text-xs font-extrabold border transition-all ${
+                        className={`min-w-0 whitespace-nowrap py-2 px-1 rounded-xl text-[10px] font-extrabold border transition-all ${
                           modalTag === tag ? 'bg-purple-600 text-white border-transparent' : 'bg-slate-950 text-slate-550 border-slate-850'
                         }`}
                       >
@@ -2025,7 +2063,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
 
               {activeModal === 'discharge_consult' && (
                 <div>
-                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">퇴원 상담 대상</span>
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">진로 상담 대상</span>
                   <div className="flex gap-1.5">
                     {['학부모 상담', '학생 상담', '모두 상담'].map(tag => (
                       <button
