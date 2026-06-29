@@ -137,10 +137,15 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
   const [outputStudentId, setOutputStudentId] = useState('');
   const [outputStartDate, setOutputStartDate] = useState(getThisWeekRange().start);
   const [outputEndDate, setOutputEndDate] = useState(getThisWeekRange().end);
-  const [outputMode, setOutputMode] = useState('class'); // 'class' | 'student'
+  const [outputMode, setOutputMode] = useState('class'); // 'class' | 'student' | 'consult'
   const [printScale, setPrintScale] = useState('100');
   const [outputClassSort, setOutputClassSort] = useState('name'); // 'name' | 'absent_desc' | 'late_desc'
   const [withdrawalReportMode, setWithdrawalReportMode] = useState('lastClass');
+  // 기간별 상담일지 전용 상태
+  const [consultPeriodData, setConsultPeriodData] = useState([]); // 기간 내 전체 상담 목록
+  const [consultSortField, setConsultSortField] = useState('date'); // 정렬 기준 컬럼
+  const [consultSortDir, setConsultSortDir] = useState('asc'); // 'asc' | 'desc'
+  const [consultCopied, setConsultCopied] = useState(false); // 복사 완료 피드백
   const printScaleValue = Number(printScale) / 100;
 
   // Firebase DB 인스턴스 획득
@@ -1017,6 +1022,59 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
     return () => unsubConsult();
   }, [db, activeTab, outputStudentId]);
 
+  // 기간별 상담일지: 강사 담당 반 전체의 상담 기록 구독
+  useEffect(() => {
+    if (!db || activeTab !== 'output' || outputMode !== 'consult') {
+      setConsultPeriodData([]);
+      return;
+    }
+    // 강사 담당 반 학생 ID 목록 추출
+    const myStudentIds = (state.allStudents || [])
+      .filter(s => s.deleted !== true && availableClasses.some(c => c.id === s.classId || c.id === s.previousClassId))
+      .map(s => s.id);
+
+    if (myStudentIds.length === 0) {
+      setConsultPeriodData([]);
+      return;
+    }
+
+    // Firestore in 쿼리는 최대 30개 제한이므로 배치 처리
+    const BATCH = 30;
+    const batches = [];
+    for (let i = 0; i < myStudentIds.length; i += BATCH) {
+      batches.push(myStudentIds.slice(i, i + BATCH));
+    }
+
+    let allDocs = [];
+    const unsubs = [];
+    let active = true;
+
+    const merge = (batchDocs) => {
+      // batchDocs를 전역 목록에 추가 후 갱신
+      allDocs = allDocs.filter(d => !batchDocs.some(bd => bd.id === d.id));
+      allDocs = [...allDocs, ...batchDocs];
+      if (active) setConsultPeriodData([...allDocs]);
+    };
+
+    batches.forEach(batch => {
+      const q = query(
+        collection(db, 'consulting'),
+        where('studentId', 'in', batch),
+        where('category', '==', '상담')
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        merge(docs);
+      }, (err) => console.error('consultPeriod sub error:', err));
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      active = false;
+      unsubs.forEach(u => u());
+    };
+  }, [db, activeTab, outputMode, state.allStudents, availableClasses]);
+
   // 출력 화면용 날짜 컬럼 생성 (기록된 날짜만)
   const outputClassRecordedDates = useMemo(() => {
     if (!outputClassId || !outputStartDate || !outputEndDate) return [];
@@ -1637,7 +1695,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
       {activeTab === 'output' && (
         <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl flex flex-col print-full-width w-full">
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 no-print">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button 
                 onClick={() => setOutputMode('class')}
                 className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all ${
@@ -1658,6 +1716,16 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               >
                 개인별 출결 현황 출력
               </button>
+              <button 
+                onClick={() => setOutputMode('consult')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all ${
+                  outputMode === 'consult' 
+                    ? 'bg-purple-600 text-white border-transparent' 
+                    : 'bg-slate-950/60 text-slate-400 border-slate-850 hover:text-slate-200'
+                }`}
+              >
+                📋 기간별 상담내역 출력
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1674,12 +1742,14 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 />
                 <span className="text-[9px] font-mono font-bold text-slate-300 w-8 text-right">{printScale}%</span>
               </div>
-              <button 
-                onClick={handlePrint}
-                className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-              >
-                🖨️ 인쇄하기
-              </button>
+              {outputMode !== 'consult' && (
+                <button 
+                  onClick={handlePrint}
+                  className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                >
+                  🖨️ 인쇄하기
+                </button>
+              )}
             </div>
           </div>
 
@@ -1961,6 +2031,274 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               </div>
             </div>
           )}
+
+          {/* ----------------------------------------------------------------- */}
+          {/* 출력 뷰 C: 기간별 상담일지 (표 + 텍스트 복붙) */}
+          {/* ----------------------------------------------------------------- */}
+          {outputMode === 'consult' && (() => {
+            // 기간 필터링
+            const filteredConsults = consultPeriodData.filter(c =>
+              c.date >= outputStartDate && c.date <= outputEndDate
+            );
+
+            // 학생 정보 룩업
+            const getStudent = (sid) => (state.allStudents || []).find(s => s.id === sid);
+            const getClass = (sid) => {
+              const s = getStudent(sid);
+              if (!s) return null;
+              return availableClasses.find(c => c.id === s.classId) || null;
+            };
+
+            // 상담대상 추출 (content 파싱)
+            const getTarget = (content) => {
+              if (!content) return '-';
+              if (content.includes('학부모 상담')) return '학부모';
+              if (content.includes('학생 상담')) return '학생';
+              return '-';
+            };
+
+            // content에서 태그 제거한 실제 내용 추출
+            const getCleanContent = (content) => {
+              if (!content) return '-';
+              return content.replace(/^\[.*?\]\s*/, '').trim() || content;
+            };
+
+            // 날짜 포맷: M월 D일 (요일)
+            const formatConsultDate = (dateStr) => {
+              if (!dateStr) return '-';
+              const d = new Date(dateStr);
+              if (isNaN(d)) return dateStr;
+              const m = d.getMonth() + 1;
+              const day = d.getDate();
+              const days = ['일', '월', '화', '수', '목', '금', '토'];
+              return `${m}월 ${day}일 (${days[d.getDay()]})`;
+            };
+
+            // 기간 표시: M/D(요일)~M/D(요일)
+            const formatPeriodLabel = (s, e) => {
+              const fmt = (str) => {
+                const d = new Date(str);
+                if (isNaN(d)) return str;
+                const days = ['일', '월', '화', '수', '목', '금', '토'];
+                return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+              };
+              return `${fmt(s)}~${fmt(e)}`;
+            };
+
+            // 행 데이터 생성
+            const rows = filteredConsults.map((c, idx) => {
+              const student = getStudent(c.studentId);
+              const cls = getClass(c.studentId);
+              return {
+                _id: c.id,
+                no: idx + 1,
+                studentName: student?.name || c.studentName || '-',
+                schoolGrade: (() => {
+                  const school = student?.school || '';
+                  const grade = student?.grade || cls?.grade || '';
+                  if (school && grade) return `${school}${grade}`;
+                  return school || grade || '-';
+                })(),
+                className: cls?.name || '-',
+                target: getTarget(c.content),
+                date: c.date || '',
+                dateLabel: formatConsultDate(c.date),
+                content: getCleanContent(c.content),
+                studentId: c.studentId,
+              };
+            });
+
+            // 정렬
+            const sortedRows = [...rows].sort((a, b) => {
+              let av = a[consultSortField] || '';
+              let bv = b[consultSortField] || '';
+              if (consultSortField === 'no') { av = a.no; bv = b.no; }
+              const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ko');
+              return consultSortDir === 'asc' ? cmp : -cmp;
+            });
+
+            const handleConsultSort = (field) => {
+              if (consultSortField === field) {
+                setConsultSortDir(d => d === 'asc' ? 'desc' : 'asc');
+              } else {
+                setConsultSortField(field);
+                setConsultSortDir('asc');
+              }
+            };
+
+            const sortIcon = (field) => {
+              if (consultSortField !== field) return <span className="text-slate-600 ml-1">⇅</span>;
+              return <span className="text-cyan-400 ml-1">{consultSortDir === 'asc' ? '↑' : '↓'}</span>;
+            };
+
+            const teacherName = state.currentTeacher?.name || '강사';
+            const periodLabel = formatPeriodLabel(outputStartDate, outputEndDate);
+            const title = `${teacherName} 상담일지`;
+            const subtitle = `(상담기간 : ${periodLabel})`;
+
+            // 텍스트 복붙용 내용 생성
+            const generateTextReport = () => {
+              let text = `${title}\n${subtitle}\n`;
+              // 학생별 그룹핑 (날짜순 정렬 기준)
+              const byStudent = {};
+              sortedRows.forEach(row => {
+                if (!byStudent[row.studentId]) byStudent[row.studentId] = [];
+                byStudent[row.studentId].push(row);
+              });
+
+              // 날짜 순으로 첫 등장 순서로 학생 순서 결정
+              const studentOrder = [];
+              sortedRows.forEach(row => {
+                if (!studentOrder.includes(row.studentId)) studentOrder.push(row.studentId);
+              });
+
+              studentOrder.forEach(sid => {
+                const entries = byStudent[sid];
+                const first = entries[0];
+                text += `\n▶ ${first.studentName} (${first.schoolGrade}) \n`;
+                text += `- ${first.className}\n`;
+                entries.forEach(e => {
+                  text += `- 상담대상 : ${e.target}\n`;
+                  text += `- 상담일시 : ${e.dateLabel}\n`;
+                  text += `- 상담내용 : ${e.content}\n`;
+                });
+              });
+              return text;
+            };
+
+            const handleCopyText = () => {
+              const text = generateTextReport();
+              copyTextSafely(text);
+              setConsultCopied(true);
+              setTimeout(() => setConsultCopied(false), 2000);
+            };
+
+            return (
+              <div className="space-y-6">
+                {/* 기간 선택 컨트롤 */}
+                <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 flex flex-wrap gap-4 items-center no-print">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-slate-400 tracking-wider">상담 기간:</span>
+                    <div className="relative">
+                      <input type="date" value={outputStartDate} onChange={e => setOutputStartDate(e.target.value)}
+                        onClick={e => { try { e.target.showPicker(); } catch(err) {} }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
+                      <button className="border border-slate-800 bg-slate-900 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono min-w-[150px] flex items-center justify-center">
+                        {formatDateWithDay(outputStartDate)}
+                      </button>
+                    </div>
+                    <span className="text-slate-650 font-black">~</span>
+                    <div className="relative">
+                      <input type="date" value={outputEndDate} onChange={e => setOutputEndDate(e.target.value)}
+                        onClick={e => { try { e.target.showPicker(); } catch(err) {} }}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
+                      <button className="border border-slate-800 bg-slate-900 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono min-w-[150px] flex items-center justify-center">
+                        {formatDateWithDay(outputEndDate)}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-bold">
+                    총 <span className="text-purple-400 font-black">{filteredConsults.length}</span>건 상담 내역
+                  </div>
+                </div>
+
+                {filteredConsults.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl">
+                    선택 기간 내 상담 내역이 없습니다.
+                  </div>
+                ) : (
+                  <div className="grid lg:grid-cols-2 gap-6">
+
+                    {/* 좌측: 인쇄용 표 */}
+                    <div className="attendance-print-sheet bg-slate-950/40 rounded-2xl border border-slate-850 p-5" style={{ zoom: printScaleValue }}>
+                      <div className="mb-4">
+                        <h2 className="text-base font-black text-slate-100 text-center">{title}</h2>
+                        <p className="text-xs text-slate-400 text-center mt-1">{subtitle}</p>
+                      </div>
+
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="no-print">
+                          <button
+                            onClick={handlePrint}
+                            className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-[10px] font-extrabold px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5"
+                          >
+                            🖨️ 인쇄하기
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-[11px]">
+                          <thead>
+                            <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                              {[
+                                { field: 'no', label: 'No' },
+                                { field: 'studentName', label: '학생명' },
+                                { field: 'schoolGrade', label: '학교학년' },
+                                { field: 'className', label: '학원반' },
+                                { field: 'target', label: '상담대상' },
+                                { field: 'date', label: '상담일시' },
+                                { field: 'content', label: '상담내용' },
+                              ].map(col => (
+                                <th
+                                  key={col.field}
+                                  onClick={() => handleConsultSort(col.field)}
+                                  className="p-2.5 border border-slate-800 font-black cursor-pointer whitespace-nowrap select-none hover:bg-slate-800/60 transition-colors"
+                                >
+                                  {col.label}{sortIcon(col.field)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedRows.map((row, idx) => (
+                              <tr key={row._id} className={`border-b border-slate-850/60 ${idx % 2 === 0 ? '' : 'bg-slate-900/20'}`}>
+                                <td className="p-2.5 text-center border border-slate-800 text-slate-500 font-bold">{idx + 1}</td>
+                                <td className="p-2.5 border border-slate-800 font-bold text-slate-200 whitespace-nowrap">{row.studentName}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap">{row.schoolGrade}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap">{row.className}</td>
+                                <td className="p-2.5 border border-slate-800 text-center whitespace-nowrap">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                    row.target === '학부모' ? 'bg-purple-500/15 text-purple-300' : 'bg-cyan-500/15 text-cyan-300'
+                                  }`}>{row.target}</span>
+                                </td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap font-mono">{row.dateLabel}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-300 leading-relaxed min-w-[160px]">{row.content}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 우측: 텍스트 복붙용 */}
+                    <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-5 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-200">📤 텍스트 복붙용</h3>
+                          <p className="text-[10px] text-slate-500 mt-0.5">밴드·채팅 직접 보고용</p>
+                        </div>
+                        <button
+                          onClick={handleCopyText}
+                          className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                            consultCopied
+                              ? 'bg-emerald-600/80 text-white'
+                              : 'bg-purple-600/80 hover:bg-purple-600 text-white'
+                          }`}
+                        >
+                          {consultCopied ? '✅ 복사됨!' : '📋 전체 복사'}
+                        </button>
+                      </div>
+
+                      <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-xl p-4 overflow-y-auto font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap select-all" style={{ minHeight: '300px', maxHeight: '600px' }}>
+                        {generateTextReport()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
