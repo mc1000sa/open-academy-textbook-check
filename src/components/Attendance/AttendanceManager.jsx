@@ -2111,13 +2111,19 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               };
             });
 
-            // 정렬
+            // 정렬 (1차 정렬이 같은 경우 이름순 -> 날짜순 복합 정렬 보장)
             const sortedRows = [...rows].sort((a, b) => {
               let av = a[consultSortField] || '';
               let bv = b[consultSortField] || '';
               if (consultSortField === 'no') { av = a.no; bv = b.no; }
               const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ko');
-              return consultSortDir === 'asc' ? cmp : -cmp;
+              if (cmp !== 0) return consultSortDir === 'asc' ? cmp : -cmp;
+
+              if (consultSortField !== 'studentName') {
+                const nameCmp = String(a.studentName || '').localeCompare(String(b.studentName || ''), 'ko');
+                if (nameCmp !== 0) return nameCmp;
+              }
+              return String(a.date || '').localeCompare(String(b.date || ''));
             });
 
             const handleConsultSort = (field) => {
@@ -2187,33 +2193,6 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
 
             return (
               <div className="space-y-6">
-                {/* 기간 선택 컨트롤 */}
-                <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 flex flex-wrap gap-4 items-center no-print">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-slate-400 tracking-wider">상담 기간:</span>
-                    <div className="relative">
-                      <input type="date" value={outputStartDate} onChange={e => setOutputStartDate(e.target.value)}
-                        onClick={e => { try { e.target.showPicker(); } catch(err) {} }}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
-                      <button className="border border-slate-800 bg-slate-900 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono min-w-[150px] flex items-center justify-center">
-                        {formatDateWithDay(outputStartDate)}
-                      </button>
-                    </div>
-                    <span className="text-slate-650 font-black">~</span>
-                    <div className="relative">
-                      <input type="date" value={outputEndDate} onChange={e => setOutputEndDate(e.target.value)}
-                        onClick={e => { try { e.target.showPicker(); } catch(err) {} }}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" />
-                      <button className="border border-slate-800 bg-slate-900 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono min-w-[150px] flex items-center justify-center">
-                        {formatDateWithDay(outputEndDate)}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-bold">
-                    총 <span className="text-purple-400 font-black">{filteredConsults.length}</span>건 상담 내역
-                  </div>
-                </div>
-
                 {filteredConsults.length === 0 ? (
                   <div className="p-12 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl">
                     선택 기간 내 상담 내역이 없습니다.
@@ -2224,17 +2203,14 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                     {/* 좌측: 인쇄용 표 */}
                     <div className="attendance-print-sheet bg-slate-950/40 rounded-2xl border border-slate-850 p-5" style={{ zoom: printScaleValue }}>
                       <div className="mb-4 border-b border-slate-800/60 pb-3">
-                        <h2 className="text-base font-black text-slate-100 text-left pl-2.5">{title}</h2>
-                        <p className="text-xs text-slate-400 text-left pl-2.5 mt-1">{subtitle}</p>
-                      </div>
-
-                      {/* 인쇄 가능 미니 요약 현황판 */}
-                      <div className="mb-4 flex gap-4 text-[10px] text-slate-400 font-bold border border-slate-800/80 p-2.5 rounded-xl bg-slate-900/30 consult-summary-bar">
-                        <div>총 상담건수: <span className="text-slate-200 font-extrabold">{sortedRows.length}건</span></div>
-                        <div className="text-slate-700">|</div>
-                        <div>학부모 상담: <span className="text-purple-450 font-extrabold">{sortedRows.filter(r => r.target === '학부모').length}건</span></div>
-                        <div className="text-slate-700">|</div>
-                        <div>학생 상담: <span className="text-cyan-455 font-extrabold">{sortedRows.filter(r => r.target === '학생').length}건</span></div>
+                        <h2 className="text-[20px] font-black text-left pl-2.5 flex items-center gap-1.5 leading-snug">
+                          <span className="text-slate-500 font-normal text-lg">|</span>
+                          <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent font-black consult-title-gradient">
+                            {teacherName}
+                          </span>
+                          <span className="text-slate-100 font-extrabold">상담일지</span>
+                        </h2>
+                        <p className="text-[11px] text-slate-500 text-left pl-2.5 mt-1 tracking-wide">{subtitle}</p>
                       </div>
 
                       <div className="overflow-x-auto">
