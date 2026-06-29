@@ -1746,12 +1746,12 @@ details.group[open] summary span {
     margin-bottom: 4px !important;
   }
 
-  /* 3열 레이아웃 그리드 설정 */
+  /* 3열 레이아웃 그리드 설정 (가운데 정렬) */
   .attendance-print-root .consult-print-card-grid {
     display: grid !important;
     grid-template-columns: 220px 145px 1fr !important;
     gap: 16px !important;
-    align-items: start !important;
+    align-items: center !important;
     width: 100% !important;
   }
 
@@ -1763,7 +1763,7 @@ details.group[open] summary span {
     margin-bottom: 3px !important;
   }
   .attendance-print-root .consult-print-card-col-student .student-name {
-    font-size: 14px !important;
+    font-size: 15.5px !important; /* 이름 10% 확대 */
     font-weight: 850 !important;
     color: #0f172a !important; /* 이름은 제일 크고 굵게 */
   }
@@ -1789,11 +1789,11 @@ details.group[open] summary span {
     font-family: monospace !important;
   }
 
-  /* 3열: 상담내용 */
+  /* 3열: 상담내용 (폰트 10% 확대 및 진한 검정색 적용) */
   .attendance-print-root .consult-print-card-col-content {
-    font-size: 11px !important;
+    font-size: 12px !important;
     line-height: 1.55 !important;
-    color: #334155 !important;
+    color: #000000 !important; /* 진한 검정색 */
     text-align: left !important;
     word-break: break-all !important;
     white-space: pre-wrap !important;
