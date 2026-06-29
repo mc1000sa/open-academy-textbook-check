@@ -1742,14 +1742,12 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 />
                 <span className="text-[9px] font-mono font-bold text-slate-300 w-8 text-right">{printScale}%</span>
               </div>
-              {outputMode !== 'consult' && (
-                <button 
-                  onClick={handlePrint}
-                  className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-                >
-                  🖨️ 인쇄하기
-                </button>
-              )}
+              <button 
+                onClick={handlePrint}
+                className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                🖨️ 인쇄하기
+              </button>
             </div>
           </div>
 
@@ -2049,6 +2047,16 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               return availableClasses.find(c => c.id === s.classId) || null;
             };
 
+            // 학교 학년 중복 제거 포맷터 (파주고 + 고1 => 파주고1)
+            const formatSchoolGrade = (school, grade) => {
+              const s = school || '';
+              const g = grade || '';
+              if (s.endsWith('고') && g.startsWith('고')) {
+                return s + g.slice(1);
+              }
+              return s + g;
+            };
+
             // 상담대상 추출 (content 파싱)
             const getTarget = (content) => {
               if (!content) return '-';
@@ -2093,12 +2101,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 _id: c.id,
                 no: idx + 1,
                 studentName: student?.name || c.studentName || '-',
-                schoolGrade: (() => {
-                  const school = student?.school || '';
-                  const grade = student?.grade || cls?.grade || '';
-                  if (school && grade) return `${school}${grade}`;
-                  return school || grade || '-';
-                })(),
+                schoolGrade: formatSchoolGrade(student?.school, student?.grade || cls?.grade),
                 className: cls?.name || '-',
                 target: getTarget(c.content),
                 date: c.date || '',
@@ -2131,9 +2134,15 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
               return <span className="text-cyan-400 ml-1">{consultSortDir === 'asc' ? '↑' : '↓'}</span>;
             };
 
-            const teacherName = state.currentTeacher?.name || '강사';
+            const getCleanTeacherName = (name) => {
+              if (!name) return '강사';
+              const clean = name.replace(/\s*[Tt]\s*$/, '').trim();
+              return `${clean}t`;
+            };
+
+            const teacherName = getCleanTeacherName(state.currentTeacher?.name);
             const periodLabel = formatPeriodLabel(outputStartDate, outputEndDate);
-            const title = `${teacherName} 상담일지`;
+            const title = `| ${teacherName} 상담일지`;
             const subtitle = `(상담기간 : ${periodLabel})`;
 
             // 텍스트 복붙용 내용 생성
@@ -2157,7 +2166,10 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                 const first = entries[0];
                 text += `\n▶ ${first.studentName} (${first.schoolGrade}) \n`;
                 text += `- ${first.className}\n`;
-                entries.forEach(e => {
+                entries.forEach((e, idx) => {
+                  if (idx > 0) {
+                    text += `\n`; // 여러 개 상담일 때 한 줄 띄어서 구분
+                  }
                   text += `- 상담대상 : ${e.target}\n`;
                   text += `- 상담일시 : ${e.dateLabel}\n`;
                   text += `- 상담내용 : ${e.content}\n`;
@@ -2216,34 +2228,23 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                         <p className="text-xs text-slate-400 text-center mt-1">{subtitle}</p>
                       </div>
 
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="no-print">
-                          <button
-                            onClick={handlePrint}
-                            className="bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-[10px] font-extrabold px-4 py-2 rounded-xl shadow-md flex items-center gap-1.5"
-                          >
-                            🖨️ 인쇄하기
-                          </button>
-                        </div>
-                      </div>
-
                       <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse text-[11px]">
                           <thead>
                             <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
                               {[
-                                { field: 'no', label: 'No' },
-                                { field: 'studentName', label: '학생명' },
-                                { field: 'schoolGrade', label: '학교학년' },
-                                { field: 'className', label: '학원반' },
-                                { field: 'target', label: '상담대상' },
-                                { field: 'date', label: '상담일시' },
-                                { field: 'content', label: '상담내용' },
+                                { field: 'no', label: 'No', widthClass: 'w-[5%]' },
+                                { field: 'studentName', label: '학생명', widthClass: 'w-[10%]' },
+                                { field: 'schoolGrade', label: '학교학년', widthClass: 'w-[12%]' },
+                                { field: 'className', label: '학원반', widthClass: 'w-[13%]' },
+                                { field: 'target', label: '상담대상', widthClass: 'w-[10%]' },
+                                { field: 'date', label: '상담일시', widthClass: 'w-[15%]' },
+                                { field: 'content', label: '상담내용', widthClass: 'w-[35%]' },
                               ].map(col => (
                                 <th
                                   key={col.field}
                                   onClick={() => handleConsultSort(col.field)}
-                                  className="p-2.5 border border-slate-800 font-black cursor-pointer whitespace-nowrap select-none hover:bg-slate-800/60 transition-colors"
+                                  className={`p-2.5 border border-slate-800 font-black cursor-pointer whitespace-nowrap select-none hover:bg-slate-800/60 transition-colors ${col.widthClass}`}
                                 >
                                   {col.label}{sortIcon(col.field)}
                                 </th>
@@ -2253,17 +2254,17 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                           <tbody>
                             {sortedRows.map((row, idx) => (
                               <tr key={row._id} className={`border-b border-slate-850/60 ${idx % 2 === 0 ? '' : 'bg-slate-900/20'}`}>
-                                <td className="p-2.5 text-center border border-slate-800 text-slate-500 font-bold">{idx + 1}</td>
-                                <td className="p-2.5 border border-slate-800 font-bold text-slate-200 whitespace-nowrap">{row.studentName}</td>
-                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap">{row.schoolGrade}</td>
-                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap">{row.className}</td>
-                                <td className="p-2.5 border border-slate-800 text-center whitespace-nowrap">
+                                <td className="p-2.5 text-center border border-slate-800 text-slate-500 font-bold w-[5%]">{idx + 1}</td>
+                                <td className="p-2.5 border border-slate-800 font-bold text-slate-200 whitespace-nowrap text-center w-[10%]">{row.studentName}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap text-center w-[12%]">{row.schoolGrade}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap text-center w-[13%]">{row.className}</td>
+                                <td className="p-2.5 border border-slate-800 text-center whitespace-nowrap w-[10%]">
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                     row.target === '학부모' ? 'bg-purple-500/15 text-purple-300' : 'bg-cyan-500/15 text-cyan-300'
                                   }`}>{row.target}</span>
                                 </td>
-                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap font-mono">{row.dateLabel}</td>
-                                <td className="p-2.5 border border-slate-800 text-slate-300 leading-relaxed min-w-[160px]">{row.content}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap font-mono text-center w-[15%]">{row.dateLabel}</td>
+                                <td className="p-2.5 border border-slate-800 text-slate-300 leading-relaxed text-left break-all whitespace-pre-wrap w-[35%] consult-content-cell">{row.content}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2272,7 +2273,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                     </div>
 
                     {/* 우측: 텍스트 복붙용 */}
-                    <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-5 flex flex-col gap-3">
+                    <div className="bg-slate-950/40 rounded-2xl border border-slate-850 p-5 flex flex-col gap-3 no-print">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-sm font-black text-slate-200">📤 텍스트 복붙용</h3>

@@ -1526,6 +1526,11 @@ details.group[open] summary span {
 }
 
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
   body:has(.attendance-print-root) * {
     visibility: hidden !important;
   }
@@ -1660,6 +1665,14 @@ details.group[open] summary span {
   .attendance-print-root .bg-indigo-600 { background-color: #2563eb !important; color: #ffffff !important; }
   .attendance-print-root .bg-purple-500,
   .attendance-print-root .bg-purple-600 { background-color: #7c3aed !important; color: #ffffff !important; }
+
+  /* 상담내용 인쇄 시 텍스트 정렬 및 줄바꿈 오버라이드 */
+  .attendance-print-root .attendance-print-sheet td.consult-content-cell {
+    text-align: left !important;
+    word-break: break-all !important;
+    word-wrap: break-word !important;
+    white-space: pre-wrap !important;
+  }
 }
 
 
