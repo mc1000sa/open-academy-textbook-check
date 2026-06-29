@@ -2130,8 +2130,8 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
             };
 
             const sortIcon = (field) => {
-              if (consultSortField !== field) return <span className="text-slate-600 ml-1">⇅</span>;
-              return <span className="text-cyan-400 ml-1">{consultSortDir === 'asc' ? '↑' : '↓'}</span>;
+              if (consultSortField !== field) return <span className="text-slate-650 ml-1 no-print">⇅</span>;
+              return <span className="text-cyan-400 ml-1 no-print">{consultSortDir === 'asc' ? '▲' : '▼'}</span>;
             };
 
             const getCleanTeacherName = (name) => {
@@ -2223,9 +2223,18 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
 
                     {/* 좌측: 인쇄용 표 */}
                     <div className="attendance-print-sheet bg-slate-950/40 rounded-2xl border border-slate-850 p-5" style={{ zoom: printScaleValue }}>
-                      <div className="mb-4">
-                        <h2 className="text-base font-black text-slate-100 text-center">{title}</h2>
-                        <p className="text-xs text-slate-400 text-center mt-1">{subtitle}</p>
+                      <div className="mb-4 border-b border-slate-800/60 pb-3">
+                        <h2 className="text-base font-black text-slate-100 text-left pl-2.5">{title}</h2>
+                        <p className="text-xs text-slate-400 text-left pl-2.5 mt-1">{subtitle}</p>
+                      </div>
+
+                      {/* 인쇄 가능 미니 요약 현황판 */}
+                      <div className="mb-4 flex gap-4 text-[10px] text-slate-400 font-bold border border-slate-800/80 p-2.5 rounded-xl bg-slate-900/30 consult-summary-bar">
+                        <div>총 상담건수: <span className="text-slate-200 font-extrabold">{sortedRows.length}건</span></div>
+                        <div className="text-slate-700">|</div>
+                        <div>학부모 상담: <span className="text-purple-450 font-extrabold">{sortedRows.filter(r => r.target === '학부모').length}건</span></div>
+                        <div className="text-slate-700">|</div>
+                        <div>학생 상담: <span className="text-cyan-455 font-extrabold">{sortedRows.filter(r => r.target === '학생').length}건</span></div>
                       </div>
 
                       <div className="overflow-x-auto">
@@ -2233,20 +2242,22 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                           <thead>
                             <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
                               {[
-                                { field: 'no', label: 'No', widthClass: 'w-[5%]' },
-                                { field: 'studentName', label: '학생명', widthClass: 'w-[10%]' },
-                                { field: 'schoolGrade', label: '학교학년', widthClass: 'w-[12%]' },
-                                { field: 'className', label: '학원반', widthClass: 'w-[13%]' },
-                                { field: 'target', label: '상담대상', widthClass: 'w-[10%]' },
-                                { field: 'date', label: '상담일시', widthClass: 'w-[15%]' },
-                                { field: 'content', label: '상담내용', widthClass: 'w-[35%]' },
+                                { field: 'no', label: 'No', widthClass: 'w-[5%]', sortable: false },
+                                { field: 'studentName', label: '학생명', widthClass: 'w-[10%]', sortable: true },
+                                { field: 'schoolGrade', label: '학교학년', widthClass: 'w-[12%]', sortable: true },
+                                { field: 'className', label: '학원반', widthClass: 'w-[13%]', sortable: true },
+                                { field: 'target', label: '상담대상', widthClass: 'w-[10%]', sortable: true },
+                                { field: 'date', label: '상담일시', widthClass: 'w-[15%]', sortable: true },
+                                { field: 'content', label: '상담내용', widthClass: 'w-[35%]', sortable: true },
                               ].map(col => (
                                 <th
                                   key={col.field}
-                                  onClick={() => handleConsultSort(col.field)}
-                                  className={`p-2.5 border border-slate-800 font-black cursor-pointer whitespace-nowrap select-none hover:bg-slate-800/60 transition-colors ${col.widthClass}`}
+                                  onClick={() => col.sortable && handleConsultSort(col.field)}
+                                  className={`p-2.5 border border-slate-800 font-black whitespace-nowrap select-none ${col.widthClass} ${
+                                    col.sortable ? 'cursor-pointer hover:bg-slate-800/60 transition-colors' : ''
+                                  }`}
                                 >
-                                  {col.label}{sortIcon(col.field)}
+                                  {col.label}{col.sortable && sortIcon(col.field)}
                                 </th>
                               ))}
                             </tr>
@@ -2259,8 +2270,10 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                                 <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap text-center w-[12%]">{row.schoolGrade}</td>
                                 <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap text-center w-[13%]">{row.className}</td>
                                 <td className="p-2.5 border border-slate-800 text-center whitespace-nowrap w-[10%]">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                    row.target === '학부모' ? 'bg-purple-500/15 text-purple-300' : 'bg-cyan-500/15 text-cyan-300'
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border consult-target-chip ${
+                                    row.target === '학부모'
+                                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/30 print-purple-chip'
+                                      : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 print-cyan-chip'
                                   }`}>{row.target}</span>
                                 </td>
                                 <td className="p-2.5 border border-slate-800 text-slate-400 whitespace-nowrap font-mono text-center w-[15%]">{row.dateLabel}</td>
