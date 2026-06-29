@@ -2213,7 +2213,8 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                         <p className="text-[11px] text-slate-500 text-left pl-2.5 mt-1 tracking-wide">{subtitle}</p>
                       </div>
 
-                      <div className="overflow-x-auto">
+                      {/* 웹 전용 화면: 정렬 가능한 클래식 테이블 */}
+                      <div className="overflow-x-auto consult-web-table-wrapper">
                         <table className="w-full text-left border-collapse text-[11px]">
                           <thead>
                             <tr className="bg-slate-900 text-slate-400 border-b border-slate-800">
@@ -2259,6 +2260,42 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                           </tbody>
                         </table>
                       </div>
+
+                      {/* 인쇄 전용 화면: 모던 카드 리포트 뷰 (합쳐서 1열씩 3단 레이아웃 표현) */}
+                      <div className="consult-print-card-list">
+                        {sortedRows.map((row, idx) => (
+                          <div key={row._id} className="consult-print-card">
+                            <div className="consult-print-card-num">#{idx + 1}</div>
+                            <div className="consult-print-card-grid">
+                              {/* 1열: 학생정보 */}
+                              <div className="consult-print-card-col-student">
+                                <div className="student-name-row">
+                                  <span className="student-name">{row.studentName}</span>
+                                  <span className="school-grade">({row.schoolGrade})</span>
+                                </div>
+                                <div className="student-class">{row.className}</div>
+                              </div>
+                              
+                              {/* 2열: 상담대상 및 일시 */}
+                              <div className="consult-print-card-col-meta">
+                                <div className="target-chip-row">
+                                  <span className={`consult-target-chip inline-block px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wide border ${
+                                    row.target === '학부모'
+                                      ? 'bg-purple-500/15 text-purple-300 border-purple-500/30 print-purple-chip'
+                                      : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 print-cyan-chip'
+                                  }`}>{row.target}</span>
+                                </div>
+                                <div className="consult-date">{row.dateLabel}</div>
+                              </div>
+                              
+                              {/* 3열: 상담내용 */}
+                              <div className="consult-print-card-col-content">
+                                {row.content}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* 우측: 텍스트 복붙용 */}
@@ -2266,7 +2303,7 @@ export default function AttendanceManager({ state, updateLegacyState, deps }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="text-sm font-black text-slate-200">📤 텍스트 복붙용</h3>
-                          <p className="text-[10px] text-slate-500 mt-0.5">밴드·채팅 직접 보고용</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">밴드·채팅 직접 보고용 (표에서 정렬한 순서대로 복사됩니다)</p>
                         </div>
                         <button
                           onClick={handleCopyText}

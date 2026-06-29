@@ -1713,6 +1713,96 @@ details.group[open] summary span {
     color: #1e3a8a !important;
     font-weight: 950 !important;
   }
+
+  /* 인쇄 시 웹 전용 테이블 래퍼 숨기기 */
+  .attendance-print-root .consult-web-table-wrapper {
+    display: none !important;
+  }
+
+  /* 인쇄 시 3열 카드 리포트 뷰 활성화 */
+  .attendance-print-root .consult-print-card-list {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 15px !important;
+  }
+
+  /* 개별 상담 리포트 카드 */
+  .attendance-print-root .consult-print-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    position: relative !important;
+    padding: 14px 8px !important;
+    margin-bottom: 2px !important;
+    /* 연한 로열블루 계열의 그라데이션 구분선 */
+    border-bottom: 1.5px solid !important;
+    border-image: linear-gradient(to right, #3b82f6 30%, #818cf8 60%, transparent) 1 !important;
+  }
+
+  /* 왼쪽 상단 넘버링 */
+  .attendance-print-root .consult-print-card-num {
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    color: #3b82f6 !important; /* 로열 블루 */
+    margin-bottom: 4px !important;
+  }
+
+  /* 3열 레이아웃 그리드 설정 */
+  .attendance-print-root .consult-print-card-grid {
+    display: grid !important;
+    grid-template-columns: 220px 145px 1fr !important;
+    gap: 16px !important;
+    align-items: start !important;
+    width: 100% !important;
+  }
+
+  /* 1열: 학생정보 */
+  .attendance-print-root .consult-print-card-col-student .student-name-row {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+    margin-bottom: 3px !important;
+  }
+  .attendance-print-root .consult-print-card-col-student .student-name {
+    font-size: 14px !important;
+    font-weight: 850 !important;
+    color: #0f172a !important; /* 이름은 제일 크고 굵게 */
+  }
+  .attendance-print-root .consult-print-card-col-student .school-grade {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: #475569 !important; /* 이름보다 작게 */
+  }
+  .attendance-print-root .consult-print-card-col-student .student-class {
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+  }
+
+  /* 2열: 상담대상 칩셋 및 날짜 */
+  .attendance-print-root .consult-print-card-col-meta .target-chip-row {
+    margin-bottom: 5px !important;
+  }
+  .attendance-print-root .consult-print-card-col-meta .consult-date {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    font-family: monospace !important;
+  }
+
+  /* 3열: 상담내용 */
+  .attendance-print-root .consult-print-card-col-content {
+    font-size: 11px !important;
+    line-height: 1.55 !important;
+    color: #334155 !important;
+    text-align: left !important;
+    word-break: break-all !important;
+    white-space: pre-wrap !important;
+  }
+}
+
+/* 일반 웹 화면용: 인쇄용 카드 리스트는 가려줌 */
+.consult-print-card-list {
+  display: none !important;
 }
 
 /* 일반 웹 브라우징 상태에서의 강사명 그라데이션 텍스트 규칙 */
